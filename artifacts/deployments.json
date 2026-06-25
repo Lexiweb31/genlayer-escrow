@@ -2,9 +2,9 @@
   "network": "testnet_bradbury",
   "deployer": "0x57570ccd5045259D24f76a7340653B08549B56dc",
   "evaluate_submission": "0x7E4F1636845c5108c6e380D19B0e5AC505a2fBE1",
-  "freelance_escrow": "0x862D6a09B735B821167e96e7C0CaD463C9a45ac0",
+  "freelance_escrow": "0x64DCD0e89Ee9De9825C66dB6d30E608e28349870",
   "explorer": {
     "evaluate_submission": "https://explorer-bradbury.genlayer.com/address/0x7E4F1636845c5108c6e380D19B0e5AC505a2fBE1",
-    "freelance_escrow": "https://explorer-bradbury.genlayer.com/address/0x862D6a09B735B821167e96e7C0CaD463C9a45ac0"
+    "freelance_escrow": "https://explorer-bradbury.genlayer.com/address/0x64DCD0e89Ee9De9825C66dB6d30E608e28349870"
   }
 }
