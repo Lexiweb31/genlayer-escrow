@@ -1,7 +1,7 @@
 networks:
   default: localnet
   localnet:
-  testnet_asimov:
+  testnet_bradbury:
     accounts:
       - ${DEPLOYER_PRIVATE_KEY}
 

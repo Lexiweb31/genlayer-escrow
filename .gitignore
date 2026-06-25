@@ -9,8 +9,9 @@ __pycache__/
 dist/
 build/
 
-# GenLayer artifacts
-artifacts/
+# GenLayer artifacts (keep deployments.json)
+artifacts/*.db
+artifacts/*.log
 .pytest_cache/
 
 # Environment
