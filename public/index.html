@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Freelance Escrow — Dispute Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f111a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: .25rem; }
+    .subtitle { color: #64748b; font-size: .875rem; }
+
+    .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+    .badge {
+      padding: .25rem .75rem;
+      border-radius: 9999px;
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+    }
+    .badge-blue   { background: #1e40af22; color: #60a5fa; border: 1px solid #1e40af55; }
+    .badge-green  { background: #16653322; color: #4ade80; border: 1px solid #16653355; }
+    .badge-yellow { background: #92400e22; color: #fbbf24; border: 1px solid #92400e55; }
+    .badge-red    { background: #7f1d1d22; color: #f87171; border: 1px solid #7f1d1d55; }
+    .badge-purple { background: #4c1d9522; color: #c084fc; border: 1px solid #4c1d9555; }
+    .badge-gray   { background: #1e293b;   color: #94a3b8; border: 1px solid #334155; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+    @media(max-width:700px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #1e2535;
+      border: 1px solid #2d3748;
+      border-radius: .75rem;
+      padding: 1.25rem;
+    }
+    .card h2 { font-size: .8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+
+    .kv { display: flex; justify-content: space-between; align-items: baseline; padding: .4rem 0; border-bottom: 1px solid #2d3748; font-size: .875rem; }
+    .kv:last-child { border-bottom: none; }
+    .kv-key { color: #94a3b8; flex-shrink: 0; margin-right: .5rem; }
+    .kv-val { color: #e2e8f0; word-break: break-all; text-align: right; }
+    .kv-val a { color: #60a5fa; text-decoration: none; }
+    .kv-val a:hover { text-decoration: underline; }
+
+    .score-bar-wrap { margin-top: .75rem; }
+    .score-label { display: flex; justify-content: space-between; font-size: .75rem; color: #94a3b8; margin-bottom: .4rem; }
+    .score-bar { height: 8px; background: #2d3748; border-radius: 4px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+    .fill-green  { background: linear-gradient(90deg,#16a34a,#4ade80); }
+    .fill-yellow { background: linear-gradient(90deg,#d97706,#fbbf24); }
+    .fill-red    { background: linear-gradient(90deg,#dc2626,#f87171); }
+
+    .reasoning {
+      margin-top: 1rem;
+      font-size: .825rem;
+      color: #94a3b8;
+      line-height: 1.6;
+      padding: .75rem;
+      background: #0f111a;
+      border-radius: .5rem;
+      border: 1px solid #2d3748;
+    }
+
+    .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+
+    button {
+      padding: .6rem 1rem;
+      border: none;
+      border-radius: .5rem;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    button:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary  { background: #2563eb; color: #fff; }
+    .btn-success  { background: #16a34a; color: #fff; }
+    .btn-warning  { background: #d97706; color: #fff; }
+    .btn-danger   { background: #dc2626; color: #fff; }
+    .btn-outline  { background: transparent; color: #e2e8f0; border: 1px solid #334155; }
+
+    .url-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
+    .url-row input {
+      flex: 1;
+      padding: .5rem .75rem;
+      background: #0f111a;
+      border: 1px solid #334155;
+      border-radius: .5rem;
+      color: #e2e8f0;
+      font-size: .875rem;
+    }
+    .url-row input::placeholder { color: #64748b; }
+
+    .log-box {
+      background: #0f111a;
+      border: 1px solid #2d3748;
+      border-radius: .75rem;
+      padding: 1rem;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: .78rem;
+      color: #94a3b8;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .log-line { padding: .1rem 0; }
+    .log-ok   { color: #4ade80; }
+    .log-err  { color: #f87171; }
+    .log-info { color: #60a5fa; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .refresh-btn { float: right; padding: .3rem .8rem; font-size: .75rem; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Freelance Escrow</h1>
+    <div class="subtitle">AI-Arbitrated — testnet_bradbury</div>
+  </div>
+  <span id="statusBadge" class="badge badge-gray">—</span>
+  <button class="btn-outline refresh-btn" onclick="loadStatus()">↻ Refresh</button>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Job</h2>
+    <div id="jobInfo"><div class="kv"><span class="kv-key">Loading…</span></div></div>
+  </div>
+  <div class="card">
+    <h2>Evaluation Result</h2>
+    <div id="resultInfo"><div class="kv"><span class="kv-key">Not evaluated yet</span></div></div>
+    <div id="scoreBar" style="display:none" class="score-bar-wrap">
+      <div class="score-label"><span>Score</span><span id="scoreLabel">—</span></div>
+      <div class="score-bar"><div id="scoreFill" class="score-fill" style="width:0%"></div></div>
+    </div>
+    <div id="reasoning" class="reasoning" style="display:none"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1.25rem">
+  <h2>Contracts</h2>
+  <div id="addressInfo"></div>
+</div>
+
+<div class="card" style="margin-bottom:1.25rem">
+  <h2>Actions</h2>
+  <div class="url-row">
+    <input id="submitUrl" type="url" placeholder="Submission URL (https://…)" />
+    <button class="btn-primary" onclick="submitWork()">Submit Work</button>
+  </div>
+  <div class="actions">
+    <button class="btn-success"  onclick="fund()">Fund Escrow</button>
+    <button class="btn-outline"  onclick="acceptTerms()">Accept Terms</button>
+    <button class="btn-primary"  onclick="evaluate()">Evaluate</button>
+    <button class="btn-warning"  onclick="appeal()">Appeal</button>
+    <button class="btn-danger"   onclick="finalize()">Finalize</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Log</h2>
+  <div class="log-box" id="log"></div>
+</div>
+
+<script>
+const API_BASE = 'https://genlayer-escrow.onrender.com';
+
+const STATUS_COLORS = {
+  UNFUNDED:  'badge-gray',
+  OPEN:      'badge-blue',
+  AGREED:    'badge-blue',
+  SUBMITTED: 'badge-yellow',
+  EVALUATED: 'badge-yellow',
+  ACCEPTED:  'badge-green',
+  PARTIAL:   'badge-yellow',
+  REFUNDED:  'badge-red',
+};
+
+function log(msg, cls='') {
+  const box = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + (cls ? 'log-' + cls : '');
+  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  box.prepend(line);
+}
+
+function kv(key, val, link) {
+  return `<div class="kv">
+    <span class="kv-key">${key}</span>
+    <span class="kv-val">${link ? `<a href="${link}" target="_blank">${val}</a>` : val}</span>
+  </div>`;
+}
+
+function shortAddr(a) { return a.slice(0,6) + '…' + a.slice(-4); }
+
+async function loadStatus() {
+  try {
+    const r = await fetch(API_BASE + '/api/status');
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderStatus(d);
+  } catch(e) {
+    log('Error loading status: ' + e.message, 'err');
+  }
+}
+
+function renderStatus({ job, result, addresses }) {
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = job.status;
+  badge.className = 'badge ' + (STATUS_COLORS[job.status] || 'badge-gray');
+
+  document.getElementById('jobInfo').innerHTML = [
+    kv('Status',        job.status),
+    kv('Amount',        job.amount + ' wei'),
+    kv('Fee',           job.fee_bps / 100 + '%'),
+    kv('Min score',     job.min_score + ' / 100'),
+    kv('Partial floor', job.partial_floor + ' / 100'),
+    kv('Terms agreed',  job.terms_agreed ? '✓ Yes' : 'No'),
+    kv('Appeal used',   job.appeal_used  ? '✓ Used' : 'Available'),
+  ].join('');
+
+  if (result.score !== undefined) {
+    const score = result.score;
+    const minS  = result.min_score || job.min_score;
+    document.getElementById('resultInfo').innerHTML = [
+      kv('Status', result.status),
+      kv('Score',  score + ' / 100'),
+    ].join('');
+
+    const fillEl = document.getElementById('scoreFill');
+    const cls = score >= minS ? 'fill-green' : score >= job.partial_floor ? 'fill-yellow' : 'fill-red';
+    fillEl.className = 'score-fill ' + cls;
+    fillEl.style.width = score + '%';
+    document.getElementById('scoreLabel').textContent = score + ' / 100';
+    document.getElementById('scoreBar').style.display = '';
+
+    if (result.reasoning) {
+      document.getElementById('reasoning').textContent = result.reasoning;
+      document.getElementById('reasoning').style.display = '';
+    }
+  } else {
+    document.getElementById('resultInfo').innerHTML = kv('Status', result.status || job.status);
+    document.getElementById('scoreBar').style.display = 'none';
+    document.getElementById('reasoning').style.display = 'none';
+  }
+
+  document.getElementById('addressInfo').innerHTML = [
+    kv('Escrow',    shortAddr(addresses.escrow),    addresses.explorer_escrow),
+    kv('Evaluator', shortAddr(addresses.evaluator), addresses.explorer_evaluator),
+    kv('Deployer',  shortAddr(addresses.deployer)),
+  ].join('');
+}
+
+async function apiPost(path, body = {}) {
+  const r = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+  return data;
+}
+
+async function withSpinner(label, fn) {
+  log(`⏳ ${label}…`);
+  try {
+    const d = await fn();
+    log(`✓ ${label} → ${d.status || 'done'}`, 'ok');
+    await loadStatus();
+  } catch(e) {
+    log(`✗ ${label}: ${e.message}`, 'err');
+  }
+}
+
+const fund        = () => withSpinner('Fund escrow',   () => apiPost('/api/fund', { amount_wei: 1000000000000000 }));
+const acceptTerms = () => withSpinner('Accept terms',  () => apiPost('/api/accept_terms'));
+const evaluate    = () => withSpinner('Evaluate (this may take ~30s)', () => apiPost('/api/evaluate'));
+const appeal      = () => withSpinner('Appeal',        () => apiPost('/api/appeal'));
+const finalize    = () => withSpinner('Finalize',      () => apiPost('/api/finalize'));
+function submitWork() {
+  const url = document.getElementById('submitUrl').value.trim();
+  if (!url.startsWith('http')) return log('Enter a valid http(s) URL', 'err');
+  withSpinner('Submit work', () => apiPost('/api/submit', { url }));
+}
+
+loadStatus();
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -47,6 +48,13 @@ EVAL_CODE   = (ROOT / "contracts" / "evaluate_submission.py").read_text()
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(title="Freelance Escrow Dashboard")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://genlayer-escrow.vercel.app", "http://localhost:8001", "http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _wait(tx_hash: str) -> dict:
