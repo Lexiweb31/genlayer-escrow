@@ -1,2 +1,5 @@
 genlayer-test
 genvm-linter
+fastapi
+uvicorn
+python-dotenv
