@@ -3,316 +3,640 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Freelance Escrow — Dispute Dashboard</title>
+  <title>GenLayer Escrow — Dashboard</title>
   <style>
+    :root {
+      --bg:         #0a0c10;
+      --surface:    #0d1117;
+      --card:       #161b22;
+      --border:     #30363d;
+      --border-muted: #21262d;
+      --text:       #e6edf3;
+      --muted:      #8b949e;
+      --subtle:     #484f58;
+      --blue:       #58a6ff;
+      --blue-dark:  #1f6feb;
+      --blue-bg:    rgba(56,139,253,.12);
+      --green:      #3fb950;
+      --green-dark: #238636;
+      --green-bg:   rgba(46,160,67,.12);
+      --yellow:     #d29922;
+      --yellow-bg:  rgba(187,128,9,.12);
+      --red:        #f85149;
+      --red-bg:     rgba(248,81,73,.12);
+      --purple:     #bc8cff;
+      --purple-dark:#6e40c9;
+      --purple-bg:  rgba(188,140,255,.12);
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f111a;
-      color: #e2e8f0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
       min-height: 100vh;
-      padding: 2rem 1rem;
     }
 
-    h1 { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: .25rem; }
-    .subtitle { color: #64748b; font-size: .875rem; }
-
-    .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
-    .badge {
-      padding: .25rem .75rem;
-      border-radius: 9999px;
-      font-size: .75rem;
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      height: 56px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .logo-icon { font-size: 20px; }
+    .spacer { flex: 1; }
+    .net-badge {
+      background: var(--border-muted);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
       font-weight: 600;
-      letter-spacing: .05em;
+      letter-spacing: .04em;
     }
-    .badge-blue   { background: #1e40af22; color: #60a5fa; border: 1px solid #1e40af55; }
-    .badge-green  { background: #16653322; color: #4ade80; border: 1px solid #16653355; }
-    .badge-yellow { background: #92400e22; color: #fbbf24; border: 1px solid #92400e55; }
-    .badge-red    { background: #7f1d1d22; color: #f87171; border: 1px solid #7f1d1d55; }
-    .badge-purple { background: #4c1d9522; color: #c084fc; border: 1px solid #4c1d9555; }
-    .badge-gray   { background: #1e293b;   color: #94a3b8; border: 1px solid #334155; }
-
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
-    @media(max-width:700px) { .grid { grid-template-columns: 1fr; } }
-
-    .card {
-      background: #1e2535;
-      border: 1px solid #2d3748;
-      border-radius: .75rem;
-      padding: 1.25rem;
+    #headerPill {
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
     }
-    .card h2 { font-size: .8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
-
-    .kv { display: flex; justify-content: space-between; align-items: baseline; padding: .4rem 0; border-bottom: 1px solid #2d3748; font-size: .875rem; }
-    .kv:last-child { border-bottom: none; }
-    .kv-key { color: #94a3b8; flex-shrink: 0; margin-right: .5rem; }
-    .kv-val { color: #e2e8f0; word-break: break-all; text-align: right; }
-    .kv-val a { color: #60a5fa; text-decoration: none; }
-    .kv-val a:hover { text-decoration: underline; }
-
-    .score-bar-wrap { margin-top: .75rem; }
-    .score-label { display: flex; justify-content: space-between; font-size: .75rem; color: #94a3b8; margin-bottom: .4rem; }
-    .score-bar { height: 8px; background: #2d3748; border-radius: 4px; overflow: hidden; }
-    .score-fill { height: 100%; border-radius: 4px; transition: width .5s; }
-    .fill-green  { background: linear-gradient(90deg,#16a34a,#4ade80); }
-    .fill-yellow { background: linear-gradient(90deg,#d97706,#fbbf24); }
-    .fill-red    { background: linear-gradient(90deg,#dc2626,#f87171); }
-
-    .reasoning {
-      margin-top: 1rem;
-      font-size: .825rem;
-      color: #94a3b8;
-      line-height: 1.6;
-      padding: .75rem;
-      background: #0f111a;
-      border-radius: .5rem;
-      border: 1px solid #2d3748;
-    }
-
-    .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
-
-    button {
-      padding: .6rem 1rem;
-      border: none;
-      border-radius: .5rem;
-      font-size: .875rem;
-      font-weight: 600;
+    .ghost-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
       cursor: pointer;
-      transition: opacity .15s, transform .1s;
+      transition: all .15s;
     }
-    button:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
-    button:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-primary  { background: #2563eb; color: #fff; }
-    .btn-success  { background: #16a34a; color: #fff; }
-    .btn-warning  { background: #d97706; color: #fff; }
-    .btn-danger   { background: #dc2626; color: #fff; }
-    .btn-outline  { background: transparent; color: #e2e8f0; border: 1px solid #334155; }
+    .ghost-btn:hover { background: var(--border-muted); color: var(--text); }
 
-    .url-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
-    .url-row input {
-      flex: 1;
-      padding: .5rem .75rem;
-      background: #0f111a;
-      border: 1px solid #334155;
-      border-radius: .5rem;
-      color: #e2e8f0;
-      font-size: .875rem;
+    /* ── Layout ─────────────────────────────────────────────────────────────── */
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+
+    /* ── Stepper ────────────────────────────────────────────────────────────── */
+    .stepper {
+      display: flex;
+      align-items: flex-start;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+      gap: 0;
     }
-    .url-row input::placeholder { color: #64748b; }
-
-    .log-box {
-      background: #0f111a;
-      border: 1px solid #2d3748;
-      border-radius: .75rem;
-      padding: 1rem;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: .78rem;
-      color: #94a3b8;
-      max-height: 220px;
-      overflow-y: auto;
+    .step { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 72px; position: relative; }
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 15px;
+      left: calc(50% + 20px);
+      right: calc(-50% + 20px);
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
     }
-    .log-line { padding: .1rem 0; }
-    .log-ok   { color: #4ade80; }
-    .log-err  { color: #f87171; }
-    .log-info { color: #60a5fa; }
-
-    .spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid #334155;
-      border-top-color: #60a5fa;
+    .step.done:not(:last-child)::after { background: var(--green); }
+    .step-dot {
+      width: 30px; height: 30px;
       border-radius: 50%;
-      animation: spin .7s linear infinite;
-      vertical-align: middle;
-      margin-right: .4rem;
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+      background: var(--card);
+      color: var(--subtle);
+      position: relative; z-index: 1;
+      transition: all .2s;
+    }
+    .step.done .step-dot  { border-color: var(--green);  color: var(--green);  background: var(--green-bg);  }
+    .step.active .step-dot{ border-color: var(--blue);   color: var(--blue);   background: var(--blue-bg);   }
+    .step-name { font-size: 11px; font-weight: 500; color: var(--subtle); text-align: center; white-space: nowrap; }
+    .step.done .step-name  { color: var(--green); }
+    .step.active .step-name{ color: var(--blue);  }
+
+    /* ── Grid ───────────────────────────────────────────────────────────────── */
+    .grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .stack { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── Cards ──────────────────────────────────────────────────────────────── */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .card-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-muted);
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; color: var(--text);
+    }
+    .card-head .icon { font-size: 15px; }
+    .card-body { padding: 18px; }
+
+    /* ── Action card ────────────────────────────────────────────────────────── */
+    .step-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .action-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .action-desc  { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 18px; }
+
+    /* ── Forms ──────────────────────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+    .field small  { font-size: 11px; color: var(--subtle); }
+    input[type="url"], input[type="number"] {
+      width: 100%;
+      padding: 9px 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus { border-color: var(--blue); }
+    input::placeholder { color: var(--subtle); }
+
+    /* ── Buttons ────────────────────────────────────────────────────────────── */
+    .btn {
+      padding: 9px 18px;
+      border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      transition: filter .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn:not(:disabled):hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .btn-full { width: 100%; }
+    .btn-green  { background: var(--green-dark); color: #fff; }
+    .btn-blue   { background: var(--blue-dark);  color: #fff; }
+    .btn-purple { background: var(--purple-dark); color: #fff; }
+    .btn-ghost2 { background: var(--border-muted); color: var(--text); border: 1px solid var(--border); }
+    .btn-row { display: flex; gap: 10px; }
+
+    /* ── Hint boxes ─────────────────────────────────────────────────────────── */
+    .hint {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 11px 13px; border-radius: 8px;
+      font-size: 13px; line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .hint-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(88,166,255,.2); }
+    .hint-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(210,153,34,.2); }
+    .hint-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(63,185,80,.2);  }
+
+    /* ── Terminal result hero ───────────────────────────────────────────────── */
+    .result-hero { padding: 28px 20px; text-align: center; }
+    .result-icon { font-size: 44px; margin-bottom: 10px; }
+    .result-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+    .result-title.ACCEPTED { color: var(--green);  }
+    .result-title.PARTIAL  { color: var(--yellow); }
+    .result-title.REFUNDED { color: var(--red);    }
+    .result-sub { font-size: 14px; color: var(--muted); }
+
+    /* ── KV list ────────────────────────────────────────────────────────────── */
+    .kv-list { display: flex; flex-direction: column; }
+    .kv {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-muted);
+      font-size: 13px;
+    }
+    .kv:last-child { border-bottom: none; }
+    .kv-k { color: var(--muted); flex-shrink: 0; }
+    .kv-v { color: var(--text); text-align: right; word-break: break-all; }
+    .kv-v a { color: var(--blue); text-decoration: none; }
+    .kv-v a:hover { text-decoration: underline; }
+
+    /* ── Score ──────────────────────────────────────────────────────────────── */
+    .score-row { display: flex; align-items: flex-end; justify-content: center; gap: 6px; padding: 12px 0 10px; }
+    .score-big { font-size: 52px; font-weight: 800; line-height: 1; }
+    .score-big.hi  { color: var(--green);  }
+    .score-big.mid { color: var(--yellow); }
+    .score-big.lo  { color: var(--red);    }
+    .score-denom { font-size: 18px; color: var(--subtle); padding-bottom: 6px; }
+    .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+    .bar-fill  { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(.4,0,.2,1); width: 0%; }
+    .bar-fill.hi  { background: linear-gradient(90deg,#16a34a,#4ade80); }
+    .bar-fill.mid { background: linear-gradient(90deg,#d97706,#fbbf24); }
+    .bar-fill.lo  { background: linear-gradient(90deg,#dc2626,#f87171); }
+    .outcome-chip {
+      display: inline-block; padding: 4px 14px;
+      border-radius: 20px; font-size: 11px; font-weight: 700;
+      letter-spacing: .07em; text-transform: uppercase;
+      margin: 0 auto; display: block; text-align: center; width: fit-content;
+      margin-bottom: 12px;
+    }
+    .reasoning-box {
+      background: var(--surface); border: 1px solid var(--border-muted);
+      border-radius: 8px; padding: 12px;
+      font-size: 12px; color: var(--muted); line-height: 1.65;
+    }
+    .reasoning-box strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--subtle); margin-bottom: 5px; }
+
+    /* ── Log ────────────────────────────────────────────────────────────────── */
+    .log-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 18px; cursor: pointer; user-select: none;
+      font-size: 13px; font-weight: 500; color: var(--muted);
+    }
+    .log-toggle:hover { color: var(--text); }
+    .log-count { background: var(--border-muted); padding: 1px 8px; border-radius: 10px; font-size: 11px; }
+    .log-body {
+      border-top: 1px solid var(--border-muted);
+      padding: 10px 18px; max-height: 180px; overflow-y: auto;
+      font-family: ui-monospace, "SF Mono", monospace; font-size: 12px;
+    }
+    .log-entry { padding: 2px 0; color: var(--muted); }
+    .log-entry.ok  { color: var(--green); }
+    .log-entry.err { color: var(--red);   }
+    .log-ts { color: var(--subtle); margin-right: 8px; }
+
+    /* ── Spec ───────────────────────────────────────────────────────────────── */
+    .spec-text { font-size: 13px; color: var(--muted); line-height: 1.7; white-space: pre-wrap; }
+
+    /* ── Skeleton ───────────────────────────────────────────────────────────── */
+    @keyframes shimmer { 0% { background-position:-200% 0 } 100% { background-position:200% 0 } }
+    .skel {
+      height: 13px; border-radius: 4px; margin-bottom: 10px;
+      background: linear-gradient(90deg, var(--border-muted) 25%, var(--border) 50%, var(--border-muted) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
 
-    .refresh-btn { float: right; padding: .3rem .8rem; font-size: .75rem; }
+    /* ── Pill colours ───────────────────────────────────────────────────────── */
+    .p-UNFUNDED  { background:var(--border-muted); color:var(--muted);   }
+    .p-OPEN      { background:var(--blue-bg);      color:var(--blue);    }
+    .p-AGREED    { background:var(--blue-bg);      color:var(--blue);    }
+    .p-SUBMITTED { background:var(--purple-bg);    color:var(--purple);  }
+    .p-EVALUATED { background:var(--yellow-bg);    color:var(--yellow);  }
+    .p-ACCEPTED  { background:var(--green-bg);     color:var(--green);   }
+    .p-PARTIAL   { background:var(--yellow-bg);    color:var(--yellow);  }
+    .p-REFUNDED  { background:var(--red-bg);       color:var(--red);     }
   </style>
 </head>
 <body>
 
-<div class="header">
-  <div>
-    <h1>Freelance Escrow</h1>
-    <div class="subtitle">AI-Arbitrated — testnet_bradbury</div>
-  </div>
-  <span id="statusBadge" class="badge badge-gray">—</span>
-  <button class="btn-outline refresh-btn" onclick="loadStatus()">↻ Refresh</button>
-</div>
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="logo"><span class="logo-icon">⚖️</span> GenLayer Escrow</div>
+  <div class="spacer"></div>
+  <span class="net-badge">testnet_bradbury</span>
+  <span id="headerPill" class="p-UNFUNDED">—</span>
+  <button class="ghost-btn" onclick="loadStatus()">↻ Refresh</button>
+</header>
 
-<!-- Job info + Result -->
-<div class="grid">
-  <div class="card">
-    <h2>Job</h2>
-    <div id="jobInfo"><div class="kv"><span class="kv-key">Loading…</span></div></div>
+<div class="wrap">
+
+  <!-- ── Stepper ─────────────────────────────────────────────────────────── -->
+  <div class="stepper">
+    <div class="step" id="st0"><div class="step-dot">1</div><div class="step-name">Fund</div></div>
+    <div class="step" id="st1"><div class="step-dot">2</div><div class="step-name">Accept Terms</div></div>
+    <div class="step" id="st2"><div class="step-dot">3</div><div class="step-name">Submit Work</div></div>
+    <div class="step" id="st3"><div class="step-dot">4</div><div class="step-name">Evaluate</div></div>
+    <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
   </div>
-  <div class="card">
-    <h2>Evaluation Result</h2>
-    <div id="resultInfo"><div class="kv"><span class="kv-key">Not evaluated yet</span></div></div>
-    <div id="scoreBar" style="display:none" class="score-bar-wrap">
-      <div class="score-label"><span>Score</span><span id="scoreLabel">—</span></div>
-      <div class="score-bar"><div id="scoreFill" class="score-fill" style="width:0%"></div></div>
+
+  <!-- ── Main grid ────────────────────────────────────────────────────────── -->
+  <div class="grid">
+
+    <!-- Left column -->
+    <div class="stack">
+      <!-- Action card -->
+      <div class="card" id="actionCard">
+        <div class="card-body">
+          <div class="skel" style="width:35%;height:10px"></div>
+          <div class="skel" style="width:65%;height:20px;margin:8px 0 16px"></div>
+          <div class="skel"></div><div class="skel" style="width:85%"></div>
+        </div>
+      </div>
+
+      <!-- Spec card (hidden until loaded) -->
+      <div class="card" id="specCard" style="display:none">
+        <div class="card-head"><span class="icon">📋</span> Job Specification</div>
+        <div class="card-body">
+          <p class="spec-text" id="specText"></p>
+        </div>
+      </div>
     </div>
-    <div id="reasoning" class="reasoning" style="display:none"></div>
-  </div>
-</div>
 
-<!-- Addresses -->
-<div class="card" style="margin-bottom:1.25rem">
-  <h2>Contracts</h2>
-  <div id="addressInfo"></div>
-</div>
+    <!-- Right column -->
+    <div class="stack">
+      <!-- Details -->
+      <div class="card">
+        <div class="card-head"><span class="icon">💰</span> Escrow Details</div>
+        <div class="card-body" style="padding:0 18px">
+          <div class="kv-list" id="detailList">
+            <div class="kv"><span class="kv-k">Loading…</span></div>
+          </div>
+        </div>
+      </div>
 
-<!-- Actions -->
-<div class="card" style="margin-bottom:1.25rem">
-  <h2>Actions</h2>
-  <div class="url-row">
-    <input id="submitUrl" type="url" placeholder="Submission URL (https://…)" />
-    <button class="btn-primary" onclick="submitWork()">Submit Work</button>
-  </div>
-  <div class="actions">
-    <button class="btn-success"  onclick="fund()">Fund Escrow</button>
-    <button class="btn-outline"  onclick="acceptTerms()">Accept Terms</button>
-    <button class="btn-primary"  onclick="evaluate()">Evaluate</button>
-    <button class="btn-warning"  onclick="appeal()">Appeal</button>
-    <button class="btn-danger"   onclick="finalize()">Finalize</button>
-  </div>
-</div>
+      <!-- Score (hidden until evaluated) -->
+      <div class="card" id="scoreCard" style="display:none">
+        <div class="card-head"><span class="icon">🤖</span> AI Evaluation</div>
+        <div class="card-body">
+          <div class="score-row">
+            <div class="score-big" id="scoreBig">—</div>
+            <div class="score-denom">/100</div>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+          <div class="outcome-chip" id="outcomeChip"></div>
+          <div class="reasoning-box" id="reasoningBox" style="display:none">
+            <strong>AI Reasoning</strong>
+            <span id="reasoningText"></span>
+          </div>
+        </div>
+      </div>
 
-<!-- Log -->
-<div class="card">
-  <h2>Log</h2>
-  <div class="log-box" id="log"></div>
-</div>
+      <!-- Contracts -->
+      <div class="card">
+        <div class="card-head"><span class="icon">🔗</span> Contracts</div>
+        <div class="card-body" style="padding:0 18px">
+          <div class="kv-list" id="contractList">
+            <div class="kv"><span class="kv-k">Loading…</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Log ──────────────────────────────────────────────────────────────── -->
+  <div class="card" style="margin-top:20px">
+    <div class="log-toggle" onclick="toggleLog()">
+      <span id="logArrow">▶</span> Activity Log
+      <span class="log-count" id="logCount">0</span>
+    </div>
+    <div class="log-body" id="logBody" style="display:none"></div>
+  </div>
+
+</div><!-- /wrap -->
 
 <script>
-const STATUS_COLORS = {
-  UNFUNDED:  'badge-gray',
-  OPEN:      'badge-blue',
-  AGREED:    'badge-blue',
-  SUBMITTED: 'badge-yellow',
-  EVALUATED: 'badge-yellow',
-  ACCEPTED:  'badge-green',
-  PARTIAL:   'badge-yellow',
-  REFUNDED:  'badge-red',
-};
+const API_BASE = '';   // served by FastAPI at same origin
 
-function log(msg, cls='') {
-  const box = document.getElementById('log');
-  const line = document.createElement('div');
-  line.className = 'log-line ' + (cls ? 'log-' + cls : '');
-  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
-  box.prepend(line);
+// ── State ──────────────────────────────────────────────────────────────────
+const S2IDX = { UNFUNDED:0, OPEN:1, AGREED:2, SUBMITTED:3, EVALUATED:4, ACCEPTED:5, PARTIAL:5, REFUNDED:5 };
+const TERMINAL = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
+let logOpen = false, logN = 0;
+
+// ── Log ────────────────────────────────────────────────────────────────────
+function addLog(msg, type='') {
+  logN++;
+  document.getElementById('logCount').textContent = logN;
+  const el = Object.assign(document.createElement('div'), { className: 'log-entry ' + type });
+  el.innerHTML = `<span class="log-ts">${new Date().toLocaleTimeString()}</span>${msg}`;
+  document.getElementById('logBody').prepend(el);
+}
+function toggleLog() {
+  logOpen = !logOpen;
+  document.getElementById('logBody').style.display = logOpen ? '' : 'none';
+  document.getElementById('logArrow').textContent = logOpen ? '▼' : '▶';
 }
 
-function kv(key, val, link) {
-  return `<div class="kv">
-    <span class="kv-key">${key}</span>
-    <span class="kv-val">${link ? `<a href="${link}" target="_blank">${val}</a>` : val}</span>
+// ── Stepper ────────────────────────────────────────────────────────────────
+function updateStepper(status) {
+  const idx = S2IDX[status] ?? 0;
+  const done = TERMINAL.has(status);
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('st'+i);
+    el.className = 'step' + (done || i < idx ? ' done' : i === idx ? ' active' : '');
+    el.querySelector('.step-dot').textContent = (done || i < idx) ? '✓' : i+1;
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const short = a => a ? a.slice(0,6)+'…'+a.slice(-4) : '—';
+const toGEN = w => w === 0 ? '0 GEN' : (w/1e18).toFixed(4)+' GEN';
+const kv = (k,v,href) => `<div class="kv"><span class="kv-k">${k}</span><span class="kv-v">${href?`<a href="${href}" target="_blank">${v} ↗</a>`:v}</span></div>`;
+
+// ── Action card ────────────────────────────────────────────────────────────
+function renderAction(job, result) {
+  const s = job.status;
+  const el = document.getElementById('actionCard');
+
+  if (TERMINAL.has(s)) {
+    const cfg = {
+      ACCEPTED: { icon:'🎉', title:'Payment Released',  cls:'ACCEPTED', desc:`Score ${result?.score}/100 met the minimum of ${job.min_score}. Full payment released to the worker.` },
+      PARTIAL:  { icon:'⚠️', title:'Partial Payment',   cls:'PARTIAL',  desc:`Score ${result?.score}/100 is below the minimum but above the floor. A proportional payment was made.` },
+      REFUNDED: { icon:'↩️', title:'Funds Refunded',    cls:'REFUNDED', desc:`Score ${result?.score}/100 fell below the floor of ${job.partial_floor}. All funds returned to the client.` },
+    }[s];
+    el.innerHTML = `<div class="result-hero">
+      <div class="result-icon">${cfg.icon}</div>
+      <div class="result-title ${cfg.cls}">${cfg.title}</div>
+      <div class="result-sub" style="margin-top:8px">${cfg.desc}</div>
+    </div>`;
+    return;
+  }
+
+  const score = result?.score;
+  const scoreHint = score != null
+    ? `<div class="hint hint-blue" style="margin-bottom:16px">
+        <span>ℹ️</span>
+        <span>AI scored the submission <strong>${score}/100</strong> —
+        ${score >= job.min_score ? `full payment (≥ min ${job.min_score})`
+          : score >= job.partial_floor ? `partial payment (above floor ${job.partial_floor})`
+          : `refund (below floor ${job.partial_floor})`}
+        </span>
+       </div>` : '';
+
+  const steps = [
+    { tag:'Step 1 of 5', title:'Fund the Escrow',
+      desc:'Deposit GEN tokens. Funds are locked in the smart contract until the AI evaluation is complete.',
+      body:`<div class="field">
+              <label>Amount (wei)</label>
+              <input type="number" id="inp-amount" value="1000000000000000" />
+              <small>1,000,000,000,000,000 wei = 0.001 GEN</small>
+            </div>
+            <button class="btn btn-green btn-full" onclick="fund()">Fund Escrow</button>` },
+
+    { tag:'Step 2 of 5', title:'Accept Terms',
+      desc:'The worker reviews the job specification and agrees to deliver the described work.',
+      body:`<button class="btn btn-blue btn-full" onclick="acceptTerms()">Accept Terms &amp; Begin</button>` },
+
+    { tag:'Step 3 of 5', title:'Submit Your Deliverable',
+      desc:'Provide a public URL to the completed work. The AI evaluator will fetch and score this page.',
+      body:`<div class="field">
+              <label>Deliverable URL</label>
+              <input type="url" id="inp-url" placeholder="https://your-submission.com" />
+              <small>Must be publicly accessible — the AI reads this URL directly</small>
+            </div>
+            <button class="btn btn-blue btn-full" onclick="submitWork()">Submit Work</button>` },
+
+    { tag:'Step 4 of 5', title:'Request AI Evaluation',
+      desc:'An AI validator fetches your submission URL and scores it against the job specification.',
+      body:`<div class="hint hint-yellow">
+              <span>⏱</span>
+              <span>This takes <strong>30–60 seconds</strong> on testnet while the AI reads and grades the page.</span>
+            </div>
+            <button class="btn btn-purple btn-full" onclick="evaluate()">Start Evaluation</button>` },
+
+    { tag:'Step 5 of 5', title:'Finalize Payout',
+      desc:'Release funds based on the AI score. The contract calculates the split automatically.',
+      body:`${scoreHint}
+            <div class="btn-row">
+              <button class="btn btn-green btn-full" onclick="finalize()">Release Funds</button>
+              ${!job.appeal_used
+                ? `<button class="btn btn-ghost2" onclick="appeal()" title="Request a second AI opinion">Appeal</button>`
+                : ''}
+            </div>` },
+  ];
+
+  const idx = Math.min(S2IDX[s] ?? 0, 4);
+  const st  = steps[idx];
+  el.innerHTML = `<div class="card-body">
+    <div class="step-tag">${st.tag}</div>
+    <div class="action-title">${st.title}</div>
+    <div class="action-desc">${st.desc}</div>
+    ${st.body}
   </div>`;
 }
 
-function shortAddr(a) { return a.slice(0,6) + '…' + a.slice(-4); }
+// ── Details + contracts ────────────────────────────────────────────────────
+function renderDetails(job) {
+  document.getElementById('detailList').innerHTML =
+    kv('Locked', toGEN(job.amount)) +
+    kv('Platform fee', (job.fee_bps/100)+'%') +
+    kv('Min score', job.min_score+' / 100') +
+    kv('Partial floor', job.partial_floor+' / 100') +
+    kv('Terms agreed', job.terms_agreed ? '✓ Yes' : 'Pending') +
+    kv('Appeal', job.appeal_used ? 'Used' : 'Available') +
+    kv('Client', short(job.client)) +
+    kv('Worker', short(job.worker));
+}
 
+function renderContracts(addr) {
+  document.getElementById('contractList').innerHTML =
+    kv('Escrow',    short(addr.escrow),    addr.explorer_escrow) +
+    kv('Evaluator', short(addr.evaluator), addr.explorer_evaluator) +
+    kv('Deployer',  short(addr.deployer));
+}
+
+// ── Score card ─────────────────────────────────────────────────────────────
+function renderScore(result, job) {
+  const sc = result?.score;
+  if (sc == null) { document.getElementById('scoreCard').style.display = 'none'; return; }
+  document.getElementById('scoreCard').style.display = '';
+
+  const cls = sc >= job.min_score ? 'hi' : sc >= job.partial_floor ? 'mid' : 'lo';
+  document.getElementById('scoreBig').textContent = sc;
+  document.getElementById('scoreBig').className = 'score-big ' + cls;
+  const fill = document.getElementById('barFill');
+  fill.className = 'bar-fill ' + cls;
+  setTimeout(() => fill.style.width = sc+'%', 80);
+
+  const chip = document.getElementById('outcomeChip');
+  const chipMap = {
+    ACCEPTED:{ bg:'var(--green-bg)',  color:'var(--green)',  label:'ACCEPTED'     },
+    PARTIAL: { bg:'var(--yellow-bg)', color:'var(--yellow)', label:'PARTIAL PAY'  },
+    REFUNDED:{ bg:'var(--red-bg)',    color:'var(--red)',    label:'REFUNDED'     },
+  }[result.status] || { bg:'var(--border-muted)', color:'var(--muted)', label: result.status || '—' };
+  chip.textContent = chipMap.label;
+  chip.style.background = chipMap.bg;
+  chip.style.color = chipMap.color;
+
+  if (result.reasoning) {
+    document.getElementById('reasoningText').textContent = result.reasoning;
+    document.getElementById('reasoningBox').style.display = '';
+  }
+}
+
+// ── Main render ────────────────────────────────────────────────────────────
+function renderStatus({ job, result, addresses }) {
+  const s = job.status;
+
+  // Header pill
+  const pill = document.getElementById('headerPill');
+  pill.textContent = s;
+  pill.className = 'p-' + s;
+
+  updateStepper(s);
+  renderAction(job, result);
+  renderDetails(job);
+  renderContracts(addresses);
+  renderScore(result, job);
+
+  if (job.spec) {
+    document.getElementById('specText').textContent = job.spec;
+    document.getElementById('specCard').style.display = '';
+  }
+}
+
+// ── API ────────────────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch(API_BASE + '/api/status');
     if (!r.ok) throw new Error(await r.text());
-    const d = await r.json();
-    renderStatus(d);
-  } catch(e) {
-    log('Error loading status: ' + e.message, 'err');
-  }
+    renderStatus(await r.json());
+  } catch(e) { addLog('Status error: '+e.message, 'err'); if(!logOpen) toggleLog(); }
 }
 
-function renderStatus({ job, result, addresses }) {
-  // Badge
-  const badge = document.getElementById('statusBadge');
-  badge.textContent = job.status;
-  badge.className = 'badge ' + (STATUS_COLORS[job.status] || 'badge-gray');
-
-  // Job card
-  document.getElementById('jobInfo').innerHTML = [
-    kv('Status',        job.status),
-    kv('Amount',        job.amount + ' wei'),
-    kv('Fee',           job.fee_bps / 100 + '%'),
-    kv('Min score',     job.min_score + ' / 100'),
-    kv('Partial floor', job.partial_floor + ' / 100'),
-    kv('Terms agreed',  job.terms_agreed ? '✓ Yes' : 'No'),
-    kv('Appeal used',   job.appeal_used  ? '✓ Used' : 'Available'),
-  ].join('');
-
-  // Result card
-  if (result.score !== undefined) {
-    const score = result.score;
-    const minS  = result.min_score || job.min_score;
-    document.getElementById('resultInfo').innerHTML = [
-      kv('Status', result.status),
-      kv('Score',  score + ' / 100'),
-    ].join('');
-
-    const fillEl = document.getElementById('scoreFill');
-    const cls = score >= minS ? 'fill-green' : score >= job.partial_floor ? 'fill-yellow' : 'fill-red';
-    fillEl.className = 'score-fill ' + cls;
-    fillEl.style.width = score + '%';
-    document.getElementById('scoreLabel').textContent = score + ' / 100';
-    document.getElementById('scoreBar').style.display = '';
-
-    if (result.reasoning) {
-      document.getElementById('reasoning').textContent = result.reasoning;
-      document.getElementById('reasoning').style.display = '';
+function disableAction(loading) {
+  document.querySelectorAll('#actionCard button').forEach(b => {
+    b.disabled = loading;
+    if (loading && !b.dataset.orig) {
+      b.dataset.orig = b.innerHTML;
+      b.innerHTML = '<span class="spinner"></span> Working…';
+    } else if (!loading && b.dataset.orig) {
+      b.innerHTML = b.dataset.orig;
+      delete b.dataset.orig;
     }
-  } else {
-    document.getElementById('resultInfo').innerHTML = kv('Status', result.status || job.status);
-    document.getElementById('scoreBar').style.display = 'none';
-    document.getElementById('reasoning').style.display = 'none';
-  }
-
-  // Addresses
-  document.getElementById('addressInfo').innerHTML = [
-    kv('Escrow',    shortAddr(addresses.escrow),    addresses.explorer_escrow),
-    kv('Evaluator', shortAddr(addresses.evaluator), addresses.explorer_evaluator),
-    kv('Deployer',  shortAddr(addresses.deployer)),
-  ].join('');
-}
-
-async function apiPost(path, body = {}) {
-  const r = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
-  return data;
 }
 
-async function withSpinner(label, fn) {
-  log(`⏳ ${label}…`);
+async function call(path, body={}) {
+  addLog('→ '+path);
+  disableAction(true);
   try {
-    const d = await fn();
-    log(`✓ ${label} → ${d.status || 'done'}`, 'ok');
+    const r = await fetch(API_BASE+path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    addLog('✓ '+path+' — '+(d.status||'done'), 'ok');
     await loadStatus();
   } catch(e) {
-    log(`✗ ${label}: ${e.message}`, 'err');
+    addLog('✗ '+e.message, 'err');
+    disableAction(false);
+    if (!logOpen) toggleLog();
   }
 }
 
-const fund        = () => withSpinner('Fund escrow',   () => apiPost('/api/fund', { amount_wei: 1000000000000000 }));
-const acceptTerms = () => withSpinner('Accept terms',  () => apiPost('/api/accept_terms'));
-const evaluate    = () => withSpinner('Evaluate (this may take ~30s)', () => apiPost('/api/evaluate'));
-const appeal      = () => withSpinner('Appeal',        () => apiPost('/api/appeal'));
-const finalize    = () => withSpinner('Finalize',      () => apiPost('/api/finalize'));
-function submitWork() {
-  const url = document.getElementById('submitUrl').value.trim();
-  if (!url.startsWith('http')) return log('Enter a valid http(s) URL', 'err');
-  withSpinner('Submit work', () => apiPost('/api/submit', { url }));
+function fund()        { call('/api/fund', { amount_wei: parseInt(document.getElementById('inp-amount')?.value)||1e15 }); }
+function acceptTerms() { call('/api/accept_terms'); }
+function evaluate()    { call('/api/evaluate'); }
+function appeal()      { call('/api/appeal'); }
+function finalize()    { call('/api/finalize'); }
+function submitWork()  {
+  const url = document.getElementById('inp-url')?.value?.trim();
+  if (!url?.startsWith('http')) { addLog('Enter a valid https:// URL', 'err'); if(!logOpen) toggleLog(); return; }
+  call('/api/submit', { url });
 }
 
-// Load on start
 loadStatus();
 </script>
 </body>
