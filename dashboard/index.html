@@ -1,643 +1,612 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GenLayer Escrow — Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenEscrow — AI Freelance Escrow</title>
   <style>
     :root {
-      --bg:         #0a0c10;
-      --surface:    #0d1117;
-      --card:       #161b22;
-      --border:     #30363d;
-      --border-muted: #21262d;
-      --text:       #e6edf3;
-      --muted:      #8b949e;
-      --subtle:     #484f58;
-      --blue:       #58a6ff;
-      --blue-dark:  #1f6feb;
-      --blue-bg:    rgba(56,139,253,.12);
-      --green:      #3fb950;
-      --green-dark: #238636;
-      --green-bg:   rgba(46,160,67,.12);
-      --yellow:     #d29922;
-      --yellow-bg:  rgba(187,128,9,.12);
-      --red:        #f85149;
-      --red-bg:     rgba(248,81,73,.12);
-      --purple:     #bc8cff;
-      --purple-dark:#6e40c9;
-      --purple-bg:  rgba(188,140,255,.12);
+      --bg:#090d13; --surface:#0e1420; --card:#141c2a; --card2:#18202f;
+      --border:#1e2d42; --border-sub:#162030;
+      --text:#e4eaf4; --muted:#6b809a; --subtle:#2e4260;
+      --blue:#4f8ef7; --blue-dark:#1a52cc; --blue-bg:rgba(79,142,247,.1);
+      --green:#2ec76a; --green-dark:#176b38; --green-bg:rgba(46,199,106,.1);
+      --yellow:#e5a020; --yellow-bg:rgba(229,160,32,.1);
+      --red:#f04747; --red-bg:rgba(240,71,71,.1);
+      --purple:#a855f7; --purple-dark:#6d28d9; --purple-bg:rgba(168,85,247,.1);
+      --sw:240px;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.5}
+    a{text-decoration:none;color:inherit}
+    button{font-family:inherit}
 
-    /* ── Header ─────────────────────────────────────────────────────────────── */
-    .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      height: 56px;
-      padding: 0 24px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-    .logo-icon { font-size: 20px; }
-    .spacer { flex: 1; }
-    .net-badge {
-      background: var(--border-muted);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: .04em;
-    }
-    #headerPill {
-      padding: 3px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-    }
-    .ghost-btn {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all .15s;
-    }
-    .ghost-btn:hover { background: var(--border-muted); color: var(--text); }
+    /* SPLASH */
+    .splash{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .5s,visibility .5s}
+    .splash.out{opacity:0;visibility:hidden}
+    .splash-mark{width:76px;height:76px;border-radius:22px;background:linear-gradient(135deg,#1a52cc,#6d28d9);display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 20px;box-shadow:0 12px 40px rgba(79,142,247,.35);animation:float 2.4s ease-in-out infinite}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .splash-title{font-size:30px;font-weight:800;letter-spacing:-.03em;text-align:center;margin-bottom:4px}
+    .splash-sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:36px}
+    .splash-track{width:200px;height:3px;background:var(--border);border-radius:3px;margin:0 auto 14px;overflow:hidden}
+    .splash-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:3px;animation:load 1.6s ease-in-out infinite}
+    @keyframes load{0%{width:0%;margin-left:0}50%{width:70%;margin-left:0}100%{width:0%;margin-left:100%}}
+    .splash-msg{font-size:12px;color:var(--subtle);text-align:center}
+    .splash-err{color:var(--red);font-size:13px;text-align:center;margin-top:14px}
 
-    /* ── Layout ─────────────────────────────────────────────────────────────── */
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+    /* APP SHELL */
+    .app{display:none;height:100vh;overflow:hidden}
+    .app.on{display:flex}
 
-    /* ── Stepper ────────────────────────────────────────────────────────────── */
-    .stepper {
-      display: flex;
-      align-items: flex-start;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px 24px;
-      margin-bottom: 24px;
-      overflow-x: auto;
-      gap: 0;
-    }
-    .step { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 72px; position: relative; }
-    .step:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      top: 15px;
-      left: calc(50% + 20px);
-      right: calc(-50% + 20px);
-      height: 2px;
-      background: var(--border);
-      z-index: 0;
-    }
-    .step.done:not(:last-child)::after { background: var(--green); }
-    .step-dot {
-      width: 30px; height: 30px;
-      border-radius: 50%;
-      border: 2px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700;
-      background: var(--card);
-      color: var(--subtle);
-      position: relative; z-index: 1;
-      transition: all .2s;
-    }
-    .step.done .step-dot  { border-color: var(--green);  color: var(--green);  background: var(--green-bg);  }
-    .step.active .step-dot{ border-color: var(--blue);   color: var(--blue);   background: var(--blue-bg);   }
-    .step-name { font-size: 11px; font-weight: 500; color: var(--subtle); text-align: center; white-space: nowrap; }
-    .step.done .step-name  { color: var(--green); }
-    .step.active .step-name{ color: var(--blue);  }
+    /* SIDEBAR */
+    .sb{width:var(--sw);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border-sub);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;z-index:50}
+    .sb-logo{display:flex;align-items:center;gap:10px;padding:17px 16px 15px;border-bottom:1px solid var(--border-sub)}
+    .sb-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#1a52cc,#6d28d9);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .sb-name{font-size:15px;font-weight:700;letter-spacing:-.01em}
+    .sb-nav{flex:1;padding:10px 8px;overflow-y:auto}
+    .nav-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle);padding:6px 10px 6px}
+    .ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .15s;margin-bottom:2px;user-select:none}
+    .ni:hover{background:var(--border-sub);color:var(--text)}
+    .ni.on{background:var(--blue-bg);color:var(--blue)}
+    .ni-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+    .ni-badge{margin-left:auto;background:var(--green-bg);color:var(--green);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700}
+    .sb-div{height:1px;background:var(--border-sub);margin:8px 8px}
+    .sb-profile{padding:12px 14px;border-top:1px solid var(--border-sub);display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .15s;flex-shrink:0}
+    .sb-profile:hover{background:var(--border-sub)}
+    .prof-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#1a52cc,#6d28d9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+    .prof-addr{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .prof-net{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);margin-top:1px}
+    .net-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 
-    /* ── Grid ───────────────────────────────────────────────────────────────── */
-    .grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
-    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-    .stack { display: flex; flex-direction: column; gap: 16px; }
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+    .mob-header{display:none;background:var(--surface);border-bottom:1px solid var(--border-sub);height:52px;padding:0 16px;align-items:center;gap:12px;flex-shrink:0}
+    .burger{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;line-height:1}
+    .mob-title{font-size:15px;font-weight:700;flex:1}
+    .scroll{flex:1;overflow-y:auto;padding:26px 28px 32px}
 
-    /* ── Cards ──────────────────────────────────────────────────────────────── */
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    .card-head {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border-muted);
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 600; color: var(--text);
-    }
-    .card-head .icon { font-size: 15px; }
-    .card-body { padding: 18px; }
+    /* PAGE HEADER */
+    .pg-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px}
+    .pg-title{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:3px}
+    .pg-sub{font-size:13px;color:var(--muted)}
+    .pg-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 
-    /* ── Action card ────────────────────────────────────────────────────────── */
-    .step-tag {
-      font-size: 10px; font-weight: 700; letter-spacing: .1em;
-      text-transform: uppercase; color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .action-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-    .action-desc  { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 18px; }
+    /* STATUS PILL */
+    .pill{padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .p-UNFUNDED{background:rgba(100,116,139,.15);color:#94a3b8}
+    .p-OPEN,.p-AGREED{background:var(--blue-bg);color:var(--blue)}
+    .p-SUBMITTED{background:var(--purple-bg);color:var(--purple)}
+    .p-EVALUATED{background:var(--yellow-bg);color:var(--yellow)}
+    .p-ACCEPTED{background:var(--green-bg);color:var(--green)}
+    .p-PARTIAL{background:var(--yellow-bg);color:var(--yellow)}
+    .p-REFUNDED{background:var(--red-bg);color:var(--red)}
 
-    /* ── Forms ──────────────────────────────────────────────────────────────── */
-    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
-    .field label { font-size: 12px; font-weight: 600; color: var(--muted); }
-    .field small  { font-size: 11px; color: var(--subtle); }
-    input[type="url"], input[type="number"] {
-      width: 100%;
-      padding: 9px 13px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 13px;
-      outline: none;
-      transition: border-color .15s;
-    }
-    input:focus { border-color: var(--blue); }
-    input::placeholder { color: var(--subtle); }
+    /* CARDS */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .card-head{padding:13px 18px;border-bottom:1px solid var(--border-sub);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+    .ch-icon{font-size:14px}
+    .card-body{padding:18px}
 
-    /* ── Buttons ────────────────────────────────────────────────────────────── */
-    .btn {
-      padding: 9px 18px;
-      border: none; border-radius: 8px;
-      font-size: 13px; font-weight: 600;
-      cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      transition: filter .15s, transform .1s;
-      white-space: nowrap;
-    }
-    .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn:not(:disabled):hover { filter: brightness(1.15); transform: translateY(-1px); }
-    .btn-full { width: 100%; }
-    .btn-green  { background: var(--green-dark); color: #fff; }
-    .btn-blue   { background: var(--blue-dark);  color: #fff; }
-    .btn-purple { background: var(--purple-dark); color: #fff; }
-    .btn-ghost2 { background: var(--border-muted); color: var(--text); border: 1px solid var(--border); }
-    .btn-row { display: flex; gap: 10px; }
+    /* OVERVIEW */
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+    .stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:9px}
+    .stat-val{font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:3px;line-height:1.1}
+    .stat-hint{font-size:12px;color:var(--muted)}
+    .ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 
-    /* ── Hint boxes ─────────────────────────────────────────────────────────── */
-    .hint {
-      display: flex; gap: 10px; align-items: flex-start;
-      padding: 11px 13px; border-radius: 8px;
-      font-size: 13px; line-height: 1.5;
-      margin-bottom: 16px;
-    }
-    .hint-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(88,166,255,.2); }
-    .hint-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(210,153,34,.2); }
-    .hint-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(63,185,80,.2);  }
+    /* TIMELINE */
+    .tl-item{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--border-sub)}
+    .tl-item:last-child{border-bottom:none}
+    .tl-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+    .td-done{background:var(--green-bg);color:var(--green)}
+    .td-active{background:var(--blue-bg);color:var(--blue)}
+    .td-pending{background:var(--border-sub);color:var(--subtle)}
+    .tl-title{font-size:13px;font-weight:600;margin-bottom:2px}
+    .tl-desc{font-size:12px;color:var(--muted)}
 
-    /* ── Terminal result hero ───────────────────────────────────────────────── */
-    .result-hero { padding: 28px 20px; text-align: center; }
-    .result-icon { font-size: 44px; margin-bottom: 10px; }
-    .result-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
-    .result-title.ACCEPTED { color: var(--green);  }
-    .result-title.PARTIAL  { color: var(--yellow); }
-    .result-title.REFUNDED { color: var(--red);    }
-    .result-sub { font-size: 14px; color: var(--muted); }
+    /* QUICK ACTION */
+    .qa-title{font-size:15px;font-weight:700;margin-bottom:6px}
+    .qa-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px}
 
-    /* ── KV list ────────────────────────────────────────────────────────────── */
-    .kv-list { display: flex; flex-direction: column; }
-    .kv {
-      display: flex; justify-content: space-between; align-items: center; gap: 8px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border-muted);
-      font-size: 13px;
-    }
-    .kv:last-child { border-bottom: none; }
-    .kv-k { color: var(--muted); flex-shrink: 0; }
-    .kv-v { color: var(--text); text-align: right; word-break: break-all; }
-    .kv-v a { color: var(--blue); text-decoration: none; }
-    .kv-v a:hover { text-decoration: underline; }
+    /* MANAGE */
+    .stepper-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:18px;overflow-x:auto}
+    .stepper{display:flex;align-items:flex-start}
+    .step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:70px;position:relative}
+    .step:not(:last-child)::after{content:'';position:absolute;top:13px;left:calc(50% + 18px);right:calc(-50% + 18px);height:2px;background:var(--border);z-index:0}
+    .step.done:not(:last-child)::after{background:var(--green)}
+    .step-dot{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--card);color:var(--subtle);position:relative;z-index:1;transition:all .2s}
+    .step.done .step-dot{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+    .step.active .step-dot{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+    .step-name{font-size:10px;font-weight:500;color:var(--subtle);text-align:center;white-space:nowrap}
+    .step.done .step-name{color:var(--green)}
+    .step.active .step-name{color:var(--blue)}
+    .mg-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .step-tag{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+    .act-title{font-size:19px;font-weight:700;margin-bottom:8px}
+    .act-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:18px}
+    .spec-text{font-size:13px;color:var(--muted);line-height:1.75;white-space:pre-wrap}
 
-    /* ── Score ──────────────────────────────────────────────────────────────── */
-    .score-row { display: flex; align-items: flex-end; justify-content: center; gap: 6px; padding: 12px 0 10px; }
-    .score-big { font-size: 52px; font-weight: 800; line-height: 1; }
-    .score-big.hi  { color: var(--green);  }
-    .score-big.mid { color: var(--yellow); }
-    .score-big.lo  { color: var(--red);    }
-    .score-denom { font-size: 18px; color: var(--subtle); padding-bottom: 6px; }
-    .bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
-    .bar-fill  { height: 100%; border-radius: 4px; transition: width 1s cubic-bezier(.4,0,.2,1); width: 0%; }
-    .bar-fill.hi  { background: linear-gradient(90deg,#16a34a,#4ade80); }
-    .bar-fill.mid { background: linear-gradient(90deg,#d97706,#fbbf24); }
-    .bar-fill.lo  { background: linear-gradient(90deg,#dc2626,#f87171); }
-    .outcome-chip {
-      display: inline-block; padding: 4px 14px;
-      border-radius: 20px; font-size: 11px; font-weight: 700;
-      letter-spacing: .07em; text-transform: uppercase;
-      margin: 0 auto; display: block; text-align: center; width: fit-content;
-      margin-bottom: 12px;
-    }
-    .reasoning-box {
-      background: var(--surface); border: 1px solid var(--border-muted);
-      border-radius: 8px; padding: 12px;
-      font-size: 12px; color: var(--muted); line-height: 1.65;
-    }
-    .reasoning-box strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--subtle); margin-bottom: 5px; }
+    /* FORMS */
+    .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .field label{font-size:12px;font-weight:600;color:var(--muted)}
+    .field small{font-size:11px;color:var(--subtle)}
+    input[type="url"],input[type="number"]{width:100%;padding:9px 13px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+    input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,142,247,.12)}
+    input::placeholder{color:var(--subtle)}
 
-    /* ── Log ────────────────────────────────────────────────────────────────── */
-    .log-toggle {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 18px; cursor: pointer; user-select: none;
-      font-size: 13px; font-weight: 500; color: var(--muted);
-    }
-    .log-toggle:hover { color: var(--text); }
-    .log-count { background: var(--border-muted); padding: 1px 8px; border-radius: 10px; font-size: 11px; }
-    .log-body {
-      border-top: 1px solid var(--border-muted);
-      padding: 10px 18px; max-height: 180px; overflow-y: auto;
-      font-family: ui-monospace, "SF Mono", monospace; font-size: 12px;
-    }
-    .log-entry { padding: 2px 0; color: var(--muted); }
-    .log-entry.ok  { color: var(--green); }
-    .log-entry.err { color: var(--red);   }
-    .log-ts { color: var(--subtle); margin-right: 8px; }
+    /* HINT */
+    .hint{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;border-radius:8px;font-size:13px;line-height:1.5;margin-bottom:14px}
+    .hy{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(229,160,32,.2)}
+    .hb{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(79,142,247,.2)}
+    .hg{background:var(--green-bg);color:var(--green);border:1px solid rgba(46,199,106,.2)}
 
-    /* ── Spec ───────────────────────────────────────────────────────────────── */
-    .spec-text { font-size: 13px; color: var(--muted); line-height: 1.7; white-space: pre-wrap; }
+    /* BUTTONS */
+    .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:filter .15s,transform .1s;white-space:nowrap;font-family:inherit}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .btn:not(:disabled):hover{filter:brightness(1.15);transform:translateY(-1px)}
+    .btn-full{width:100%}
+    .bg{background:var(--green-dark);color:#fff}
+    .bb{background:var(--blue-dark);color:#fff}
+    .bp{background:var(--purple-dark);color:#fff}
+    .bh{background:var(--border-sub);color:var(--text);border:1px solid var(--border)}
+    .btn-row{display:flex;gap:10px}
 
-    /* ── Skeleton ───────────────────────────────────────────────────────────── */
-    @keyframes shimmer { 0% { background-position:-200% 0 } 100% { background-position:200% 0 } }
-    .skel {
-      height: 13px; border-radius: 4px; margin-bottom: 10px;
-      background: linear-gradient(90deg, var(--border-muted) 25%, var(--border) 50%, var(--border-muted) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.4s infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,.25);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      display: inline-block;
-    }
+    /* TERMINAL */
+    .t-hero{padding:32px 24px;text-align:center}
+    .t-icon{font-size:48px;margin-bottom:12px}
+    .t-title{font-size:22px;font-weight:800;margin-bottom:6px}
+    .t-ACCEPTED{color:var(--green)}.t-PARTIAL{color:var(--yellow)}.t-REFUNDED{color:var(--red)}
+    .t-sub{font-size:14px;color:var(--muted)}
 
-    /* ── Pill colours ───────────────────────────────────────────────────────── */
-    .p-UNFUNDED  { background:var(--border-muted); color:var(--muted);   }
-    .p-OPEN      { background:var(--blue-bg);      color:var(--blue);    }
-    .p-AGREED    { background:var(--blue-bg);      color:var(--blue);    }
-    .p-SUBMITTED { background:var(--purple-bg);    color:var(--purple);  }
-    .p-EVALUATED { background:var(--yellow-bg);    color:var(--yellow);  }
-    .p-ACCEPTED  { background:var(--green-bg);     color:var(--green);   }
-    .p-PARTIAL   { background:var(--yellow-bg);    color:var(--yellow);  }
-    .p-REFUNDED  { background:var(--red-bg);       color:var(--red);     }
+    /* EVALUATE PAGE */
+    .ev-hero{display:flex;flex-direction:column;align-items:center;padding:32px 24px;margin-bottom:18px}
+    .circ-wrap{position:relative;width:150px;height:150px;margin-bottom:18px}
+    .circ-svg{width:150px;height:150px;transform:rotate(-90deg)}
+    .c-bg{fill:none;stroke:var(--border);stroke-width:9}
+    .c-arc{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1)}
+    .circ-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .circ-num{font-size:38px;font-weight:800;line-height:1}
+    .circ-den{font-size:14px;color:var(--muted)}
+    .out-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 16px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+    .ev-verdict{font-size:13px;color:var(--muted);text-align:center}
+    .ev-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .bar-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
+    .bar-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:14px}
+    .bar-fill{height:100%;border-radius:4px;transition:width 1.2s cubic-bezier(.4,0,.2,1);width:0%}
+    .thr-row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border-sub)}
+    .thr-row:last-child{border-bottom:none}
+    .thr-row span:last-child{color:var(--text);font-weight:600}
+    .reasoning{font-size:13px;color:var(--muted);line-height:1.75}
+
+    /* CONTRACTS */
+    .cts-stack{display:flex;flex-direction:column;gap:14px}
+    .addr-block{background:var(--bg);border:1px solid var(--border-sub);border-radius:8px;padding:11px 13px;display:flex;align-items:center;gap:8px;margin-top:10px}
+    .addr-mono{font-family:ui-monospace,"SF Mono",monospace;font-size:12px;flex:1;word-break:break-all;color:var(--text)}
+    .copy-btn{background:var(--border-sub);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;transition:all .15s;flex-shrink:0;font-family:inherit}
+    .copy-btn:hover{background:var(--border);color:var(--text)}
+    .exp-link{display:inline-flex;align-items:center;gap:5px;color:var(--blue);font-size:12px;margin-top:8px}
+    .exp-link:hover{text-decoration:underline}
+    .kv-list{display:flex;flex-direction:column}
+    .kv{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border-sub);font-size:13px}
+    .kv:last-child{border-bottom:none}
+    .kv-k{color:var(--muted);flex-shrink:0}
+    .kv-v{color:var(--text);text-align:right}
+
+    /* EMPTY */
+    .empty{text-align:center;padding:56px 24px}
+    .empty-icon{font-size:48px;margin-bottom:16px}
+    .empty-title{font-size:18px;font-weight:700;margin-bottom:8px}
+    .empty-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:24px;max-width:340px;margin-left:auto;margin-right:auto}
+
+    /* LOG */
+    .log-wrap{border-top:1px solid var(--border-sub);flex-shrink:0}
+    .log-toggle{display:flex;align-items:center;gap:8px;padding:10px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);user-select:none}
+    .log-toggle:hover{color:var(--text)}
+    .log-n{background:var(--border-sub);padding:1px 8px;border-radius:10px;font-size:10px}
+    .log-lines{border-top:1px solid var(--border-sub);padding:10px 18px;max-height:150px;overflow-y:auto;font-family:ui-monospace,monospace;font-size:11px}
+    .ll{padding:2px 0;color:var(--muted)}
+    .ll.ok{color:var(--green)}.ll.err{color:var(--red)}
+    .ll-ts{color:var(--subtle);margin-right:8px}
+
+    /* OVERLAY */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:49}
+    .overlay.on{display:block}
+
+    /* BOTTOM NAV */
+    .bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border-sub);padding:6px 0 calc(6px + env(safe-area-inset-bottom));z-index:40}
+    .bnav-items{display:flex}
+    .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 8px;font-size:10px;font-weight:500;color:var(--muted);cursor:pointer;transition:color .15s;user-select:none}
+    .bn.on{color:var(--blue)}
+    .bn-ic{font-size:18px}
+
+    /* SKELETON */
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    .skel{height:13px;border-radius:4px;margin-bottom:10px;background:linear-gradient(90deg,var(--border-sub) 25%,var(--border) 50%,var(--border-sub) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+
+    /* RESPONSIVE */
+    @media(max-width:900px){
+      .sb{position:fixed;top:0;left:0;height:100%;transform:translateX(-100%);transition:transform .25s;z-index:60}
+      .sb.open{transform:translateX(0)}
+      .mob-header{display:flex}
+      .bnav{display:block}
+      .scroll{padding:20px 16px 80px}
+      .app.on{display:block}
+      .main{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+      .stat-row{grid-template-columns:1fr}
+      .ov-grid,.mg-grid,.ev-grid{grid-template-columns:1fr}
+    }
+    @media(max-width:600px){.stat-row{grid-template-columns:1fr 1fr}}
   </style>
 </head>
 <body>
 
-<!-- ── Header ──────────────────────────────────────────────────────────────── -->
-<header class="header">
-  <div class="logo"><span class="logo-icon">⚖️</span> GenLayer Escrow</div>
-  <div class="spacer"></div>
-  <span class="net-badge">testnet_bradbury</span>
-  <span id="headerPill" class="p-UNFUNDED">—</span>
-  <button class="ghost-btn" onclick="loadStatus()">↻ Refresh</button>
-</header>
-
-<div class="wrap">
-
-  <!-- ── Stepper ─────────────────────────────────────────────────────────── -->
-  <div class="stepper">
-    <div class="step" id="st0"><div class="step-dot">1</div><div class="step-name">Fund</div></div>
-    <div class="step" id="st1"><div class="step-dot">2</div><div class="step-name">Accept Terms</div></div>
-    <div class="step" id="st2"><div class="step-dot">3</div><div class="step-name">Submit Work</div></div>
-    <div class="step" id="st3"><div class="step-dot">4</div><div class="step-name">Evaluate</div></div>
-    <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
+<!-- SPLASH -->
+<div id="splash" class="splash">
+  <div>
+    <div class="splash-mark">⚖️</div>
+    <div class="splash-title">GenEscrow</div>
+    <div class="splash-sub">AI-Arbitrated Freelance Escrow</div>
+    <div class="splash-track"><div class="splash-bar"></div></div>
+    <div class="splash-msg" id="splashMsg">Connecting to testnet_bradbury…</div>
+    <div class="splash-err" id="splashErr" style="display:none"></div>
   </div>
+</div>
 
-  <!-- ── Main grid ────────────────────────────────────────────────────────── -->
-  <div class="grid">
+<!-- APP -->
+<div id="app" class="app">
 
-    <!-- Left column -->
-    <div class="stack">
-      <!-- Action card -->
-      <div class="card" id="actionCard">
-        <div class="card-body">
-          <div class="skel" style="width:35%;height:10px"></div>
-          <div class="skel" style="width:65%;height:20px;margin:8px 0 16px"></div>
-          <div class="skel"></div><div class="skel" style="width:85%"></div>
-        </div>
-      </div>
-
-      <!-- Spec card (hidden until loaded) -->
-      <div class="card" id="specCard" style="display:none">
-        <div class="card-head"><span class="icon">📋</span> Job Specification</div>
-        <div class="card-body">
-          <p class="spec-text" id="specText"></p>
-        </div>
+  <!-- SIDEBAR -->
+  <aside class="sb" id="sb">
+    <div class="sb-logo">
+      <div class="sb-mark">⚖️</div>
+      <div class="sb-name">GenEscrow</div>
+    </div>
+    <nav class="sb-nav">
+      <div class="nav-label">Menu</div>
+      <div class="ni on" id="ni-overview" onclick="go('overview')"><span class="ni-icon">📊</span> Overview</div>
+      <div class="ni" id="ni-manage"   onclick="go('manage')">  <span class="ni-icon">⚙️</span> Manage Job</div>
+      <div class="ni" id="ni-evaluate" onclick="go('evaluate')"><span class="ni-icon">🤖</span> AI Evaluation<span class="ni-badge" id="evalBadge" style="display:none">New</span></div>
+      <div class="sb-div"></div>
+      <div class="nav-label">Technical</div>
+      <div class="ni" id="ni-contracts" onclick="go('contracts')"><span class="ni-icon">🔗</span> Contracts</div>
+    </nav>
+    <div class="sb-profile">
+      <div class="prof-av" id="profAv">?</div>
+      <div style="overflow:hidden">
+        <div class="prof-addr" id="profAddr">Loading…</div>
+        <div class="prof-net"><span class="net-dot"></span>testnet_bradbury</div>
       </div>
     </div>
+  </aside>
 
-    <!-- Right column -->
-    <div class="stack">
-      <!-- Details -->
-      <div class="card">
-        <div class="card-head"><span class="icon">💰</span> Escrow Details</div>
-        <div class="card-body" style="padding:0 18px">
-          <div class="kv-list" id="detailList">
-            <div class="kv"><span class="kv-k">Loading…</span></div>
+  <div class="overlay" id="ov" onclick="closeSb()"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="mob-header">
+      <button class="burger" onclick="toggleSb()">☰</button>
+      <span class="mob-title">GenEscrow</span>
+      <span id="mobPill" class="pill p-UNFUNDED">—</span>
+    </div>
+
+    <div class="scroll" id="scroll">
+
+      <!-- OVERVIEW -->
+      <section id="pg-overview">
+        <div class="pg-hdr">
+          <div><div class="pg-title">Overview</div><div class="pg-sub">Current state of your escrow</div></div>
+          <div class="pg-right">
+            <span id="ovPill" class="pill p-UNFUNDED">—</span>
+            <button class="btn bh" style="font-size:12px;padding:6px 12px" onclick="reload()">↻ Refresh</button>
           </div>
         </div>
-      </div>
+        <div class="stat-row">
+          <div class="stat"><div class="stat-lbl">Status</div><div class="stat-val" id="ov-s">—</div><div class="stat-hint" id="ov-sh"></div></div>
+          <div class="stat"><div class="stat-lbl">Amount Locked</div><div class="stat-val" id="ov-a">—</div><div class="stat-hint" id="ov-ah"></div></div>
+          <div class="stat"><div class="stat-lbl">AI Score</div><div class="stat-val" id="ov-sc">—</div><div class="stat-hint" id="ov-sch"></div></div>
+        </div>
+        <div class="ov-grid">
+          <div class="card"><div class="card-head"><span class="ch-icon">🗺️</span> Escrow Timeline</div><div class="card-body" style="padding:0 18px"><div id="tl"></div></div></div>
+          <div class="card"><div class="card-head"><span class="ch-icon">⚡</span> Next Action</div><div class="card-body" id="qa"></div></div>
+        </div>
+      </section>
 
-      <!-- Score (hidden until evaluated) -->
-      <div class="card" id="scoreCard" style="display:none">
-        <div class="card-head"><span class="icon">🤖</span> AI Evaluation</div>
-        <div class="card-body">
-          <div class="score-row">
-            <div class="score-big" id="scoreBig">—</div>
-            <div class="score-denom">/100</div>
-          </div>
-          <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
-          <div class="outcome-chip" id="outcomeChip"></div>
-          <div class="reasoning-box" id="reasoningBox" style="display:none">
-            <strong>AI Reasoning</strong>
-            <span id="reasoningText"></span>
+      <!-- MANAGE -->
+      <section id="pg-manage" style="display:none">
+        <div class="pg-hdr">
+          <div><div class="pg-title">Manage Job</div><div class="pg-sub">Step-by-step escrow flow</div></div>
+          <span id="mgPill" class="pill p-UNFUNDED">—</span>
+        </div>
+        <div class="stepper-wrap">
+          <div class="stepper">
+            <div class="step" id="st0"><div class="step-dot">1</div><div class="step-name">Fund</div></div>
+            <div class="step" id="st1"><div class="step-dot">2</div><div class="step-name">Accept</div></div>
+            <div class="step" id="st2"><div class="step-dot">3</div><div class="step-name">Submit</div></div>
+            <div class="step" id="st3"><div class="step-dot">4</div><div class="step-name">Evaluate</div></div>
+            <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
           </div>
         </div>
-      </div>
+        <div class="mg-grid">
+          <div class="card" id="actCard"><div class="card-body"><div class="skel" style="width:40%;height:10px"></div><div class="skel" style="height:20px;margin:8px 0 14px"></div><div class="skel"></div></div></div>
+          <div class="card" id="specCard" style="display:none"><div class="card-head"><span class="ch-icon">📋</span> Job Specification</div><div class="card-body"><p class="spec-text" id="specTxt"></p></div></div>
+        </div>
+      </section>
 
-      <!-- Contracts -->
-      <div class="card">
-        <div class="card-head"><span class="icon">🔗</span> Contracts</div>
-        <div class="card-body" style="padding:0 18px">
-          <div class="kv-list" id="contractList">
-            <div class="kv"><span class="kv-k">Loading…</span></div>
+      <!-- EVALUATE -->
+      <section id="pg-evaluate" style="display:none">
+        <div class="pg-hdr"><div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Automated scoring of submitted work</div></div></div>
+        <div class="card" id="evEmpty"><div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div></div>
+        <div id="evContent" style="display:none">
+          <div class="card ev-hero" style="margin-bottom:18px">
+            <div class="circ-wrap">
+              <svg class="circ-svg" viewBox="0 0 150 150">
+                <circle class="c-bg" cx="75" cy="75" r="62"/>
+                <circle class="c-arc" id="cArc" cx="75" cy="75" r="62" stroke-dasharray="389.6" stroke-dashoffset="389.6"/>
+              </svg>
+              <div class="circ-label"><div class="circ-num" id="cNum">—</div><div class="circ-den">/100</div></div>
+            </div>
+            <div class="out-badge" id="oBadge">—</div>
+            <div class="ev-verdict" id="eVerdict"></div>
+          </div>
+          <div class="ev-grid">
+            <div class="card"><div class="card-head"><span class="ch-icon">📈</span> Score Breakdown</div>
+              <div class="card-body">
+                <div class="bar-meta"><span>Score</span><span id="bPct">—</span></div>
+                <div class="bar-track"><div class="bar-fill" id="bFill"></div></div>
+                <div id="thrInfo"></div>
+              </div>
+            </div>
+            <div class="card"><div class="card-head"><span class="ch-icon">💬</span> AI Reasoning</div><div class="card-body"><p class="reasoning" id="rText">—</p></div></div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <!-- CONTRACTS -->
+      <section id="pg-contracts" style="display:none">
+        <div class="pg-hdr"><div><div class="pg-title">Contracts</div><div class="pg-sub">Smart contracts deployed on testnet_bradbury</div></div></div>
+        <div class="cts-stack" id="ctsContent"><div class="skel" style="height:100px;border-radius:12px;margin-bottom:14px"></div><div class="skel" style="height:100px;border-radius:12px"></div></div>
+      </section>
+
+    </div><!-- /scroll -->
+
+    <!-- LOG -->
+    <div class="log-wrap">
+      <div class="log-toggle" onclick="toggleLog()"><span id="logArr">▶</span> Activity Log <span class="log-n" id="logN">0</span></div>
+      <div class="log-lines" id="logLines" style="display:none"></div>
     </div>
   </div>
 
-  <!-- ── Log ──────────────────────────────────────────────────────────────── -->
-  <div class="card" style="margin-top:20px">
-    <div class="log-toggle" onclick="toggleLog()">
-      <span id="logArrow">▶</span> Activity Log
-      <span class="log-count" id="logCount">0</span>
+  <!-- BOTTOM NAV -->
+  <nav class="bnav">
+    <div class="bnav-items">
+      <div class="bn on" id="bn-overview"  onclick="go('overview')"> <span class="bn-ic">📊</span>Overview</div>
+      <div class="bn"    id="bn-manage"    onclick="go('manage')">   <span class="bn-ic">⚙️</span>Manage</div>
+      <div class="bn"    id="bn-evaluate"  onclick="go('evaluate')"> <span class="bn-ic">🤖</span>Evaluate</div>
+      <div class="bn"    id="bn-contracts" onclick="go('contracts')"><span class="bn-ic">🔗</span>Contracts</div>
     </div>
-    <div class="log-body" id="logBody" style="display:none"></div>
-  </div>
-
-</div><!-- /wrap -->
+  </nav>
+</div>
 
 <script>
-const API_BASE = '';   // served by FastAPI at same origin
+const API_BASE = '';
+const PAGES = ['overview','manage','evaluate','contracts'];
+const S2I = {UNFUNDED:0,OPEN:1,AGREED:2,SUBMITTED:3,EVALUATED:4,ACCEPTED:5,PARTIAL:5,REFUNDED:5};
+const TERM = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
+let data = null, logOpen = false, logN = 0, curPage = 'overview';
 
-// ── State ──────────────────────────────────────────────────────────────────
-const S2IDX = { UNFUNDED:0, OPEN:1, AGREED:2, SUBMITTED:3, EVALUATED:4, ACCEPTED:5, PARTIAL:5, REFUNDED:5 };
-const TERMINAL = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
-let logOpen = false, logN = 0;
-
-// ── Log ────────────────────────────────────────────────────────────────────
-function addLog(msg, type='') {
-  logN++;
-  document.getElementById('logCount').textContent = logN;
-  const el = Object.assign(document.createElement('div'), { className: 'log-entry ' + type });
-  el.innerHTML = `<span class="log-ts">${new Date().toLocaleTimeString()}</span>${msg}`;
-  document.getElementById('logBody').prepend(el);
-}
-function toggleLog() {
-  logOpen = !logOpen;
-  document.getElementById('logBody').style.display = logOpen ? '' : 'none';
-  document.getElementById('logArrow').textContent = logOpen ? '▼' : '▶';
-}
-
-// ── Stepper ────────────────────────────────────────────────────────────────
-function updateStepper(status) {
-  const idx = S2IDX[status] ?? 0;
-  const done = TERMINAL.has(status);
-  for (let i = 0; i < 5; i++) {
-    const el = document.getElementById('st'+i);
-    el.className = 'step' + (done || i < idx ? ' done' : i === idx ? ' active' : '');
-    el.querySelector('.step-dot').textContent = (done || i < idx) ? '✓' : i+1;
+// ── SPLASH ─────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch(API_BASE+'/api/status');
+    if (!r.ok) throw new Error('Server error '+r.status);
+    data = await r.json();
+    await delay(500);
+    document.getElementById('splash').classList.add('out');
+    document.getElementById('app').classList.add('on');
+    setTimeout(()=>document.getElementById('splash').remove(),600);
+    renderAll();
+  } catch(e) {
+    document.getElementById('splashErr').textContent = 'Could not connect: '+e.message;
+    document.getElementById('splashErr').style.display='';
+    document.getElementById('splashMsg').textContent='Make sure the API server is running.';
   }
 }
+const delay = ms => new Promise(r=>setTimeout(r,ms));
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-const short = a => a ? a.slice(0,6)+'…'+a.slice(-4) : '—';
-const toGEN = w => w === 0 ? '0 GEN' : (w/1e18).toFixed(4)+' GEN';
-const kv = (k,v,href) => `<div class="kv"><span class="kv-k">${k}</span><span class="kv-v">${href?`<a href="${href}" target="_blank">${v} ↗</a>`:v}</span></div>`;
-
-// ── Action card ────────────────────────────────────────────────────────────
-function renderAction(job, result) {
-  const s = job.status;
-  const el = document.getElementById('actionCard');
-
-  if (TERMINAL.has(s)) {
-    const cfg = {
-      ACCEPTED: { icon:'🎉', title:'Payment Released',  cls:'ACCEPTED', desc:`Score ${result?.score}/100 met the minimum of ${job.min_score}. Full payment released to the worker.` },
-      PARTIAL:  { icon:'⚠️', title:'Partial Payment',   cls:'PARTIAL',  desc:`Score ${result?.score}/100 is below the minimum but above the floor. A proportional payment was made.` },
-      REFUNDED: { icon:'↩️', title:'Funds Refunded',    cls:'REFUNDED', desc:`Score ${result?.score}/100 fell below the floor of ${job.partial_floor}. All funds returned to the client.` },
-    }[s];
-    el.innerHTML = `<div class="result-hero">
-      <div class="result-icon">${cfg.icon}</div>
-      <div class="result-title ${cfg.cls}">${cfg.title}</div>
-      <div class="result-sub" style="margin-top:8px">${cfg.desc}</div>
-    </div>`;
-    return;
-  }
-
-  const score = result?.score;
-  const scoreHint = score != null
-    ? `<div class="hint hint-blue" style="margin-bottom:16px">
-        <span>ℹ️</span>
-        <span>AI scored the submission <strong>${score}/100</strong> —
-        ${score >= job.min_score ? `full payment (≥ min ${job.min_score})`
-          : score >= job.partial_floor ? `partial payment (above floor ${job.partial_floor})`
-          : `refund (below floor ${job.partial_floor})`}
-        </span>
-       </div>` : '';
-
-  const steps = [
-    { tag:'Step 1 of 5', title:'Fund the Escrow',
-      desc:'Deposit GEN tokens. Funds are locked in the smart contract until the AI evaluation is complete.',
-      body:`<div class="field">
-              <label>Amount (wei)</label>
-              <input type="number" id="inp-amount" value="1000000000000000" />
-              <small>1,000,000,000,000,000 wei = 0.001 GEN</small>
-            </div>
-            <button class="btn btn-green btn-full" onclick="fund()">Fund Escrow</button>` },
-
-    { tag:'Step 2 of 5', title:'Accept Terms',
-      desc:'The worker reviews the job specification and agrees to deliver the described work.',
-      body:`<button class="btn btn-blue btn-full" onclick="acceptTerms()">Accept Terms &amp; Begin</button>` },
-
-    { tag:'Step 3 of 5', title:'Submit Your Deliverable',
-      desc:'Provide a public URL to the completed work. The AI evaluator will fetch and score this page.',
-      body:`<div class="field">
-              <label>Deliverable URL</label>
-              <input type="url" id="inp-url" placeholder="https://your-submission.com" />
-              <small>Must be publicly accessible — the AI reads this URL directly</small>
-            </div>
-            <button class="btn btn-blue btn-full" onclick="submitWork()">Submit Work</button>` },
-
-    { tag:'Step 4 of 5', title:'Request AI Evaluation',
-      desc:'An AI validator fetches your submission URL and scores it against the job specification.',
-      body:`<div class="hint hint-yellow">
-              <span>⏱</span>
-              <span>This takes <strong>30–60 seconds</strong> on testnet while the AI reads and grades the page.</span>
-            </div>
-            <button class="btn btn-purple btn-full" onclick="evaluate()">Start Evaluation</button>` },
-
-    { tag:'Step 5 of 5', title:'Finalize Payout',
-      desc:'Release funds based on the AI score. The contract calculates the split automatically.',
-      body:`${scoreHint}
-            <div class="btn-row">
-              <button class="btn btn-green btn-full" onclick="finalize()">Release Funds</button>
-              ${!job.appeal_used
-                ? `<button class="btn btn-ghost2" onclick="appeal()" title="Request a second AI opinion">Appeal</button>`
-                : ''}
-            </div>` },
-  ];
-
-  const idx = Math.min(S2IDX[s] ?? 0, 4);
-  const st  = steps[idx];
-  el.innerHTML = `<div class="card-body">
-    <div class="step-tag">${st.tag}</div>
-    <div class="action-title">${st.title}</div>
-    <div class="action-desc">${st.desc}</div>
-    ${st.body}
-  </div>`;
+// ── NAV ────────────────────────────────────────────────────────────────────
+function go(page) {
+  curPage = page;
+  PAGES.forEach(p=>{
+    document.getElementById('pg-'+p).style.display = p===page?'':'none';
+    const ni = document.getElementById('ni-'+p); if(ni) ni.className='ni'+(p===page?' on':'');
+    const bn = document.getElementById('bn-'+p); if(bn) bn.className='bn'+(p===page?' on':'');
+  });
+  closeSb();
 }
+function toggleSb(){document.getElementById('sb').classList.toggle('open');document.getElementById('ov').classList.toggle('on')}
+function closeSb(){document.getElementById('sb').classList.remove('open');document.getElementById('ov').classList.remove('on')}
 
-// ── Details + contracts ────────────────────────────────────────────────────
-function renderDetails(job) {
-  document.getElementById('detailList').innerHTML =
-    kv('Locked', toGEN(job.amount)) +
-    kv('Platform fee', (job.fee_bps/100)+'%') +
-    kv('Min score', job.min_score+' / 100') +
-    kv('Partial floor', job.partial_floor+' / 100') +
-    kv('Terms agreed', job.terms_agreed ? '✓ Yes' : 'Pending') +
-    kv('Appeal', job.appeal_used ? 'Used' : 'Available') +
-    kv('Client', short(job.client)) +
-    kv('Worker', short(job.worker));
+// ── LOG ────────────────────────────────────────────────────────────────────
+function log(msg,type=''){
+  logN++;document.getElementById('logN').textContent=logN;
+  const el=Object.assign(document.createElement('div'),{className:'ll '+type});
+  el.innerHTML=`<span class="ll-ts">${new Date().toLocaleTimeString()}</span>${msg}`;
+  document.getElementById('logLines').prepend(el);
 }
+function toggleLog(){logOpen=!logOpen;document.getElementById('logLines').style.display=logOpen?'':'none';document.getElementById('logArr').textContent=logOpen?'▼':'▶'}
 
-function renderContracts(addr) {
-  document.getElementById('contractList').innerHTML =
-    kv('Escrow',    short(addr.escrow),    addr.explorer_escrow) +
-    kv('Evaluator', short(addr.evaluator), addr.explorer_evaluator) +
-    kv('Deployer',  short(addr.deployer));
-}
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const short = a=>a?a.slice(0,6)+'…'+a.slice(-4):'—';
+const toGEN = w=>w===0?'0 GEN':(w/1e18).toFixed(4)+' GEN';
 
-// ── Score card ─────────────────────────────────────────────────────────────
-function renderScore(result, job) {
-  const sc = result?.score;
-  if (sc == null) { document.getElementById('scoreCard').style.display = 'none'; return; }
-  document.getElementById('scoreCard').style.display = '';
-
-  const cls = sc >= job.min_score ? 'hi' : sc >= job.partial_floor ? 'mid' : 'lo';
-  document.getElementById('scoreBig').textContent = sc;
-  document.getElementById('scoreBig').className = 'score-big ' + cls;
-  const fill = document.getElementById('barFill');
-  fill.className = 'bar-fill ' + cls;
-  setTimeout(() => fill.style.width = sc+'%', 80);
-
-  const chip = document.getElementById('outcomeChip');
-  const chipMap = {
-    ACCEPTED:{ bg:'var(--green-bg)',  color:'var(--green)',  label:'ACCEPTED'     },
-    PARTIAL: { bg:'var(--yellow-bg)', color:'var(--yellow)', label:'PARTIAL PAY'  },
-    REFUNDED:{ bg:'var(--red-bg)',    color:'var(--red)',    label:'REFUNDED'     },
-  }[result.status] || { bg:'var(--border-muted)', color:'var(--muted)', label: result.status || '—' };
-  chip.textContent = chipMap.label;
-  chip.style.background = chipMap.bg;
-  chip.style.color = chipMap.color;
-
-  if (result.reasoning) {
-    document.getElementById('reasoningText').textContent = result.reasoning;
-    document.getElementById('reasoningBox').style.display = '';
-  }
-}
-
-// ── Main render ────────────────────────────────────────────────────────────
-function renderStatus({ job, result, addresses }) {
-  const s = job.status;
-
-  // Header pill
-  const pill = document.getElementById('headerPill');
-  pill.textContent = s;
-  pill.className = 'p-' + s;
-
-  updateStepper(s);
-  renderAction(job, result);
-  renderDetails(job);
+// ── RENDER ALL ─────────────────────────────────────────────────────────────
+function renderAll() {
+  if(!data) return;
+  const {job,result,addresses} = data;
+  renderPills(job.status);
+  renderProfile(addresses);
+  renderOverview(job,result);
+  renderManage(job,result);
+  renderEvaluate(job,result);
   renderContracts(addresses);
-  renderScore(result, job);
+}
 
-  if (job.spec) {
-    document.getElementById('specText').textContent = job.spec;
-    document.getElementById('specCard').style.display = '';
+function renderPills(s) {
+  ['ovPill','mgPill','mobPill'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=s;e.className='pill p-'+s}});
+}
+
+function renderProfile(addr) {
+  const a=addr?.deployer||'';
+  document.getElementById('profAddr').textContent=short(a);
+  document.getElementById('profAv').textContent=a?a.slice(2,4).toUpperCase():'?';
+}
+
+// ── OVERVIEW ───────────────────────────────────────────────────────────────
+function renderOverview(job, result) {
+  const s=job.status, i=S2I[s]??0;
+  const SC={UNFUNDED:'#94a3b8',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',ACCEPTED:'var(--green)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'};
+  const SH={UNFUNDED:'Awaiting deposit',OPEN:'Worker can accept',AGREED:'Worker can submit',SUBMITTED:'Awaiting AI score',EVALUATED:'Ready to finalize',ACCEPTED:'Fully paid out',PARTIAL:'Partial payout',REFUNDED:'Refunded to client'};
+  set('ov-s',s,SC[s]); set('ov-sh',SH[s]||'');
+  set('ov-a',toGEN(job.amount)); set('ov-ah',TERM.has(s)?'Disbursed':job.amount>0?'Held in contract':'Not yet funded');
+  if(result?.score!=null){
+    const sc=result.score,c=sc>=job.min_score?'var(--green)':sc>=job.partial_floor?'var(--yellow)':'var(--red)';
+    set('ov-sc',sc+' / 100',c); set('ov-sch','Min required: '+job.min_score);
+    document.getElementById('evalBadge').style.display='';
+  } else {set('ov-sc','—');set('ov-sch','Not yet evaluated')}
+
+  // Timeline
+  const steps=[
+    {l:'Escrow Funded',     d:'Client deposited '+toGEN(job.amount)},
+    {l:'Terms Accepted',    d:'Worker agreed to the job specification'},
+    {l:'Work Submitted',    d:'Deliverable URL provided for evaluation'},
+    {l:'AI Evaluated',      d:result?.score!=null?`Scored ${result.score}/100`:'AI graded the submission'},
+    {l:'Payout Finalized',  d:{ACCEPTED:'Full payment released',PARTIAL:'Partial payment released',REFUNDED:'Refund issued'}[s]||'Funds released'},
+  ];
+  document.getElementById('tl').innerHTML=steps.map((st,n)=>{
+    const done=n<i||TERM.has(s), active=!TERM.has(s)&&n===i;
+    const cls=done?'td-done':active?'td-active':'td-pending';
+    const icon=done?'✓':active?'→':n+1;
+    return `<div class="tl-item"><div class="tl-dot ${cls}">${icon}</div><div><div class="tl-title" style="color:${done?'var(--text)':active?'var(--blue)':'var(--muted)'}">${st.l}</div><div class="tl-desc">${done||active?st.d:'Pending'}</div></div></div>`;
+  }).join('');
+
+  // Quick action
+  const qas=[
+    {title:'Fund the Escrow',      desc:'Deposit GEN tokens. Funds are locked until evaluation.',   btn:'Fund Now →',    page:'manage',   cls:'bg'},
+    {title:'Accept Terms',         desc:'Worker reviews and agrees to the job specification.',       btn:'Accept Terms →', page:'manage',  cls:'bb'},
+    {title:'Submit Deliverable',   desc:'Provide the URL of the completed work for AI grading.',    btn:'Submit Work →',  page:'manage',  cls:'bb'},
+    {title:'Request Evaluation',   desc:'AI will fetch and score the submission against the spec.',  btn:'Evaluate →',    page:'manage',   cls:'bp'},
+    {title:'Finalize Payout',      desc:`Score: ${result?.score??'?'}/100. Ready to release funds.`, btn:'Finalize →',   page:'manage',   cls:'bg'},
+  ];
+  if(TERM.has(s)){
+    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:${s==='ACCEPTED'?'var(--green)':s==='PARTIAL'?'var(--yellow)':'var(--red)'}">${{ACCEPTED:'🎉 Complete',PARTIAL:'⚠️ Partial Payout',REFUNDED:'↩️ Refunded'}[s]}</div><div class="qa-desc">This escrow is finalized. See the AI Evaluation page for the full score and reasoning.</div><button class="btn bh btn-full" onclick="go('evaluate')">View Evaluation →</button>`;
+  } else {
+    const qa=qas[Math.min(i,4)];
+    document.getElementById('qa').innerHTML=`<div class="qa-title">${qa.title}</div><div class="qa-desc">${qa.desc}</div><button class="btn ${qa.cls} btn-full" onclick="go('${qa.page}')">${qa.btn}</button>`;
   }
 }
+
+// ── MANAGE ─────────────────────────────────────────────────────────────────
+function renderManage(job, result) {
+  const s=job.status, i=S2I[s]??0;
+  for(let n=0;n<5;n++){
+    const el=document.getElementById('st'+n);
+    el.className='step'+(TERM.has(s)||n<i?' done':n===i?' active':'');
+    el.querySelector('.step-dot').textContent=(TERM.has(s)||n<i)?'✓':n+1;
+  }
+  if(TERM.has(s)){
+    const c={ACCEPTED:{icon:'🎉',title:'Payment Released',msg:`Score ${result?.score}/100 ≥ min (${job.min_score}). Full payment released.`},PARTIAL:{icon:'⚠️',title:'Partial Payment',msg:`Score ${result?.score}/100 between floor (${job.partial_floor}) and min. Proportional payment made.`},REFUNDED:{icon:'↩️',title:'Funds Refunded',msg:`Score ${result?.score}/100 below floor (${job.partial_floor}). Refunded to client.`}}[s];
+    document.getElementById('actCard').innerHTML=`<div class="t-hero"><div class="t-icon">${c.icon}</div><div class="t-title t-${s}">${c.title}</div><div class="t-sub" style="margin-top:8px">${c.msg}</div></div>`;
+    document.getElementById('specCard').style.display='none';return;
+  }
+  if(job.spec){document.getElementById('specTxt').textContent=job.spec;document.getElementById('specCard').style.display='';}
+  const sc=result?.score, sh=sc!=null?`<div class="hint hb" style="margin-bottom:14px"><span>ℹ️</span><span>Score <strong>${sc}/100</strong> — ${sc>=job.min_score?`full pay (≥${job.min_score})`:sc>=job.partial_floor?`partial pay (above floor ${job.partial_floor})`:`refund (below floor ${job.partial_floor})`}</span></div>`:'';
+  const steps=[
+    {tag:'Step 1 of 5',title:'Fund the Escrow',desc:'Deposit GEN tokens. Funds are locked in the contract until evaluation is complete.',form:`<div class="field"><label>Amount (wei)</label><input type="number" id="inp-a" value="1000000000000000"/><small>1,000,000,000,000,000 wei = 0.001 GEN</small></div><button class="btn bg btn-full" onclick="fund()">Fund Escrow</button>`},
+    {tag:'Step 2 of 5',title:'Accept Terms',desc:'The worker reviews the job specification and agrees to deliver the described work.',form:`<button class="btn bb btn-full" onclick="acceptTerms()">Accept Terms &amp; Begin Work</button>`},
+    {tag:'Step 3 of 5',title:'Submit Your Deliverable',desc:'Provide a public URL to the completed work. The AI evaluator will fetch and score this page.',form:`<div class="field"><label>Deliverable URL</label><input type="url" id="inp-u" placeholder="https://your-work-url.com"/><small>Must be publicly accessible — the AI fetches this URL directly</small></div><button class="btn bb btn-full" onclick="submitWork()">Submit Work</button>`},
+    {tag:'Step 4 of 5',title:'Request AI Evaluation',desc:'An AI validator fetches your submission and scores it against the job specification. This determines the payout.',form:`<div class="hint hy"><span>⏱</span><span>Takes <strong>30–60 seconds</strong> on testnet while the AI reads and grades the page.</span></div><button class="btn bp btn-full" onclick="evaluate()">Start AI Evaluation</button>`},
+    {tag:'Step 5 of 5',title:'Finalize Payout',desc:'Release funds based on the AI score. The contract automatically calculates the split.',form:`${sh}<div class="btn-row"><button class="btn bg btn-full" onclick="finalize()">Release Funds</button>${!job.appeal_used?`<button class="btn bh" onclick="appeal()">Appeal</button>`:''}</div>`},
+  ];
+  const st=steps[Math.min(i,4)];
+  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="step-tag">${st.tag}</div><div class="act-title">${st.title}</div><div class="act-desc">${st.desc}</div>${st.form}</div>`;
+}
+
+// ── EVALUATE ───────────────────────────────────────────────────────────────
+function renderEvaluate(job, result) {
+  const sc=result?.score;
+  document.getElementById('evEmpty').style.display=sc==null?'':'none';
+  document.getElementById('evContent').style.display=sc!=null?'':'none';
+  if(sc==null) return;
+  const cls=sc>=job.min_score?'var(--green)':sc>=job.partial_floor?'var(--yellow)':'var(--red)';
+  const circ=2*Math.PI*62; // 389.6
+  document.getElementById('cNum').textContent=sc;
+  document.getElementById('cNum').style.color=cls;
+  const arc=document.getElementById('cArc');
+  arc.style.stroke=cls;
+  arc.setAttribute('stroke-dasharray',circ);
+  setTimeout(()=>arc.setAttribute('stroke-dashoffset',circ*(1-sc/100)),100);
+  const om={ACCEPTED:{l:'✓ Accepted',bg:'var(--green-bg)',c:'var(--green)'},PARTIAL:{l:'⚠ Partial Pay',bg:'var(--yellow-bg)',c:'var(--yellow)'},REFUNDED:{l:'↩ Refunded',bg:'var(--red-bg)',c:'var(--red)'}}[result.status]||{l:result.status||'—',bg:'var(--border)',c:'var(--muted)'};
+  const ob=document.getElementById('oBadge');
+  ob.textContent=om.l; ob.style.background=om.bg; ob.style.color=om.c;
+  document.getElementById('eVerdict').textContent=sc>=job.min_score?`Score meets minimum of ${job.min_score} — full payment released.`:sc>=job.partial_floor?`Above floor (${job.partial_floor}), below minimum — partial payment.`:`Below floor (${job.partial_floor}) — funds refunded to client.`;
+  document.getElementById('bPct').textContent=sc+' / 100';
+  const bf=document.getElementById('bFill'); bf.style.background=cls;
+  setTimeout(()=>bf.style.width=sc+'%',100);
+  document.getElementById('thrInfo').innerHTML=`<div class="thr-row"><span>Min score (full pay)</span><span>${job.min_score} / 100</span></div><div class="thr-row"><span>Floor (partial pay)</span><span>${job.partial_floor} / 100</span></div><div class="thr-row"><span>Platform fee</span><span>${job.fee_bps/100}%</span></div>`;
+  document.getElementById('rText').textContent=result.reasoning||'No reasoning provided.';
+}
+
+// ── CONTRACTS ──────────────────────────────────────────────────────────────
+function renderContracts(addresses) {
+  if(!addresses) return;
+  const cCard=(title,addr,exUrl)=>`<div class="card"><div class="card-head"><span class="ch-icon">📄</span> ${title}</div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addr}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div></div></div>${exUrl?`<a class="exp-link" href="${exUrl}" target="_blank">View on Explorer ↗</a>`:''}</div></div>`;
+  document.getElementById('ctsContent').innerHTML=
+    cCard('FreelanceEscrow',addresses.escrow,addresses.explorer_escrow)+
+    cCard('EvaluateSubmission',addresses.evaluator,addresses.explorer_evaluator)+
+    `<div class="card"><div class="card-head"><span class="ch-icon">👤</span> Deployer Wallet</div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addresses.deployer}</span><button class="copy-btn" onclick="cp('${addresses.deployer}',this)">Copy</button></div></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div></div></div></div>`+
+    `<div class="card"><div class="card-head"><span class="ch-icon">ℹ️</span> About</div><div class="card-body"><div class="kv-list"><div class="kv"><span class="kv-k">Platform</span><span class="kv-v">GenLayer</span></div><div class="kv"><span class="kv-k">Evaluation</span><span class="kv-v">AI-Arbitrated</span></div><div class="kv"><span class="kv-k">Language</span><span class="kv-v">Python (Intelligent Contract)</span></div></div></div></div>`;
+}
+
+function cp(addr,btn){navigator.clipboard.writeText(addr).then(()=>{const o=btn.textContent;btn.textContent='Copied!';btn.style.color='var(--green)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1500)})}
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+function set(id,val,color){const e=document.getElementById(id);if(e){e.textContent=val;if(color)e.style.color=color}}
 
 // ── API ────────────────────────────────────────────────────────────────────
-async function loadStatus() {
-  try {
-    const r = await fetch(API_BASE + '/api/status');
-    if (!r.ok) throw new Error(await r.text());
-    renderStatus(await r.json());
-  } catch(e) { addLog('Status error: '+e.message, 'err'); if(!logOpen) toggleLog(); }
+async function reload() {
+  try{const r=await fetch(API_BASE+'/api/status');if(!r.ok)throw new Error('HTTP '+r.status);data=await r.json();renderAll();log('Status refreshed','ok')}
+  catch(e){log('Refresh failed: '+e.message,'err');if(!logOpen)toggleLog()}
 }
 
-function disableAction(loading) {
-  document.querySelectorAll('#actionCard button').forEach(b => {
-    b.disabled = loading;
-    if (loading && !b.dataset.orig) {
-      b.dataset.orig = b.innerHTML;
-      b.innerHTML = '<span class="spinner"></span> Working…';
-    } else if (!loading && b.dataset.orig) {
-      b.innerHTML = b.dataset.orig;
-      delete b.dataset.orig;
-    }
+function disableAct(on){
+  document.querySelectorAll('#actCard button, #qa button').forEach(b=>{
+    b.disabled=on;
+    if(on&&!b.dataset.o){b.dataset.o=b.innerHTML;b.innerHTML='<span class="spinner"></span> Working…'}
+    else if(!on&&b.dataset.o){b.innerHTML=b.dataset.o;delete b.dataset.o}
   });
 }
 
-async function call(path, body={}) {
-  addLog('→ '+path);
-  disableAction(true);
-  try {
-    const r = await fetch(API_BASE+path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
-    addLog('✓ '+path+' — '+(d.status||'done'), 'ok');
-    await loadStatus();
-  } catch(e) {
-    addLog('✗ '+e.message, 'err');
-    disableAction(false);
-    if (!logOpen) toggleLog();
-  }
+async function call(path,body={}){
+  log('→ '+path); if(!logOpen)toggleLog(); disableAct(true);
+  try{
+    const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok)throw new Error(d.detail||JSON.stringify(d));
+    log('✓ '+(d.status||'done'),'ok'); await reload();
+  }catch(e){log('✗ '+e.message,'err');disableAct(false)}
 }
 
-function fund()        { call('/api/fund', { amount_wei: parseInt(document.getElementById('inp-amount')?.value)||1e15 }); }
-function acceptTerms() { call('/api/accept_terms'); }
-function evaluate()    { call('/api/evaluate'); }
-function appeal()      { call('/api/appeal'); }
-function finalize()    { call('/api/finalize'); }
-function submitWork()  {
-  const url = document.getElementById('inp-url')?.value?.trim();
-  if (!url?.startsWith('http')) { addLog('Enter a valid https:// URL', 'err'); if(!logOpen) toggleLog(); return; }
-  call('/api/submit', { url });
-}
+function fund(){call('/api/fund',{amount_wei:parseInt(document.getElementById('inp-a')?.value)||1e15})}
+function acceptTerms(){call('/api/accept_terms')}
+function evaluate(){call('/api/evaluate')}
+function appeal(){call('/api/appeal')}
+function finalize(){call('/api/finalize')}
+function submitWork(){const u=document.getElementById('inp-u')?.value?.trim();if(!u?.startsWith('http')){log('Enter a valid https:// URL','err');if(!logOpen)toggleLog();return}call('/api/submit',{url:u})}
 
-loadStatus();
+init();
 </script>
 </body>
 </html>
