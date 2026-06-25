@@ -1,5 +1,5 @@
 """
-Direct-mode tests for freelance_escrow.py.
+Direct-mode tests for freelance_escrow.py (Phase 2).
 Run with:
     pytest tests/direct/test_freelance_escrow.py -v
 """
@@ -17,7 +17,8 @@ def _addr(name: str):
     setup_sdk_paths(contract_path=_CONTRACT.resolve(), version="v0.2.16")
     return create_address(name)
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+
+# ── Constants ──────────────────────────────────────────────────────────────────
 
 SPEC = (
     "Build a landing page for a fintech startup. Must include: "
@@ -36,192 +37,284 @@ MOCK_PAGE_COMPLETE = """
 </body></html>
 """
 
+MOCK_PAGE_PARTIAL = """
+<html><body>
+  <h1>Welcome to FinApp</h1><button>Sign Up</button>
+  <div>Fast Transfers</div>
+</body></html>
+"""
+
 MOCK_PAGE_EMPTY = "<html><body><h1>Coming Soon</h1></body></html>"
 
-_WEB_OK = {"method": "GET", "status": 200}
+_WEB_OK   = {"method": "GET", "status": 200}
+FEE_BPS   = 200   # 2%
+MIN_SCORE = 70
+FLOOR     = 40
+AMOUNT    = 10000
 
-FEE_BPS  = 200   # 2%
-AMOUNT   = 1000  # native tokens
 
-
-def _llm_accepted(score=90):
+def _llm(score: int):
+    verdict = "ACCEPTED" if score >= MIN_SCORE else "REJECTED"
     return json.dumps({
-        "verdict": "ACCEPTED",
+        "verdict": verdict,
         "score": score,
-        "reasoning": "The deliverable meets all spec requirements.",
-    })
-
-
-def _llm_rejected(score=15):
-    return json.dumps({
-        "verdict": "REJECTED",
-        "score": score,
-        "reasoning": "The deliverable is missing required sections.",
+        "reasoning": f"Score {score} — deliverable quality assessment.",
     })
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _deploy(direct_deploy, direct_vm, worker, platform):
-    return direct_deploy(
-        "contracts/freelance_escrow.py",
-        SPEC,
-        worker,
-        platform,
-        FEE_BPS,
+def _setup(direct_deploy, direct_vm, *, with_terms=True, with_submission=True, url="http://example.com"):
+    """Deploy → fund → (accept_terms) → (submit_work). Returns (contract, worker, client)."""
+    worker   = _addr("worker")
+    platform = _addr("platform")
+    client   = _addr("default_sender")
+
+    contract = direct_deploy(
+        str(_CONTRACT),
+        SPEC, worker, platform, FEE_BPS,
+        MIN_SCORE, FLOOR,
     )
 
+    # Fund
+    direct_vm.value = AMOUNT
+    contract.fund()
+    direct_vm.value = 0
 
-# ── Tests ──────────────────────────────────────────────────────────────────────
-
-class TestFreelanceEscrow:
-
-    def test_initial_state_is_unfunded(self, direct_deploy, direct_vm):
-        """Freshly deployed contract should be UNFUNDED."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        job = json.loads(contract.get_job())
-        assert job["status"] == "UNFUNDED"
-        assert job["amount"] == 0
-        assert job["fee_bps"] == FEE_BPS
-
-    def test_fund_opens_job(self, direct_deploy, direct_vm):
-        """Client calling fund() with value should move status to OPEN."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
-
-        job = json.loads(contract.get_job())
-        assert job["status"] == "OPEN"
-        assert job["amount"] == AMOUNT
-
-    def test_non_client_cannot_fund(self, direct_deploy, direct_vm):
-        """A stranger calling fund() should be rejected."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        original_sender = direct_vm.sender
-        direct_vm.sender = _addr("stranger")
-        direct_vm.value  = AMOUNT
-        with pytest.raises(Exception):
-            contract.fund()
-        direct_vm.sender = original_sender
-        direct_vm.value  = 0
-
-    def test_worker_submits_url(self, direct_deploy, direct_vm):
-        """Worker submitting a URL should move status to SUBMITTED."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
-
+    if with_terms:
         direct_vm.sender = worker
-        contract.submit_work("http://mydeliverable.example.com")
-        direct_vm.sender = _addr("default_sender")
+        contract.accept_terms()
+        direct_vm.sender = client
 
-        job = json.loads(contract.get_job())
-        assert job["status"] == "SUBMITTED"
-
-    def test_stranger_cannot_submit(self, direct_deploy, direct_vm):
-        """A non-worker address calling submit_work() should be rejected."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
-
-        direct_vm.sender = _addr("stranger")
-        with pytest.raises(Exception):
-            contract.submit_work("http://example.com")
-        direct_vm.sender = _addr("default_sender")
-
-    def test_evaluate_accepted_pays_worker(self, direct_deploy, direct_vm):
-        """
-        ACCEPTED verdict should move status to ACCEPTED.
-        The escrow amount should be zeroed out (payout emitted).
-        """
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
-
+    if with_terms and with_submission:
         direct_vm.sender = worker
-        contract.submit_work("http://mydeliverable.example.com")
-        direct_vm.sender = _addr("default_sender")
+        contract.submit_work(url)
+        direct_vm.sender = client
 
+    return contract, worker, client
+
+
+# ── Tests: state machine ──────────────────────────────────────────────────────
+
+class TestStateMachine:
+
+    def test_initial_state_unfunded(self, direct_deploy, direct_vm):
+        worker   = _addr("worker")
+        platform = _addr("platform")
+        contract = direct_deploy(str(_CONTRACT), SPEC, worker, platform, FEE_BPS, MIN_SCORE, FLOOR)
+        job = json.loads(contract.get_job())
+        assert job["status"]        == "UNFUNDED"
+        assert job["min_score"]     == MIN_SCORE
+        assert job["partial_floor"] == FLOOR
+        assert job["terms_agreed"]  is False
+
+    def test_fund_moves_to_open(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm, with_terms=False, with_submission=False)
+        assert json.loads(contract.get_job())["status"] == "OPEN"
+
+    def test_accept_terms_moves_to_agreed(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm, with_terms=True, with_submission=False)
+        job = json.loads(contract.get_job())
+        assert job["status"]       == "AGREED"
+        assert job["terms_agreed"] is True
+
+    def test_submit_moves_to_submitted(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        assert json.loads(contract.get_job())["status"] == "SUBMITTED"
+
+    def test_evaluate_moves_to_evaluated(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm)
         direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
-        direct_vm.mock_llm(".*", _llm_accepted(score=88))
+        direct_vm.mock_llm(".*", _llm(85))
         contract.evaluate()
-
         result = json.loads(contract.get_result())
-        assert result["status"]  == "ACCEPTED"
-        assert result["verdict"] == "ACCEPTED"
-        assert result["score"]   >= 70
+        assert result["status"] == "EVALUATED"
+        assert result["score"]  == 85
 
-        # Escrow balance zeroed — payout emitted to worker
-        job = json.loads(contract.get_job())
-        assert job["amount"] == 0
 
-    def test_evaluate_rejected_refunds_client(self, direct_deploy, direct_vm):
-        """REJECTED verdict should move status to REFUNDED and zero the escrow."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
+# ── Tests: accept_terms guards ────────────────────────────────────────────────
 
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
+class TestAcceptTerms:
 
-        direct_vm.sender = worker
-        contract.submit_work("http://mydeliverable.example.com")
-        direct_vm.sender = _addr("default_sender")
-
-        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_EMPTY})
-        direct_vm.mock_llm(".*", _llm_rejected(score=10))
-        contract.evaluate()
-
-        result = json.loads(contract.get_result())
-        assert result["status"]  == "REFUNDED"
-        assert result["verdict"] == "REJECTED"
-
-        job = json.loads(contract.get_job())
-        assert job["amount"] == 0
-
-    def test_cannot_evaluate_before_submission(self, direct_deploy, direct_vm):
-        """Calling evaluate() before submit_work() should raise."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
-        direct_vm.value = AMOUNT
-        contract.fund()
-        direct_vm.value = 0
-
+    def test_stranger_cannot_accept(self, direct_deploy, direct_vm):
+        contract, _, client = _setup(direct_deploy, direct_vm, with_terms=False, with_submission=False)
+        direct_vm.sender = _addr("stranger")
         with pytest.raises(Exception):
-            contract.evaluate()
+            contract.accept_terms()
+        direct_vm.sender = client
 
-    def test_cannot_submit_before_funding(self, direct_deploy, direct_vm):
-        """Calling submit_work() before fund() should raise."""
-        worker   = _addr("worker")
-        platform = _addr("platform")
-        contract = _deploy(direct_deploy, direct_vm, worker, platform)
-
+    def test_cannot_submit_without_accepting(self, direct_deploy, direct_vm):
+        contract, worker, client = _setup(direct_deploy, direct_vm, with_terms=False, with_submission=False)
         direct_vm.sender = worker
         with pytest.raises(Exception):
             contract.submit_work("http://example.com")
-        direct_vm.sender = _addr("default_sender")
+        direct_vm.sender = client
+
+
+# ── Tests: finalize — full payment ────────────────────────────────────────────
+
+class TestFullPayment:
+
+    def test_score_above_min_gives_accepted(self, direct_deploy, direct_vm):
+        """score >= min_score → ACCEPTED, escrow zeroed."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(88))
+        contract.evaluate()
+        contract.finalize()
+        result = json.loads(contract.get_result())
+        assert result["status"] == "ACCEPTED"
+        assert json.loads(contract.get_job())["amount"] == 0
+
+    def test_exact_min_score_accepted(self, direct_deploy, direct_vm):
+        """score exactly equal to min_score → ACCEPTED."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(MIN_SCORE))
+        contract.evaluate()
+        contract.finalize()
+        assert json.loads(contract.get_result())["status"] == "ACCEPTED"
+
+
+# ── Tests: finalize — partial payment ─────────────────────────────────────────
+
+class TestPartialPayment:
+
+    def test_score_between_floor_and_min_gives_partial(self, direct_deploy, direct_vm):
+        """FLOOR <= score < min_score → PARTIAL payout."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_PARTIAL})
+        direct_vm.mock_llm(".*", _llm(55))   # 55 is between 40 and 70
+        contract.evaluate()
+        contract.finalize()
+        result = json.loads(contract.get_result())
+        assert result["status"] == "PARTIAL"
+        assert json.loads(contract.get_job())["amount"] == 0
+
+    def test_exact_partial_floor_gives_partial(self, direct_deploy, direct_vm):
+        """score exactly at partial_floor → PARTIAL (not REFUNDED)."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_PARTIAL})
+        direct_vm.mock_llm(".*", _llm(FLOOR))
+        contract.evaluate()
+        contract.finalize()
+        assert json.loads(contract.get_result())["status"] == "PARTIAL"
+
+
+# ── Tests: finalize — full refund ─────────────────────────────────────────────
+
+class TestRefund:
+
+    def test_score_below_floor_gives_refund(self, direct_deploy, direct_vm):
+        """score < partial_floor → REFUNDED."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_EMPTY})
+        direct_vm.mock_llm(".*", _llm(10))
+        contract.evaluate()
+        contract.finalize()
+        result = json.loads(contract.get_result())
+        assert result["status"] == "REFUNDED"
+        assert json.loads(contract.get_job())["amount"] == 0
+
+
+# ── Tests: appeal ─────────────────────────────────────────────────────────────
+
+class TestAppeal:
+
+    def test_client_can_appeal_after_evaluation(self, direct_deploy, direct_vm):
+        """Client appeals an unfair REJECTED verdict — new score stored."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(30))     # initial: low score
+        contract.evaluate()
+        assert json.loads(contract.get_result())["score"] == 30
+
+        # Appeal: clear old mocks and set new ones before re-evaluation
+        direct_vm.clear_mocks()
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(82))     # second eval: high score
+        direct_vm.sender = client
+        contract.appeal()
+        direct_vm.sender = client
+
+        result = json.loads(contract.get_result())
+        assert result["score"]  == 82
+        assert result["status"] == "EVALUATED"   # still pending finalize
+        assert json.loads(contract.get_job())["appeal_used"] is True
+
+    def test_worker_can_appeal(self, direct_deploy, direct_vm):
+        """Worker appeals a REJECTED verdict."""
+        contract, worker, client = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(20))
+        contract.evaluate()
+
+        direct_vm.clear_mocks()
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(75))
+        direct_vm.sender = worker
+        contract.appeal()
+        direct_vm.sender = client
+
+        assert json.loads(contract.get_result())["score"] == 75
+
+    def test_only_one_appeal_allowed(self, direct_deploy, direct_vm):
+        """Second appeal call should raise."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(20))
+        contract.evaluate()
+
+        direct_vm.clear_mocks()
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(75))
+        direct_vm.sender = client
+        contract.appeal()
+
+        # Second appeal should fail (appeal_used is now True)
+        with pytest.raises(Exception):
+            contract.appeal()
+        direct_vm.sender = client
+
+    def test_stranger_cannot_appeal(self, direct_deploy, direct_vm):
+        """Random address should not be able to appeal."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(20))
+        contract.evaluate()
+
+        direct_vm.sender = _addr("stranger")
+        with pytest.raises(Exception):
+            contract.appeal()
+        direct_vm.sender = client
+
+    def test_appeal_then_finalize_accepted(self, direct_deploy, direct_vm):
+        """Appeal overturns verdict: appeal score >= min_score → ACCEPTED after finalize."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(20))
+        contract.evaluate()
+
+        direct_vm.clear_mocks()
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+        direct_vm.mock_llm(".*", _llm(80))
+        direct_vm.sender = client
+        contract.appeal()
+        direct_vm.sender = client
+
+        contract.finalize()
+        assert json.loads(contract.get_result())["status"] == "ACCEPTED"
+
+    def test_cannot_appeal_before_evaluation(self, direct_deploy, direct_vm):
+        """appeal() before evaluate() should raise."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
+        direct_vm.sender = client
+        with pytest.raises(Exception):
+            contract.appeal()
+        direct_vm.sender = client
+
+    def test_cannot_finalize_before_evaluation(self, direct_deploy, direct_vm):
+        """finalize() before evaluate() should raise."""
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        with pytest.raises(Exception):
+            contract.finalize()
