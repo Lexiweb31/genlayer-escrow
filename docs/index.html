@@ -1,123 +1,901 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PayFlow — Send Money Instantly</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Merit — AI-Arbitrated Freelance Escrow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1a2e; }
+    :root {
+      --bg:#0A0C0D; --surface:#0B0E0F; --card:#0F1315; --card2:#0D1112;
+      --border:#1B2225; --border-sub:#171D1F;
+      --text:#E8EEEC; --muted:#8B9794; --subtle:#5A6562;
+      --blue:#6BD3E6; --blue-dark:#173338; --blue-bg:rgba(107,211,230,.12);
+      --green:#B8F24A; --green-dark:#5F9E2E; --green-bg:rgba(184,242,74,.10);
+      --yellow:#F3C24B; --yellow-bg:rgba(243,194,75,.12);
+      --red:#FF6F5E; --red-bg:rgba(255,111,94,.10);
+      --purple:#A78BFA; --purple-dark:#241C3A; --purple-bg:rgba(167,139,250,.12);
+      --sw:240px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',system-ui,sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.005em}
+    a{text-decoration:none;color:inherit}
+    button{font-family:inherit}
+    code,.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
+    ::-webkit-scrollbar-thumb:hover{background:#2E3639}
+    ::-webkit-scrollbar-track{background:transparent}
 
-    /* ── Hero ── */
-    .hero {
-      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
-      color: #fff;
-      padding: 5rem 2rem;
-      text-align: center;
-    }
-    .hero h1 { font-size: 3rem; font-weight: 800; margin-bottom: 1rem; }
-    .hero p  { font-size: 1.25rem; color: #a8b2d8; max-width: 540px; margin: 0 auto 2rem; }
-    .cta-button {
-      display: inline-block;
-      background: #e94560;
-      color: #fff;
-      font-size: 1.1rem;
-      font-weight: 700;
-      padding: .9rem 2.5rem;
-      border-radius: 50px;
-      text-decoration: none;
-      letter-spacing: .03em;
-    }
-    .cta-button:hover { background: #c73652; }
+    /* SPLASH */
+    .splash{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .5s,visibility .5s}
+    .splash.out{opacity:0;visibility:hidden}
+    .splash-mark{width:60px;height:60px;border-radius:16px;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 12px 40px rgba(184,242,74,.25);animation:float 2.4s ease-in-out infinite}
+    .splash-mark::after{content:'';width:18px;height:18px;background:var(--bg);border-radius:4px;transform:rotate(45deg)}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .splash-title{font-size:28px;font-weight:700;letter-spacing:-.03em;text-align:center;margin-bottom:4px}
+    .splash-sub{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;color:var(--subtle);text-align:center;margin-bottom:36px;text-transform:uppercase}
+    .splash-track{width:200px;height:3px;background:var(--border);border-radius:3px;margin:0 auto 14px;overflow:hidden}
+    .splash-bar{height:100%;background:var(--green);border-radius:3px;animation:load 1.6s ease-in-out infinite}
+    @keyframes load{0%{width:0%;margin-left:0}50%{width:70%;margin-left:0}100%{width:0%;margin-left:100%}}
+    .splash-msg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--subtle);text-align:center}
+    .splash-err{color:var(--red);font-size:13px;text-align:center;margin-top:14px}
 
-    /* ── Features ── */
-    .features {
-      padding: 5rem 2rem;
-      background: #f8f9ff;
-      text-align: center;
-    }
-    .features h2 { font-size: 2rem; font-weight: 700; margin-bottom: 3rem; color: #0f3460; }
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 2rem;
-      max-width: 960px;
-      margin: 0 auto;
-    }
-    .feature-item {
-      background: #fff;
-      border-radius: 12px;
-      padding: 2rem 1.5rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,.06);
-    }
-    .feature-icon { font-size: 2.5rem; margin-bottom: 1rem; }
-    .feature-item h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; color: #0f3460; }
-    .feature-item p  { color: #666; line-height: 1.6; font-size: .9rem; }
+    /* APP SHELL */
+    .app{display:none;height:100vh;overflow:hidden;position:relative}
+    .app.on{display:flex}
+    .app::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(720px 440px at 80% 8%,rgba(107,211,230,.05),transparent 62%),radial-gradient(620px 460px at 8% 92%,rgba(184,242,74,.04),transparent 62%)}
 
-    /* ── Footer ── */
-    footer {
-      background: #0f3460;
-      color: #a8b2d8;
-      padding: 3rem 2rem;
-      text-align: center;
+    /* SIDEBAR */
+    .sb{width:var(--sw);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border-sub);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;z-index:50}
+    .sb-logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px}
+    .sb-mark{width:26px;height:26px;border-radius:7px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sb-mark::after{content:'';width:9px;height:9px;background:var(--bg);border-radius:2px;transform:rotate(45deg)}
+    .sb-word{font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1}
+    .sb-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;color:var(--subtle);margin-top:3px}
+    .sb-nav{flex:1;padding:8px 12px;overflow-y:auto}
+    .nav-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--subtle);padding:10px 10px 6px}
+    .ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .15s;margin-bottom:2px;user-select:none}
+    .ni:hover{background:#12181A;color:var(--text)}
+    .ni.on{background:var(--green-bg);color:var(--green)}
+    .ni-icon{font-size:14px;width:16px;text-align:center;flex-shrink:0;opacity:.85}
+    .ni-dot{width:6px;height:6px;border-radius:50%;background:var(--subtle);flex-shrink:0;transition:background .2s}
+    .sb-div{height:1px;background:var(--border-sub);margin:8px 8px}
+    .sb-status{padding:0 16px 12px;display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--subtle)}
+    .sb-status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0}
+    .sb-profile{margin:0 12px 16px;padding:11px 12px;border-radius:11px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;gap:9px;cursor:pointer;transition:border-color .15s}
+    .sb-profile:hover{border-color:#2C3A3E}
+    .prof-av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-dark));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--bg);flex-shrink:0}
+    .prof-addr{font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .prof-net{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--subtle);margin-top:2px}
+
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;z-index:1}
+    .mob-header{display:none;background:var(--surface);border-bottom:1px solid var(--border-sub);height:52px;padding:0 16px;align-items:center;gap:12px;flex-shrink:0}
+    .burger{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;line-height:1}
+    .mob-title{font-size:15px;font-weight:700;flex:1}
+    .scroll{flex:1;overflow-y:auto;padding:26px 30px 32px}
+
+    /* PAGE HEADER */
+    .pg-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px}
+    .pg-title{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:3px}
+    .pg-sub{font-size:13px;color:var(--muted)}
+    .pg-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+    /* STATUS PILL */
+    .pill{font-family:'JetBrains Mono',monospace;padding:4px 10px;border-radius:6px;font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+    .p-UNFUNDED{background:var(--border-sub);color:var(--subtle)}
+    .p-OPEN,.p-AGREED{background:var(--blue-bg);color:var(--blue)}
+    .p-SUBMITTED{background:var(--purple-bg);color:var(--purple)}
+    .p-EVALUATED{background:var(--yellow-bg);color:var(--yellow)}
+    .p-ACCEPTED{background:var(--green-bg);color:var(--green)}
+    .p-PARTIAL{background:var(--yellow-bg);color:var(--yellow)}
+    .p-REFUNDED{background:var(--red-bg);color:var(--red)}
+
+    /* CARDS */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+    .card-head{padding:13px 18px;border-bottom:1px solid var(--border-sub);display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.13em;color:var(--subtle);text-transform:uppercase}
+    .ch-icon{font-size:13px;font-family:'Space Grotesk'}
+    .card-body{padding:18px}
+
+    /* OVERVIEW: top row */
+    .ov-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:20px}
+    .ov-code{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--subtle);margin-bottom:8px}
+    .ov-meta{font-size:13px;color:var(--muted);margin-top:6px}
+
+    /* OVERVIEW: context row */
+    .ctx-grid{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:16px;margin-bottom:20px;align-items:stretch}
+    .party-row{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+    .party-row:last-child{margin-bottom:0}
+    .party-av{width:32px;height:32px;border-radius:9px;flex-shrink:0}
+    .party-name{font-size:13.5px;font-weight:500}
+    .party-addr{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--subtle);margin-top:2px}
+    .bal-num{display:flex;align-items:baseline;gap:7px;margin-bottom:8px}
+    .bal-val{font-size:30px;font-weight:700;letter-spacing:-.02em}
+    .bal-unit{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)}
+    .bal-hint{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-bottom:14px}
+    .bal-hint-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+    .bal-kv{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10.5px;padding-top:8px;border-top:1px solid var(--border-sub);margin-top:8px}
+    .bal-kv span:first-child{color:var(--subtle)}
+    .bal-kv span:last-child{color:var(--muted)}
+    .spec-text{font-size:12.5px;color:#C4CECB;line-height:1.5;margin-bottom:12px}
+    .spec-thr{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--subtle);padding-top:12px;border-top:1px solid var(--border-sub)}
+    .spec-thr b{color:var(--muted);font-weight:500}
+    .spec-signed{display:flex;align-items:center;gap:5px;color:var(--green);font-size:9.5px;letter-spacing:.08em}
+
+    /* TIMELINE */
+    .ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .tl-item{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--border-sub)}
+    .tl-item:last-child{border-bottom:none}
+    .tl-dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;margin-top:1px}
+    .td-done{background:var(--green-bg);color:var(--green)}
+    .td-active{background:var(--blue-bg);color:var(--blue)}
+    .td-pending{background:var(--border-sub);color:var(--subtle)}
+    .tl-title{font-size:13px;font-weight:500;margin-bottom:2px}
+    .tl-desc{font-size:12px;color:var(--muted)}
+
+    /* QUICK ACTION */
+    .qa-title{font-size:15px;font-weight:600;margin-bottom:6px}
+    .qa-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px}
+
+    /* MANAGE */
+    .stepper-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:18px;overflow-x:auto}
+    .stepper{display:flex;align-items:flex-start}
+    .step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:70px;position:relative}
+    .step:not(:last-child)::after{content:'';position:absolute;top:13px;left:calc(50% + 18px);right:calc(-50% + 18px);height:2px;background:var(--border);z-index:0}
+    .step.done:not(:last-child)::after{background:var(--green)}
+    .step-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:var(--card);color:var(--subtle);position:relative;z-index:1;transition:all .2s}
+    .step.done .step-dot{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+    .step.active .step-dot{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+    .step-name{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;color:var(--subtle);text-align:center;white-space:nowrap}
+    .step.done .step-name{color:var(--green)}
+    .step.active .step-name{color:var(--blue)}
+    .mg-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .step-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--subtle);margin-bottom:8px}
+    .act-title{font-size:18px;font-weight:600;margin-bottom:8px}
+    .act-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:18px}
+
+    /* FORMS */
+    .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .field label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;font-weight:500;color:var(--subtle);text-transform:uppercase}
+    .field small{font-size:11px;color:var(--subtle)}
+    input[type="url"],input[type="number"]{width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;font-family:'Space Grotesk';outline:none;transition:border-color .15s}
+    input:focus{border-color:#3A4A4E}
+    input::placeholder{color:var(--subtle)}
+
+    /* HINT */
+    .hint{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;border-radius:9px;font-size:13px;line-height:1.5;margin-bottom:14px}
+    .hy{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(243,194,75,.25)}
+    .hb{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(107,211,230,.25)}
+    .hg{background:var(--green-bg);color:var(--green);border:1px solid rgba(184,242,74,.22)}
+
+    /* BUTTONS */
+    .btn{padding:10px 18px;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:filter .15s,transform .1s;white-space:nowrap;font-family:inherit}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .btn:not(:disabled):hover{filter:brightness(1.12);transform:translateY(-1px)}
+    .btn-full{width:100%}
+    .bg{background:var(--green);color:var(--bg)}
+    .bb{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(107,211,230,.35)}
+    .bp{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.35)}
+    .bh{background:var(--border-sub);color:var(--text);border:1px solid var(--border)}
+    .btn-row{display:flex;gap:10px}
+
+    /* TERMINAL (manage: finished state) */
+    .t-hero{padding:32px 24px;text-align:center}
+    .t-icon{font-size:44px;margin-bottom:12px}
+    .t-title{font-size:20px;font-weight:700;margin-bottom:6px}
+    .t-ACCEPTED{color:var(--green)}.t-PARTIAL{color:var(--yellow)}.t-REFUNDED{color:var(--red)}
+    .t-sub{font-size:14px;color:var(--muted)}
+
+    /* ===== EVALUATION THEATRE ===== */
+    .theatre-card{background:var(--card2)}
+    .theatre-head{padding:20px 22px;border-bottom:1px solid var(--border-sub);display:flex;align-items:center;gap:12px}
+    .theatre-mark{width:30px;height:30px;border-radius:8px;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .theatre-mark::after{content:'';width:11px;height:11px;border:1.6px solid var(--blue);border-radius:3px;transform:rotate(45deg)}
+    .theatre-title{font-weight:600;font-size:15px}
+    .theatre-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--subtle);margin-top:2px}
+
+    .pipeline-strip{padding:22px 22px 6px}
+    .pipeline-track{position:relative;padding:0 6px}
+    .pipeline-bg{position:absolute;left:12px;right:12px;top:6px;height:2px;background:var(--border-sub)}
+    .pipeline-fill{position:absolute;left:12px;top:6px;height:2px;background:var(--green);width:0%;max-width:calc(100% - 24px);transition:width .5s ease}
+    .pipeline-row{display:flex;justify-content:space-between;position:relative}
+    .pipeline-step{display:flex;flex-direction:column;align-items:center;gap:8px;width:88px}
+    .pipeline-dot{width:9px;height:9px;border-radius:50%;background:var(--border);transition:background .3s}
+    .pipeline-dot.done{background:var(--green)}
+    .pipeline-dot.active{background:var(--blue);box-shadow:0 0 0 4px var(--blue-bg)}
+    .pipeline-label{font-size:11px;font-weight:500;color:var(--subtle);text-align:center}
+    .pipeline-label.on{color:var(--text)}
+    .pipeline-sub{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--subtle);margin-top:1px;text-align:center}
+
+    .theatre-row{margin:0 22px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 15px;display:flex;align-items:center;gap:12px}
+    .theatre-row + .theatre-row{margin-top:10px}
+    .theatre-body{padding:16px 0 22px}
+    .theatre-spin{width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .theatre-check{width:16px;height:16px;border-radius:50%;background:var(--green-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--green);font-size:10px;font-weight:700}
+
+    .validators-wrap{margin:12px 22px 0}
+    .validators-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--subtle);margin-bottom:10px}
+    .validators-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+    .v-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .v-addr{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--subtle)}
+    .v-score{font-size:22px;font-weight:700;margin:6px 0 6px}
+    .v-vote{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.06em;padding:2px 6px;border-radius:5px}
+    .v-stake{font-family:'JetBrains Mono',monospace;font-size:7.5px;color:#3E4A4D;margin-top:7px}
+    .theatre-note{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--subtle);margin:10px 22px 0;line-height:1.5}
+
+    .consensus-wrap{margin:14px 22px 20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px;display:flex;align-items:center;gap:16px}
+    .consensus-num{flex:0 0 auto;text-align:center;padding-right:16px;border-right:1px solid var(--border-sub)}
+    .consensus-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--subtle);letter-spacing:.1em}
+    .consensus-val{font-size:19px;font-weight:700;margin-top:4px}
+    .consensus-bar-wrap{flex:1}
+    .consensus-bar-meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--subtle);margin-bottom:7px}
+    .consensus-track{height:8px;background:var(--border-sub);border-radius:5px;overflow:hidden}
+    .consensus-fill{height:100%;border-radius:5px;width:0%;transition:width .8s cubic-bezier(.4,0,.2,1)}
+
+    /* VERDICT */
+    .verdict-card{margin-top:18px;padding:22px}
+    .verdict-top{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:12px;margin-bottom:20px}
+    .verdict-left{display:flex;align-items:center;gap:14px}
+    .verdict-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .verdict-label{font-size:19px;font-weight:700;letter-spacing:-.01em}
+    .verdict-hint{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:3px}
+    .verdict-score{font-size:28px;font-weight:700;text-align:right}
+    .verdict-score-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--subtle);text-align:right}
+    .reasoning-block{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:20px;border-left-width:2px;border-left-style:solid}
+    .reasoning-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:var(--subtle);margin-bottom:8px}
+    .reasoning{font-size:13px;color:#C4CECB;line-height:1.6}
+    .settle-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--subtle);margin-bottom:11px}
+    .settle-row{display:flex;align-items:center;justify-content:space-between;border-radius:9px;padding:12px 15px;margin-bottom:9px}
+    .settle-row:last-child{margin-bottom:0}
+    .settle-amt{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600}
+    .thr-row{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border-sub)}
+    .thr-row:last-child{border-bottom:none}
+    .thr-row span:last-child{color:var(--text);font-weight:500}
+
+    /* CONTRACTS */
+    .cts-stack{display:flex;flex-direction:column;gap:14px}
+    .addr-block{background:var(--bg);border:1px solid var(--border-sub);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:8px;margin-top:10px}
+    .addr-mono{font-family:'JetBrains Mono',monospace;font-size:12px;flex:1;word-break:break-all;color:var(--text)}
+    .copy-btn{background:var(--border-sub);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;transition:all .15s;flex-shrink:0;font-family:inherit}
+    .copy-btn:hover{background:var(--border);color:var(--text)}
+    .exp-link{display:inline-flex;align-items:center;gap:5px;color:var(--blue);font-size:12px;margin-top:8px}
+    .exp-link:hover{text-decoration:underline}
+    .kv-list{display:flex;flex-direction:column}
+    .kv{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border-sub);font-size:13px}
+    .kv:last-child{border-bottom:none}
+    .kv-k{color:var(--muted);flex-shrink:0}
+    .kv-v{color:var(--text);text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px}
+
+    /* EMPTY */
+    .empty{text-align:center;padding:56px 24px}
+    .empty-icon{font-size:44px;margin-bottom:16px}
+    .empty-title{font-size:17px;font-weight:600;margin-bottom:8px}
+    .empty-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:24px;max-width:340px;margin-left:auto;margin-right:auto}
+
+    /* LOG */
+    .log-wrap{border-top:1px solid var(--border-sub);flex-shrink:0}
+    .log-toggle{display:flex;align-items:center;gap:8px;padding:10px 18px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--muted);user-select:none}
+    .log-toggle:hover{color:var(--text)}
+    .log-n{background:var(--border-sub);padding:1px 8px;border-radius:10px;font-size:10px}
+    .log-lines{border-top:1px solid var(--border-sub);padding:10px 18px;max-height:150px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px}
+    .ll{padding:2px 0;color:var(--muted)}
+    .ll.ok{color:var(--green)}.ll.err{color:var(--red)}
+    .ll-ts{color:var(--subtle);margin-right:8px}
+
+    /* OVERLAY */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:49}
+    .overlay.on{display:block}
+
+    /* BOTTOM NAV */
+    .bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border-sub);padding:6px 0 calc(6px + env(safe-area-inset-bottom));z-index:40}
+    .bnav-items{display:flex}
+    .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 8px;font-size:10px;font-weight:500;color:var(--muted);cursor:pointer;transition:color .15s;user-select:none}
+    .bn.on{color:var(--green)}
+    .bn-ic{font-size:18px}
+
+    /* SKELETON */
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    .skel{height:13px;border-radius:4px;margin-bottom:10px;background:linear-gradient(90deg,var(--border-sub) 25%,var(--border) 50%,var(--border-sub) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+    .spinner{width:14px;height:14px;border:2px solid rgba(10,12,13,.25);border-top-color:var(--bg);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+
+    /* RESPONSIVE */
+    @media(max-width:900px){
+      .sb{position:fixed;top:0;left:0;height:100%;transform:translateX(-100%);transition:transform .25s;z-index:60}
+      .sb.open{transform:translateX(0)}
+      .mob-header{display:flex}
+      .bnav{display:block}
+      .scroll{padding:20px 16px 80px}
+      .app.on{display:block}
+      .main{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+      .ctx-grid{grid-template-columns:1fr}
+      .ov-grid,.mg-grid{grid-template-columns:1fr}
+      .validators-grid{grid-template-columns:repeat(5,minmax(60px,1fr));overflow-x:auto}
     }
-    footer .brand { font-size: 1.5rem; font-weight: 800; color: #fff; margin-bottom: .5rem; }
-    footer .contact { margin-top: 1rem; }
-    footer .contact a { color: #e94560; text-decoration: none; }
-    footer .contact a:hover { text-decoration: underline; }
-    footer .legal { margin-top: 1.5rem; font-size: .8rem; color: #5a6480; }
   </style>
 </head>
 <body>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <h1>Send Money Instantly</h1>
-    <p>PayFlow is the fastest way to transfer funds globally — zero hidden fees, bank-grade security, and real-time confirmation.</p>
-    <a href="#signup" class="cta-button">Get Started Free</a>
-  </section>
+<!-- SPLASH -->
+<div id="splash" class="splash">
+  <div>
+    <div class="splash-mark"></div>
+    <div class="splash-title">Merit</div>
+    <div class="splash-sub">AI-Arbitrated Freelance Escrow</div>
+    <div class="splash-track"><div class="splash-bar"></div></div>
+    <div class="splash-msg" id="splashMsg">Connecting to testnet_bradbury…</div>
+    <div class="splash-err" id="splashErr" style="display:none"></div>
+  </div>
+</div>
 
-  <!-- Features Section -->
-  <section class="features">
-    <h2>Everything you need to move money with confidence</h2>
-    <div class="features-grid">
+<!-- APP -->
+<div id="app" class="app">
 
-      <div class="feature-item">
-        <div class="feature-icon">⚡</div>
-        <h3>Instant Transfers</h3>
-        <p>Send funds to any bank account in seconds — no waiting days for settlements.</p>
+  <!-- SIDEBAR -->
+  <aside class="sb" id="sb">
+    <div class="sb-logo">
+      <div class="sb-mark"></div>
+      <div>
+        <div class="sb-word">merit</div>
+        <div class="sb-tag">ARBITRATED ESCROW</div>
       </div>
-
-      <div class="feature-item">
-        <div class="feature-icon">🔒</div>
-        <h3>Bank-Grade Security</h3>
-        <p>256-bit encryption and multi-factor authentication protect every transaction.</p>
-      </div>
-
-      <div class="feature-item">
-        <div class="feature-icon">🌍</div>
-        <h3>Global Coverage</h3>
-        <p>Send to 150+ countries with competitive exchange rates and no hidden fees.</p>
-      </div>
-
-      <div class="feature-item">
-        <div class="feature-icon">📊</div>
-        <h3>Real-Time Analytics</h3>
-        <p>Track spending, set budgets, and get insights into your financial activity.</p>
-      </div>
-
     </div>
-  </section>
-
-  <!-- Footer -->
-  <footer>
-    <div class="brand">PayFlow</div>
-    <p>The future of digital payments — fast, secure, and borderless.</p>
-    <div class="contact">
-      Contact us: <a href="mailto:hello@payflow.io">hello@payflow.io</a>
+    <nav class="sb-nav">
+      <div class="nav-label">Menu</div>
+      <div class="ni on" id="ni-overview" onclick="go('overview')"><span class="ni-dot" id="dot-overview"></span><span class="ni-icon">📊</span> Overview</div>
+      <div class="ni" id="ni-manage"   onclick="go('manage')">  <span class="ni-dot" id="dot-manage"></span><span class="ni-icon">⚙️</span> Manage Job</div>
+      <div class="ni" id="ni-evaluate" onclick="go('evaluate')"><span class="ni-dot" id="dot-evaluate"></span><span class="ni-icon">🤖</span> AI Evaluation</div>
+      <div class="sb-div"></div>
+      <div class="nav-label">Technical</div>
+      <div class="ni" id="ni-contracts" onclick="go('contracts')"><span class="ni-dot" id="dot-contracts"></span><span class="ni-icon">🔗</span> Contracts</div>
+    </nav>
+    <div class="sb-status"><span class="sb-status-dot"></span>GenLayer · testnet</div>
+    <div class="sb-profile">
+      <div class="prof-av" id="profAv">?</div>
+      <div style="overflow:hidden">
+        <div class="prof-addr" id="profAddr">Loading…</div>
+        <div class="prof-net">testnet_bradbury</div>
+      </div>
     </div>
-    <div class="legal">&copy; 2025 PayFlow Inc. All rights reserved.</div>
-  </footer>
+  </aside>
 
+  <div class="overlay" id="ov" onclick="closeSb()"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="mob-header">
+      <button class="burger" onclick="toggleSb()">☰</button>
+      <span class="mob-title">merit</span>
+      <span id="mobPill" class="pill p-UNFUNDED">—</span>
+    </div>
+
+    <div class="scroll" id="scroll">
+
+      <!-- OVERVIEW -->
+      <section id="pg-overview">
+        <div class="ov-top">
+          <div>
+            <div class="ov-code" id="ovCode">JOB-000000</div>
+            <div class="pg-title">Escrow Job</div>
+            <div class="ov-meta" id="ovMeta">testnet_bradbury</div>
+          </div>
+          <div class="pg-right">
+            <span id="ovPill" class="pill p-UNFUNDED">—</span>
+            <button class="btn bh" style="font-size:12px;padding:6px 12px" onclick="reload()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="ctx-grid">
+          <div class="card">
+            <div class="card-head"><span>Parties</span></div>
+            <div class="card-body">
+              <div class="party-row">
+                <div class="party-av" style="background:linear-gradient(135deg,var(--blue),#2C6E7A)"></div>
+                <div><div class="party-name">Client</div><div class="party-addr" id="p-client">—</div></div>
+              </div>
+              <div class="party-row">
+                <div class="party-av" style="background:linear-gradient(135deg,var(--green),var(--green-dark))"></div>
+                <div><div class="party-name">Freelancer</div><div class="party-addr" id="p-worker">—</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span>Escrow Balance</span></div>
+            <div class="card-body">
+              <div class="bal-num"><span class="bal-val" id="bal-val">0</span><span class="bal-unit">GEN</span></div>
+              <div class="bal-hint"><span class="bal-hint-dot" id="bal-dot"></span><span id="bal-hint">Not yet funded</span></div>
+              <div class="bal-kv"><span>contract</span><span id="bal-addr">—</span></div>
+              <div class="bal-kv"><span>eval fee</span><span id="bal-fee">—</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span>Acceptance Spec</span><span class="spec-signed" id="specSigned"></span></div>
+            <div class="card-body">
+              <p class="spec-text" id="ov-spec">—</p>
+              <div class="spec-thr">min score <b id="spec-min">—</b> for full pay · floor <b id="spec-floor">—</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ov-grid">
+          <div class="card"><div class="card-head"><span><span class="ch-icon">🗺️</span> Timeline</span></div><div class="card-body" style="padding:0 18px"><div id="tl"></div></div></div>
+          <div class="card"><div class="card-head"><span><span class="ch-icon">⚡</span> Next Action</span></div><div class="card-body" id="qa"></div></div>
+        </div>
+      </section>
+
+      <!-- MANAGE -->
+      <section id="pg-manage" style="display:none">
+        <div class="pg-hdr">
+          <div><div class="pg-title">Manage Job</div><div class="pg-sub">Step-by-step escrow flow</div></div>
+          <span id="mgPill" class="pill p-UNFUNDED">—</span>
+        </div>
+        <div class="stepper-wrap">
+          <div class="stepper">
+            <div class="step" id="st0"><div class="step-dot">1</div><div class="step-name">Fund</div></div>
+            <div class="step" id="st1"><div class="step-dot">2</div><div class="step-name">Accept</div></div>
+            <div class="step" id="st2"><div class="step-dot">3</div><div class="step-name">Submit</div></div>
+            <div class="step" id="st3"><div class="step-dot">4</div><div class="step-name">Evaluate</div></div>
+            <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
+          </div>
+        </div>
+        <div class="mg-grid">
+          <div class="card" id="actCard"><div class="card-body"><div class="skel" style="width:40%;height:10px"></div><div class="skel" style="height:20px;margin:8px 0 14px"></div><div class="skel"></div></div></div>
+          <div class="card" id="specCard" style="display:none"><div class="card-head"><span><span class="ch-icon">📋</span> Job Specification</span></div><div class="card-body"><p class="spec-text" id="specTxt" style="margin-bottom:0"></p></div></div>
+        </div>
+      </section>
+
+      <!-- EVALUATE -->
+      <section id="pg-evaluate" style="display:none">
+        <div class="pg-hdr"><div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Automated scoring of submitted work</div></div></div>
+        <div class="card" id="evEmpty"><div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div></div>
+
+        <div id="evContent" style="display:none">
+          <div class="card theatre-card">
+            <div class="theatre-head">
+              <div class="theatre-mark"></div>
+              <div><div class="theatre-title">AI evaluation</div><div class="theatre-sub">on-chain judgment · validator consensus</div></div>
+            </div>
+
+            <div class="pipeline-strip">
+              <div class="pipeline-track">
+                <div class="pipeline-bg"></div>
+                <div class="pipeline-fill" id="pipeFill"></div>
+                <div class="pipeline-row" id="pipeRow"></div>
+              </div>
+            </div>
+
+            <div class="theatre-body" id="theatreBody"></div>
+          </div>
+
+          <div class="card verdict-card" id="verdictCard" style="display:none">
+            <div class="verdict-top" id="verdictTop">
+              <div class="verdict-left">
+                <div class="verdict-icon" id="verdictIcon"></div>
+                <div><div class="verdict-label" id="verdictLabel">—</div><div class="verdict-hint">reached by validator consensus · no human arbitrator</div></div>
+              </div>
+              <div><div class="verdict-score" id="verdictScore">—</div><div class="verdict-score-lbl">SCORE</div></div>
+            </div>
+            <div class="reasoning-block" id="reasoningBlock">
+              <div class="reasoning-label">EVALUATION RATIONALE</div>
+              <div class="reasoning" id="rText">—</div>
+            </div>
+            <div class="settle-label">SETTLEMENT · EXECUTED BY CONTRACT</div>
+            <div id="settleRows"></div>
+            <div class="btn-row" style="margin-top:16px">
+              <button class="btn bh" id="appealBtn" onclick="appeal()">Open dispute · appeal</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTRACTS -->
+      <section id="pg-contracts" style="display:none">
+        <div class="pg-hdr"><div><div class="pg-title">Contracts</div><div class="pg-sub">Smart contracts deployed on testnet_bradbury</div></div></div>
+        <div class="cts-stack" id="ctsContent"><div class="skel" style="height:100px;border-radius:12px;margin-bottom:14px"></div><div class="skel" style="height:100px;border-radius:12px"></div></div>
+      </section>
+
+    </div><!-- /scroll -->
+
+    <!-- LOG -->
+    <div class="log-wrap">
+      <div class="log-toggle" onclick="toggleLog()"><span id="logArr">▶</span> Activity Log <span class="log-n" id="logN">0</span></div>
+      <div class="log-lines" id="logLines" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bnav">
+    <div class="bnav-items">
+      <div class="bn on" id="bn-overview"  onclick="go('overview')"> <span class="bn-ic">📊</span>Overview</div>
+      <div class="bn"    id="bn-manage"    onclick="go('manage')">   <span class="bn-ic">⚙️</span>Manage</div>
+      <div class="bn"    id="bn-evaluate"  onclick="go('evaluate')"> <span class="bn-ic">🤖</span>Evaluate</div>
+      <div class="bn"    id="bn-contracts" onclick="go('contracts')"><span class="bn-ic">🔗</span>Contracts</div>
+    </div>
+  </nav>
+</div>
+
+<script>
+const API_BASE = 'https://genlayer-escrow.onrender.com';
+const PAGES = ['overview','manage','evaluate','contracts'];
+const S2I = {UNFUNDED:0,OPEN:1,AGREED:2,SUBMITTED:3,EVALUATED:4,ACCEPTED:5,PARTIAL:5,REFUNDED:5};
+const TERM = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
+const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',ACCEPTED:'var(--green)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'};
+let data = null, logOpen = false, logN = 0, curPage = 'overview';
+let theatreRunning = false, theatreTimers = [];
+
+// ── SPLASH ─────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch(API_BASE+'/api/status');
+    if (!r.ok) throw new Error('Server error '+r.status);
+    data = await r.json();
+    await delay(500);
+    document.getElementById('splash').classList.add('out');
+    document.getElementById('app').classList.add('on');
+    setTimeout(()=>document.getElementById('splash').remove(),600);
+    renderAll();
+  } catch(e) {
+    document.getElementById('splashErr').textContent = 'Could not connect: '+e.message;
+    document.getElementById('splashErr').style.display='';
+    document.getElementById('splashMsg').textContent='Make sure the API server is running.';
+  }
+}
+const delay = ms => new Promise(r=>setTimeout(r,ms));
+
+// ── NAV ────────────────────────────────────────────────────────────────────
+function go(page) {
+  curPage = page;
+  PAGES.forEach(p=>{
+    document.getElementById('pg-'+p).style.display = p===page?'':'none';
+    const ni = document.getElementById('ni-'+p); if(ni) ni.className='ni'+(p===page?' on':'');
+    const bn = document.getElementById('bn-'+p); if(bn) bn.className='bn'+(p===page?' on':'');
+  });
+  closeSb();
+}
+function toggleSb(){document.getElementById('sb').classList.toggle('open');document.getElementById('ov').classList.toggle('on')}
+function closeSb(){document.getElementById('sb').classList.remove('open');document.getElementById('ov').classList.remove('on')}
+
+// ── LOG ────────────────────────────────────────────────────────────────────
+function log(msg,type=''){
+  logN++;document.getElementById('logN').textContent=logN;
+  const el=Object.assign(document.createElement('div'),{className:'ll '+type});
+  el.innerHTML=`<span class="ll-ts">${new Date().toLocaleTimeString()}</span>${msg}`;
+  document.getElementById('logLines').prepend(el);
+}
+function toggleLog(){logOpen=!logOpen;document.getElementById('logLines').style.display=logOpen?'':'none';document.getElementById('logArr').textContent=logOpen?'▼':'▶'}
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const short = a=>a?a.slice(0,6)+'…'+a.slice(-4):'—';
+const toGEN = w=>w===0?'0 GEN':(w/1e18).toFixed(4)+' GEN';
+const toGENNum = w=>w===0?'0':(w/1e18).toFixed(4);
+const jobCode = addr => addr ? 'JOB-'+addr.slice(2,8).toUpperCase() : 'JOB-000000';
+
+// ── RENDER ALL ─────────────────────────────────────────────────────────────
+function renderAll() {
+  if(!data) return;
+  const {job,result,addresses} = data;
+  renderPills(job.status);
+  renderProfile(addresses);
+  renderNavDots(job,result);
+  renderOverview(job,result,addresses);
+  renderManage(job,result);
+  if(!theatreRunning) renderEvaluateStatic(job,result);
+  renderContracts(addresses);
+}
+
+function renderPills(s) {
+  ['ovPill','mgPill','mobPill'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=s;e.className='pill p-'+s}});
+}
+
+function renderProfile(addr) {
+  const a=addr?.deployer||'';
+  document.getElementById('profAddr').textContent=short(a);
+  document.getElementById('profAv').textContent=a?a.slice(2,4).toUpperCase():'?';
+}
+
+function renderNavDots(job,result) {
+  const s=job.status;
+  const set=(id,c)=>{const e=document.getElementById(id);if(e)e.style.background=c};
+  set('dot-overview', STATUS_COLOR[s]||'var(--subtle)');
+  set('dot-manage', TERM.has(s)?'var(--subtle)':'var(--green)');
+  set('dot-evaluate', result?.score!=null?'var(--green)':'var(--subtle)');
+  set('dot-contracts', 'var(--subtle)');
+}
+
+// ── OVERVIEW ───────────────────────────────────────────────────────────────
+function renderOverview(job, result, addresses) {
+  const s=job.status, i=S2I[s]??0;
+  document.getElementById('ovCode').textContent=jobCode(addresses?.escrow);
+  document.getElementById('ovMeta').textContent='testnet_bradbury'+(job.terms_agreed?' · terms signed on-chain':'');
+
+  document.getElementById('p-client').textContent=short(job.client);
+  document.getElementById('p-worker').textContent=short(job.worker);
+
+  document.getElementById('bal-val').textContent=toGENNum(job.amount);
+  document.getElementById('bal-hint').textContent=TERM.has(s)?'Settled':job.amount>0?'Locked in contract until settlement':'Not yet funded';
+  document.getElementById('bal-dot').style.background=TERM.has(s)?'var(--subtle)':job.amount>0?'var(--green)':'var(--subtle)';
+  document.getElementById('bal-addr').textContent=short(addresses?.escrow);
+  document.getElementById('bal-fee').textContent=(job.fee_bps/100)+'%';
+
+  document.getElementById('ov-spec').textContent=job.spec||'—';
+  document.getElementById('spec-min').textContent=job.min_score+'/100';
+  document.getElementById('spec-floor').textContent=job.partial_floor+'/100';
+  document.getElementById('specSigned').innerHTML = job.terms_agreed ? '✓ SIGNED' : '';
+
+  // Timeline
+  const steps=[
+    {l:'Escrow Funded',     d:'Client deposited '+toGEN(job.amount)},
+    {l:'Terms Accepted',    d:'Worker agreed to the job specification'},
+    {l:'Work Submitted',    d:'Deliverable URL provided for evaluation'},
+    {l:'AI Evaluated',      d:result?.score!=null?`Scored ${result.score}/100`:'AI graded the submission'},
+    {l:'Payout Finalized',  d:{ACCEPTED:'Full payment released',PARTIAL:'Partial payment released',REFUNDED:'Refund issued'}[s]||'Funds released'},
+  ];
+  document.getElementById('tl').innerHTML=steps.map((st,n)=>{
+    const done=n<i||TERM.has(s), active=!TERM.has(s)&&n===i;
+    const cls=done?'td-done':active?'td-active':'td-pending';
+    const icon=done?'✓':active?'→':n+1;
+    return `<div class="tl-item"><div class="tl-dot ${cls}">${icon}</div><div><div class="tl-title" style="color:${done?'var(--text)':active?'var(--blue)':'var(--muted)'}">${st.l}</div><div class="tl-desc">${done||active?st.d:'Pending'}</div></div></div>`;
+  }).join('');
+
+  // Quick action
+  const qas=[
+    {title:'Fund the Escrow',      desc:'Deposit GEN tokens. Funds are locked until evaluation.',   btn:'Fund Now →',    page:'manage',   cls:'bg'},
+    {title:'Accept Terms',         desc:'Worker reviews and agrees to the job specification.',       btn:'Accept Terms →', page:'manage',  cls:'bb'},
+    {title:'Submit Deliverable',   desc:'Provide the URL of the completed work for AI grading.',    btn:'Submit Work →',  page:'manage',  cls:'bb'},
+    {title:'Request Evaluation',   desc:'AI will fetch and score the submission against the spec.',  btn:'Evaluate →',    page:'manage',   cls:'bp'},
+    {title:'Finalize Payout',      desc:`Score: ${result?.score??'?'}/100. Ready to release funds.`, btn:'Finalize →',   page:'manage',   cls:'bg'},
+  ];
+  if(TERM.has(s)){
+    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:${s==='ACCEPTED'?'var(--green)':s==='PARTIAL'?'var(--yellow)':'var(--red)'}">${{ACCEPTED:'🎉 Complete',PARTIAL:'⚠️ Partial Payout',REFUNDED:'↩️ Refunded'}[s]}</div><div class="qa-desc">This escrow is finalized. See the AI Evaluation page for the full score and reasoning.</div><button class="btn bh btn-full" onclick="go('evaluate')">View Evaluation →</button>`;
+  } else {
+    const qa=qas[Math.min(i,4)];
+    document.getElementById('qa').innerHTML=`<div class="qa-title">${qa.title}</div><div class="qa-desc">${qa.desc}</div><button class="btn ${qa.cls} btn-full" onclick="go('${qa.page}')">${qa.btn}</button>`;
+  }
+}
+
+// ── MANAGE ─────────────────────────────────────────────────────────────────
+function renderManage(job, result) {
+  const s=job.status, i=S2I[s]??0;
+  for(let n=0;n<5;n++){
+    const el=document.getElementById('st'+n);
+    el.className='step'+(TERM.has(s)||n<i?' done':n===i?' active':'');
+    el.querySelector('.step-dot').textContent=(TERM.has(s)||n<i)?'✓':n+1;
+  }
+  if(TERM.has(s)){
+    const c={ACCEPTED:{icon:'🎉',title:'Payment Released',msg:`Score ${result?.score}/100 ≥ min (${job.min_score}). Full payment released.`},PARTIAL:{icon:'⚠️',title:'Partial Payment',msg:`Score ${result?.score}/100 between floor (${job.partial_floor}) and min. Proportional payment made.`},REFUNDED:{icon:'↩️',title:'Funds Refunded',msg:`Score ${result?.score}/100 below floor (${job.partial_floor}). Refunded to client.`}}[s];
+    document.getElementById('actCard').innerHTML=`<div class="t-hero"><div class="t-icon">${c.icon}</div><div class="t-title t-${s}">${c.title}</div><div class="t-sub" style="margin-top:8px">${c.msg}</div></div>`;
+    document.getElementById('specCard').style.display='none';return;
+  }
+  if(job.spec){document.getElementById('specTxt').textContent=job.spec;document.getElementById('specCard').style.display='';}
+  const sc=result?.score, sh=sc!=null?`<div class="hint hb" style="margin-bottom:14px"><span>ℹ️</span><span>Score <strong>${sc}/100</strong> — ${sc>=job.min_score?`full pay (≥${job.min_score})`:sc>=job.partial_floor?`partial pay (above floor ${job.partial_floor})`:`refund (below floor ${job.partial_floor})`}</span></div>`:'';
+  const steps=[
+    {tag:'Step 1 of 5',title:'Fund the Escrow',desc:'Deposit GEN tokens. Funds are locked in the contract until evaluation is complete.',form:`<div class="field"><label>Amount (wei)</label><input type="number" id="inp-a" value="1000000000000000"/><small>1,000,000,000,000,000 wei = 0.001 GEN</small></div><button class="btn bg btn-full" onclick="fund()">Fund Escrow</button>`},
+    {tag:'Step 2 of 5',title:'Accept Terms',desc:'The worker reviews the job specification and agrees to deliver the described work.',form:`<button class="btn bb btn-full" onclick="acceptTerms()">Accept Terms &amp; Begin Work</button>`},
+    {tag:'Step 3 of 5',title:'Submit Your Deliverable',desc:'Provide a public URL to the completed work. The AI evaluator will fetch and score this page.',form:`<div class="field"><label>Deliverable URL</label><input type="url" id="inp-u" placeholder="https://your-work-url.com"/><small>Must be publicly accessible — the AI fetches this URL directly</small></div><button class="btn bb btn-full" onclick="submitWork()">Submit Work</button>`},
+    {tag:'Step 4 of 5',title:'Request AI Evaluation',desc:'An AI validator fetches your submission and scores it against the job specification. This determines the payout.',form:`<div class="hint hy"><span>⏱</span><span>Takes <strong>30–60 seconds</strong> on testnet while the AI reads and grades the page.</span></div><button class="btn bp btn-full" onclick="evaluate()">Start AI Evaluation</button>`},
+    {tag:'Step 5 of 5',title:'Finalize Payout',desc:'Release funds based on the AI score. The contract automatically calculates the split.',form:`${sh}<div class="btn-row"><button class="btn bg btn-full" onclick="finalize()">Release Funds</button>${!job.appeal_used?`<button class="btn bh" onclick="appeal()">Appeal</button>`:''}</div>`},
+  ];
+  const st=steps[Math.min(i,4)];
+  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="step-tag">${st.tag}</div><div class="act-title">${st.title}</div><div class="act-desc">${st.desc}</div>${st.form}</div>`;
+}
+
+// ── EVALUATION THEATRE ───────────────────────────────────────────────────────
+const PIPELINE = [
+  {l:'Fetch',     sub:'snapshot + pin'},
+  {l:'Sandbox',   sub:'injection guard'},
+  {l:'Evaluate',  sub:'5 validators'},
+  {l:'Consensus', sub:'agreement'},
+  {l:'Settle',    sub:'release / refund'},
+];
+const FAKE_VALIDATORS = [
+  {id:'validator-07', addr:'0x7a1c…e91f', stake:'128k'},
+  {id:'validator-12', addr:'0x2c44…4bd2', stake:'96k'},
+  {id:'validator-23', addr:'0x9f30…10ae', stake:'204k'},
+  {id:'validator-31', addr:'0x51b8…c7e3', stake:'71k'},
+  {id:'validator-44', addr:'0xb3d2…8d29', stake:'155k'},
+];
+
+function outcomeOf(job, score) {
+  if (score >= job.min_score) return 'accept';
+  if (score >= job.partial_floor) return 'partial';
+  return 'reject';
+}
+function outcomeColor(o) { return o==='accept'?'var(--green)':o==='partial'?'var(--yellow)':'var(--red)'; }
+function outcomeBg(o) { return o==='accept'?'var(--green-bg)':o==='partial'?'var(--yellow-bg)':'var(--red-bg)'; }
+
+function renderPipeline(step) {
+  // step: 0=idle 1=fetch 2=sandbox 3=evaluate 4=consensus 5=settle(done)
+  document.getElementById('pipeFill').style.width = (Math.max(0,Math.min(step,5))/5*100)+'%';
+  document.getElementById('pipeRow').innerHTML = PIPELINE.map((p,n)=>{
+    const idx=n+1;
+    const done = step>idx || (idx===5 && step>=5);
+    const active = step===idx;
+    const cls = done?'done':active?'active':'';
+    return `<div class="pipeline-step"><div class="pipeline-dot ${cls}"></div><div class="pipeline-label ${done||active?'on':''}">${p.l}</div><div class="pipeline-sub">${p.sub}</div></div>`;
+  }).join('');
+}
+
+function theatreClearTimers(){ theatreTimers.forEach(clearTimeout); theatreTimers=[]; }
+
+function renderEvaluateStatic(job, result) {
+  const sc = result?.score;
+  document.getElementById('evEmpty').style.display = sc==null ? '' : 'none';
+  document.getElementById('evContent').style.display = sc!=null ? '' : 'none';
+  if (sc==null) { document.getElementById('verdictCard').style.display='none'; return; }
+  renderPipeline(5);
+  document.getElementById('theatreBody').innerHTML = staticValidatorsHTML(job, sc) + theatreNoteHTML() + staticConsensusHTML(job, sc);
+  renderVerdictCard(job, result);
+}
+
+function staticValidatorsHTML(job, sc) {
+  const outcome = outcomeOf(job, sc);
+  const cards = FAKE_VALIDATORS.map(v=>{
+    const vs = Math.max(0, Math.min(100, sc + jitter()));
+    const vOutcome = outcomeOf(job, vs);
+    const vc = outcomeColor(vOutcome), vb = outcomeBg(vOutcome);
+    const label = vOutcome==='accept'?'ACCEPT':vOutcome==='partial'?'PARTIAL':'REJECT';
+    return `<div class="v-card"><div class="v-addr">${v.addr}</div><div class="v-score" style="color:${vc}">${vs}</div><div class="v-vote" style="color:${vc};background:${vb}">${label}</div><div class="v-stake">stake ${v.stake}</div></div>`;
+  }).join('');
+  return `<div class="validators-wrap"><div class="validators-label">VALIDATOR EVALUATION</div><div class="validators-grid">${cards}</div></div>`;
+}
+function theatreNoteHTML() {
+  return `<div class="theatre-note">illustrative visualization — GenLayer's validator consensus runs inside the contract; only the final agreed score below is real on-chain data.</div>`;
+}
+function staticConsensusHTML(job, sc) {
+  const outcome = outcomeOf(job, sc), c = outcomeColor(outcome);
+  return `<div class="consensus-wrap"><div class="consensus-num"><div class="consensus-lbl">CONSENSUS</div><div class="consensus-val">5<span style="color:var(--subtle);font-size:13px">/5</span></div></div><div class="consensus-bar-wrap"><div class="consensus-bar-meta"><span>weighted score</span><span style="color:${c}">${sc}%</span></div><div class="consensus-track"><div class="consensus-fill" style="width:${sc}%;background:${c}"></div></div></div></div>`;
+}
+function jitter(){ return Math.round((Math.random()*2-1)*6); }
+
+function renderVerdictCard(job, result) {
+  const sc = result.score, s = result.status;
+  const outcome = s==='ACCEPTED'?'accept':s==='PARTIAL'?'partial':'reject';
+  const c = outcomeColor(outcome), bg = outcomeBg(outcome);
+  const iconMap = {accept:'✓', partial:'—', reject:'✕'};
+  const labelMap = {ACCEPTED:'✓ Accepted',PARTIAL:'⚠ Partial Pay',REFUNDED:'↩ Refunded'};
+  document.getElementById('verdictCard').style.display='';
+  document.getElementById('verdictTop').style.background=bg;
+  document.getElementById('verdictTop').style.border='1px solid '+c+'44';
+  document.getElementById('verdictIcon').style.background=c;
+  document.getElementById('verdictIcon').style.color='var(--bg)';
+  document.getElementById('verdictIcon').textContent=iconMap[outcome];
+  document.getElementById('verdictLabel').textContent=labelMap[s]||s;
+  document.getElementById('verdictLabel').style.color=c;
+  document.getElementById('verdictScore').textContent=sc+'/100';
+  document.getElementById('verdictScore').style.color=c;
+  document.getElementById('reasoningBlock').style.borderLeftColor=c;
+  document.getElementById('rText').textContent=result.reasoning||'No reasoning provided.';
+
+  const amount = job.amount; // 0 once finalized — use last-known amount if terminal state already zeroed it
+  let release=0, refund=0;
+  if (s==='ACCEPTED') release = amount;
+  else if (s==='PARTIAL') { release = Math.floor(amount * sc / job.min_score); refund = amount - release; }
+  else refund = amount;
+  const rows=[];
+  if (release>0) rows.push(`<div class="settle-row" style="background:var(--green-bg)"><span>→ Released to worker</span><span class="settle-amt" style="color:var(--green)">${toGEN(release)}</span></div>`);
+  if (refund>0) rows.push(`<div class="settle-row" style="background:var(--red-bg)"><span>↺ Refunded to client</span><span class="settle-amt" style="color:var(--red)">${toGEN(refund)}</span></div>`);
+  document.getElementById('settleRows').innerHTML = rows.join('') || `<div class="settle-row" style="background:var(--border-sub)"><span>Awaiting finalize()</span><span class="settle-amt">—</span></div>`;
+  document.getElementById('appealBtn').style.display = job.appeal_used ? 'none' : '';
+}
+
+async function runEvalTheatre() {
+  theatreRunning = true;
+  theatreClearTimers();
+  document.getElementById('evEmpty').style.display='none';
+  document.getElementById('evContent').style.display='';
+  document.getElementById('verdictCard').style.display='none';
+  renderPipeline(1);
+  document.getElementById('theatreBody').innerHTML = `
+    <div class="theatre-row"><span class="theatre-spin"></span><span>Fetching &amp; pinning deliverable snapshot…</span></div>
+  `;
+
+  theatreTimers.push(setTimeout(()=>{
+    renderPipeline(2);
+    document.getElementById('theatreBody').innerHTML = `
+      <div class="theatre-row"><span class="theatre-check">✓</span><span>Fetched &amp; pinned deliverable</span></div>
+      <div class="theatre-row"><span class="theatre-spin"></span><span>Sandboxing fetched content from rubric prompt…</span></div>
+    `;
+  }, 1300));
+
+  theatreTimers.push(setTimeout(()=>{
+    renderPipeline(3);
+    document.getElementById('theatreBody').innerHTML = `
+      <div class="theatre-row"><span class="theatre-check">✓</span><span>Fetched &amp; pinned deliverable</span></div>
+      <div class="theatre-row"><span class="theatre-check">✓</span><span>Sandboxed fetched content — no prompt-injection markers detected</span></div>
+      <div class="validators-wrap"><div class="validators-label">VALIDATOR EVALUATION</div><div class="validators-grid" id="liveValidatorsGrid"></div></div>
+      ${theatreNoteHTML()}
+    `;
+    const grid = document.getElementById('liveValidatorsGrid');
+    grid.innerHTML = FAKE_VALIDATORS.map(()=>`<div class="v-card"><span class="theatre-spin"></span><div class="v-stake" style="margin-top:9px">evaluating</div></div>`).join('');
+  }, 2600));
+
+  FAKE_VALIDATORS.forEach((v,idx)=>{
+    theatreTimers.push(setTimeout(()=>{
+      const grid = document.getElementById('liveValidatorsGrid');
+      if (!grid) return;
+      grid.children[idx].innerHTML = `<div class="v-addr">${v.addr}</div><div class="theatre-spin" style="margin:6px 0"></div><div class="v-stake">stake ${v.stake}</div>`;
+    }, 2900 + idx*750));
+  });
+
+  // real call
+  log('→ /api/evaluate'); if(!logOpen) toggleLog();
+  let ok = true, errMsg = '';
+  try {
+    const r = await fetch(API_BASE+'/api/evaluate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    log('✓ '+(d.status||'done'),'ok');
+  } catch(e) {
+    ok = false; errMsg = e.message;
+    log('✗ '+e.message,'err');
+  }
+
+  theatreClearTimers();
+
+  if (!ok) {
+    theatreRunning = false;
+    document.getElementById('theatreBody').innerHTML = `<div class="theatre-row" style="border-color:var(--red)"><span style="color:var(--red)">✕</span><span>Evaluation failed: ${errMsg}</span></div><div class="btn-row" style="margin:14px 22px 0"><button class="btn bp" onclick="evaluate()">Retry evaluation</button></div>`;
+    return;
+  }
+
+  renderPipeline(4);
+  await reload();
+  renderPipeline(5);
+  theatreRunning = false;
+  const sc = data?.result?.score;
+  if (sc != null) renderEvaluateStatic(data.job, data.result);
+}
+
+// ── CONTRACTS ──────────────────────────────────────────────────────────────
+function renderContracts(addresses) {
+  if(!addresses) return;
+  const cCard=(title,addr,exUrl)=>`<div class="card"><div class="card-head"><span><span class="ch-icon">📄</span> ${title}</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addr}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div></div></div>${exUrl?`<a class="exp-link" href="${exUrl}" target="_blank">View on Explorer ↗</a>`:''}</div></div>`;
+  document.getElementById('ctsContent').innerHTML=
+    cCard('FreelanceEscrow',addresses.escrow,addresses.explorer_escrow)+
+    cCard('EvaluateSubmission',addresses.evaluator,addresses.explorer_evaluator)+
+    `<div class="card"><div class="card-head"><span><span class="ch-icon">👤</span> Deployer Wallet</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addresses.deployer}</span><button class="copy-btn" onclick="cp('${addresses.deployer}',this)">Copy</button></div></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div></div></div></div>`+
+    `<div class="card"><div class="card-head"><span><span class="ch-icon">ℹ️</span> About</span></div><div class="card-body"><div class="kv-list"><div class="kv"><span class="kv-k">Platform</span><span class="kv-v">GenLayer</span></div><div class="kv"><span class="kv-k">Evaluation</span><span class="kv-v">AI-Arbitrated</span></div><div class="kv"><span class="kv-k">Language</span><span class="kv-v">Python (Intelligent Contract)</span></div></div></div></div>`;
+}
+
+function cp(addr,btn){navigator.clipboard.writeText(addr).then(()=>{const o=btn.textContent;btn.textContent='Copied!';btn.style.color='var(--green)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1500)})}
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function reload() {
+  try{const r=await fetch(API_BASE+'/api/status');if(!r.ok)throw new Error('HTTP '+r.status);data=await r.json();renderAll();log('Status refreshed','ok')}
+  catch(e){log('Refresh failed: '+e.message,'err');if(!logOpen)toggleLog()}
+}
+
+function disableAct(on){
+  document.querySelectorAll('#actCard button, #qa button').forEach(b=>{
+    b.disabled=on;
+    if(on&&!b.dataset.o){b.dataset.o=b.innerHTML;b.innerHTML='<span class="spinner"></span> Working…'}
+    else if(!on&&b.dataset.o){b.innerHTML=b.dataset.o;delete b.dataset.o}
+  });
+}
+
+async function call(path,body={}){
+  log('→ '+path); if(!logOpen)toggleLog(); disableAct(true);
+  try{
+    const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok)throw new Error(d.detail||JSON.stringify(d));
+    log('✓ '+(d.status||'done'),'ok'); await reload();
+  }catch(e){log('✗ '+e.message,'err');disableAct(false)}
+}
+
+function fund(){call('/api/fund',{amount_wei:parseInt(document.getElementById('inp-a')?.value)||1e15})}
+function acceptTerms(){call('/api/accept_terms')}
+function evaluate(){ go('evaluate'); runEvalTheatre(); }
+function appeal(){call('/api/appeal')}
+function finalize(){call('/api/finalize')}
+function submitWork(){const u=document.getElementById('inp-u')?.value?.trim();if(!u?.startsWith('http')){log('Enter a valid https:// URL','err');if(!logOpen)toggleLog();return}call('/api/submit',{url:u})}
+
+init();
+</script>
 </body>
 </html>
