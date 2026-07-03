@@ -51,7 +51,7 @@ app = FastAPI(title="Freelance Escrow Dashboard")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://genlayer-escrow.vercel.app", "http://localhost:8001", "http://localhost:3000"],
+    allow_origins=["https://genlayer-escrow.vercel.app", "https://lexiweb31.github.io", "http://localhost:8001", "http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
