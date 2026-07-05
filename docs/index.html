@@ -530,12 +530,22 @@ let data = null, logOpen = false, logN = 0, curPage = 'overview';
 let theatreRunning = false, theatreTimers = [];
 
 // ── SPLASH ─────────────────────────────────────────────────────────────────
+const SPLASH_STAGES = [
+  {t:0,     m:'Connecting to testnet_bradbury…'},
+  {t:6000,  m:'Still connecting — waking up the API server…'},
+  {t:16000, m:'Free-tier servers can take up to a minute to wake up on the first visit…'},
+  {t:35000, m:'Almost there — thanks for your patience…'},
+  {t:60000, m:'This is taking longer than usual, but still trying…'},
+];
+
 async function init() {
+  const msgEl = document.getElementById('splashMsg');
+  const stageTimers = SPLASH_STAGES.map(s=>setTimeout(()=>{ if(msgEl) msgEl.textContent = s.m; }, s.t));
   try {
-    const r = await fetch(API_BASE+'/api/status');
+    const r = await fetchWithTimeout(API_BASE+'/api/status', 90000);
     if (!r.ok) throw new Error('Server error '+r.status);
     data = await r.json();
-    await delay(500);
+    await delay(400);
     document.getElementById('splash').classList.add('out');
     document.getElementById('app').classList.add('on');
     setTimeout(()=>document.getElementById('splash').remove(),600);
@@ -543,10 +553,19 @@ async function init() {
   } catch(e) {
     document.getElementById('splashErr').textContent = 'Could not connect: '+e.message;
     document.getElementById('splashErr').style.display='';
-    document.getElementById('splashMsg').textContent='Make sure the API server is running.';
+    if(msgEl) msgEl.textContent="Could not reach the API server — check it's running, then reload.";
+  } finally {
+    stageTimers.forEach(clearTimeout);
   }
 }
 const delay = ms => new Promise(r=>setTimeout(r,ms));
+async function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), ms);
+  try { return await fetch(url, {signal: ctrl.signal}); }
+  catch(e) { if (e.name==='AbortError') throw new Error('Timed out after '+Math.round(ms/1000)+'s'); throw e; }
+  finally { clearTimeout(t); }
+}
 
 // ── NAV ────────────────────────────────────────────────────────────────────
 function go(page) {
