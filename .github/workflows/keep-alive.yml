@@ -1,0 +1,13 @@
+name: Keep Render API warm
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping dispute dashboard API
+        run: curl -sf -m 30 https://genlayer-escrow.onrender.com/api/status || echo "ping failed (non-fatal, Render may be redeploying)"
