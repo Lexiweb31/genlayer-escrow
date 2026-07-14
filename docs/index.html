@@ -50,17 +50,20 @@
     .app{display:none;height:100vh;overflow:hidden;position:relative}
     .app.on{display:flex}
     .app::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(720px 440px at 80% 8%,rgba(107,211,230,.05),transparent 62%),radial-gradient(620px 460px at 8% 92%,rgba(184,242,74,.04),transparent 62%)}
-    /* Ambient network motion — a slowly drifting node field, mask-faded so it
-       reads as "the network is alive" without competing with content. */
-    .app::after{content:'';position:fixed;inset:-30%;pointer-events:none;z-index:0;opacity:.55;
-      background-image:radial-gradient(circle at center,rgba(107,211,230,.55) 0,transparent 1.5px);
-      background-size:48px 48px;
-      -webkit-mask-image:radial-gradient(1100px 760px at 74% 16%,#000,transparent 72%);
-      mask-image:radial-gradient(1100px 760px at 74% 16%,#000,transparent 72%);
-      animation:drift 44s linear infinite}
-    @keyframes drift{from{transform:translate3d(0,0,0)}to{transform:translate3d(-48px,-48px,0)}}
+    /* Ambient network motion lives on a canvas (.net-field) — a sparse drifting
+       node graph in dark green, faded low so it reads as "the network is alive"
+       without competing with content. Driven by NetField in the script. */
+    .net-field{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;
+      -webkit-mask-image:radial-gradient(1200px 820px at 72% 14%,#000,transparent 74%);
+      mask-image:radial-gradient(1200px 820px at 72% 14%,#000,transparent 74%)}
+    /* Scattered static motif glyphs (money·lock·check) — antseed-style sprites */
+    .glyphs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+    .glyphs span{position:absolute;font-size:15px;opacity:.05;filter:grayscale(.2)}
+    /* right-edge scroll progress line */
+    .scroll-depth{position:fixed;top:0;right:0;width:2px;height:100vh;z-index:40;pointer-events:none;background:var(--border-sub)}
+    .scroll-depth::after{content:'';position:absolute;top:0;left:0;width:100%;height:var(--sd,0%);background:linear-gradient(180deg,var(--green),var(--gold));transition:height .1s linear}
     @media(prefers-reduced-motion:reduce){
-      .app::after{animation:none}
+      .net-field{display:none}
       .hero-eyebrow .dot{animation:none}
       .splash-mark,.splash-bar{animation:none}
     }
@@ -68,8 +71,13 @@
     /* SIDEBAR */
     .sb{width:var(--sw);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border-sub);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;z-index:50}
     .sb-logo{display:flex;align-items:center;gap:10px;padding:20px 18px 16px}
-    .sb-mark{width:26px;height:26px;border-radius:7px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sb-mark{width:26px;height:26px;border-radius:7px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 0 0 rgba(184,242,74,.5);animation:markGlow 3s ease-in-out infinite}
     .sb-mark::after{content:'';width:9px;height:9px;background:var(--bg);border-radius:2px;transform:rotate(45deg)}
+    @keyframes markGlow{0%,100%{box-shadow:0 0 6px 0 rgba(184,242,74,.35)}50%{box-shadow:0 0 14px 2px rgba(184,242,74,.6)}}
+    .sb-icons{display:flex;align-items:center;gap:4px;flex-shrink:0}
+    .icon-btn{width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;padding:0}
+    .icon-btn:hover{color:var(--text);border-color:#2C3A3E;background:#12181A}
+    @media(prefers-reduced-motion:reduce){.sb-mark{animation:none}}
     .sb-word{font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1}
     .sb-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;color:var(--subtle);margin-top:3px}
     .sb-nav{flex:1;padding:8px 12px;overflow-y:auto}
@@ -331,28 +339,74 @@
     .hero-eyebrow.dim{color:var(--subtle);border-color:var(--border);background:transparent}
     .hero-eyebrow.dim .dot{background:var(--subtle);box-shadow:none;animation:none}
     .badge-load{display:inline-block;width:16px;height:8px;border-radius:3px;vertical-align:middle;background:linear-gradient(90deg,var(--border-sub) 25%,var(--border) 50%,var(--border-sub) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+    .hero-badge-sm{font-size:9.5px;padding:5px 11px;opacity:.92}
     .hero h1{font-size:42px;line-height:1.08;font-weight:700;letter-spacing:-.03em;margin-bottom:18px}
     .hero h1 .accent{color:var(--green)}
+    .hero h1 .accent-italic{font-style:italic;font-weight:500;color:var(--green)}
     .hero-lede{font-size:16px;line-height:1.65;color:var(--muted);margin-bottom:14px;max-width:620px}
     .hero-lede strong{color:var(--text);font-weight:600}
     .hero-cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
     .btn-lg{padding:13px 24px;font-size:14px}
     .hero-note{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--subtle);margin-top:16px}
 
+    /* HERO TERMINAL — dominant hero visual, populated live from /api/jobs */
+    .terminal{margin-top:28px;background:linear-gradient(180deg,#0C1012,#090C0D);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.7),0 0 0 1px rgba(184,242,74,.04),inset 0 1px 0 rgba(255,255,255,.02);max-width:640px}
+    .term-bar{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:#0B0E0F;border-bottom:1px solid var(--border-sub)}
+    .term-dots{display:flex;gap:6px}
+    .term-dots span{width:10px;height:10px;border-radius:50%;background:#2A3235}
+    .term-dots span:nth-child(1){background:#FF6F5E}
+    .term-dots span:nth-child(2){background:#F3C24B}
+    .term-dots span:nth-child(3){background:#4FCB6B}
+    .term-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.15em;color:var(--subtle)}
+    .term-body{padding:15px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.85;color:#B8C4C0;min-height:150px}
+    .tl-cmd{color:var(--text);white-space:pre-wrap;word-break:break-word}
+    .tl-cmd .tl-p{color:var(--green);font-weight:700;margin-right:6px}
+    .tl-out{color:var(--muted);padding-left:14px}
+    .tl-out .tl-ok{color:var(--green)}
+    .tl-job{padding-left:14px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+    .tl-job .tl-code{color:#9FE4F2}
+    .tl-job .tl-st{color:var(--text)}
+    .tl-dim{color:var(--subtle)}
+    .tl-gen{color:var(--gold)}
+    .term-foot{margin-top:10px;padding-top:10px;border-top:1px solid var(--border-sub);color:var(--green);font-size:11px}
+    .term-cursor{display:inline-block;width:7px;height:13px;background:var(--green);vertical-align:text-bottom;margin-left:2px;animation:blink 1.1s steps(1) infinite}
+    @keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+    @media(prefers-reduced-motion:reduce){.term-cursor{animation:none}}
+
+    /* TYPOGRAPHY CONTRAST MOMENT */
+    .statement{max-width:900px;margin:56px auto 0;text-align:center}
+    .statement-a{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+    .statement-b{font-size:34px;font-weight:500;font-style:italic;letter-spacing:-.02em;color:var(--green);line-height:1.15;margin-top:2px}
+
     .flow{max-width:900px;margin:52px auto 0}
-    .flow-title{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--subtle);text-align:center;margin-bottom:20px}
-    .flow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-    .flow-step{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 18px}
-    .flow-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green);margin-bottom:12px}
-    .flow-step h3{font-size:15px;font-weight:600;margin-bottom:7px;letter-spacing:-.01em}
+    .flow-title{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--subtle);text-align:center;margin-bottom:28px}
+    .flow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;padding-top:20px}
+    /* horizontal connector line threading all step dots */
+    .flow-line{position:absolute;top:20px;left:12.5%;right:12.5%;height:2px;background:linear-gradient(90deg,var(--green),var(--green) 66%,var(--gold));opacity:.35;z-index:0}
+    .flow-step{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px 18px 20px;position:relative;transition:transform .15s,border-color .15s,box-shadow .15s}
+    .flow-step:hover{transform:translateY(-2px);border-color:#2C3A3E}
+    .flow-dot{position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:var(--card);border:2px solid var(--green);z-index:2}
+    .flow-dot.money{border-color:var(--gold)}
+    .flow-step.active .flow-dot{border-color:var(--green);box-shadow:0 0 0 5px var(--green-bg);animation:dotPulse 2.2s ease-in-out infinite}
+    @keyframes dotPulse{0%,100%{box-shadow:0 0 0 4px rgba(184,242,74,.18)}50%{box-shadow:0 0 0 8px rgba(184,242,74,.06)}}
+    @media(prefers-reduced-motion:reduce){.flow-step.active .flow-dot{animation:none}}
+    .flow-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--green);margin-bottom:10px;letter-spacing:-.02em;line-height:1}
+    .flow-num.money{color:var(--gold)}
+    .flow-step h3{font-size:15px;font-weight:600;margin-bottom:4px;letter-spacing:-.01em}
+    .flow-meta{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;color:var(--subtle);text-transform:uppercase;margin-bottom:10px}
+    .flow-meta.money{color:var(--gold);opacity:.75}
     .flow-step p{font-size:12.5px;color:var(--muted);line-height:1.55}
 
     .why{max-width:900px;margin:44px auto 0;background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:28px 30px}
     .why h2{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
     .why > p{font-size:13.5px;color:var(--muted);line-height:1.65;margin-bottom:20px;max-width:640px}
     .why-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .why-item{display:flex;gap:12px;align-items:flex-start}
-    .why-ic{width:30px;height:30px;border-radius:8px;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
+    .why-item{display:flex;gap:12px;align-items:flex-start;position:relative;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;overflow:hidden;transition:transform .15s,border-color .15s,box-shadow .15s;--acc:var(--green);--acc-bg:var(--green-bg)}
+    /* diagonal corner-fold, top-right — subtle "designed" craft detail */
+    .why-item::after{content:'';position:absolute;top:0;right:0;width:16px;height:16px;background:linear-gradient(225deg,var(--acc) 0,var(--acc) 48%,transparent 48%);opacity:.3;transition:opacity .15s}
+    .why-item:hover{transform:translateY(-2px);border-color:var(--acc);box-shadow:0 10px 30px -14px var(--acc)}
+    .why-item:hover::after{opacity:.7}
+    .why-ic{width:32px;height:32px;border-radius:8px;background:var(--acc-bg);color:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
     .why-item h4{font-size:13.5px;font-weight:600;margin-bottom:3px}
     .why-item p{font-size:12px;color:var(--muted);line-height:1.5}
     .landing-foot{max-width:900px;margin:36px auto 0;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--subtle);line-height:1.7}
@@ -363,13 +417,20 @@
     .faq-head{margin-bottom:18px}
     .faq-head h2{font-size:19px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
     .faq-head p{font-size:13px;color:var(--muted);line-height:1.6;max-width:600px}
-    .faq-item{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;transition:border-color .15s}
+    .faq-item{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+    .faq-item:hover{border-color:#2C3A3E;box-shadow:0 8px 26px -16px rgba(184,242,74,.4)}
     .faq-item[open]{border-color:#2C3A3E}
     .faq-item summary{list-style:none;cursor:pointer;padding:16px 18px;display:flex;align-items:center;gap:12px;font-size:14px;font-weight:600;letter-spacing:-.01em;user-select:none}
     .faq-item summary::-webkit-details-marker{display:none}
     .faq-q-ic{width:22px;height:22px;border-radius:6px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex-shrink:0}
-    .faq-chev{margin-left:auto;color:var(--subtle);transition:transform .2s;flex-shrink:0}
-    .faq-item[open] .faq-chev{transform:rotate(90deg)}
+    /* custom expand icon: plus that rotates into an × on open */
+    .faq-chev{margin-left:auto;position:relative;width:16px;height:16px;flex-shrink:0;font-size:0;transition:transform .25s ease}
+    .faq-chev::before,.faq-chev::after{content:'';position:absolute;top:50%;left:50%;background:var(--muted);border-radius:2px;transition:background .15s}
+    .faq-chev::before{width:12px;height:2px;transform:translate(-50%,-50%)}
+    .faq-chev::after{width:2px;height:12px;transform:translate(-50%,-50%)}
+    .faq-item:hover .faq-chev::before,.faq-item:hover .faq-chev::after{background:var(--green)}
+    .faq-item[open] .faq-chev{transform:rotate(135deg)}
+    .faq-item[open] .faq-chev::before,.faq-item[open] .faq-chev::after{background:var(--green)}
     .faq-a{padding:0 18px 18px 52px;font-size:13px;color:var(--muted);line-height:1.7}
     .faq-a strong{color:var(--text);font-weight:600}
     .faq-a code{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--bg);border:1px solid var(--border-sub);border-radius:4px;padding:1px 5px;color:var(--blue)}
@@ -377,8 +438,17 @@
 
     /* ===== BROWSE (jobs marketplace) ===== */
     .jobs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-    .job-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:border-color .15s,transform .1s;display:flex;flex-direction:column;gap:0}
-    .job-card:hover{border-color:#2C3A3E;transform:translateY(-2px)}
+    .job-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:border-color .15s,transform .1s,box-shadow .15s;display:flex;flex-direction:column;gap:0}
+    /* left accent border + hover glow, colored by status */
+    .job-card.acc-green{border-left-color:var(--green)}
+    .job-card.acc-gold{border-left-color:var(--gold)}
+    .job-card.acc-red{border-left-color:var(--red)}
+    .job-card.acc-muted{border-left-color:var(--border)}
+    .job-card:hover{transform:translateY(-2px)}
+    .job-card.acc-green:hover{border-color:var(--green);border-left-color:var(--green);box-shadow:0 12px 32px -16px var(--green)}
+    .job-card.acc-gold:hover{border-color:var(--gold);border-left-color:var(--gold);box-shadow:0 12px 32px -16px var(--gold)}
+    .job-card.acc-red:hover{border-color:var(--red);border-left-color:var(--red);box-shadow:0 12px 32px -16px var(--red)}
+    .job-card.acc-muted:hover{border-color:#2C3A3E}
     .jc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .jc-code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--subtle)}
     .jc-title{font-size:15.5px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px;line-height:1.3}
@@ -386,7 +456,21 @@
     .jc-foot{display:flex;align-items:center;justify-content:space-between;padding-top:14px;border-top:1px solid var(--border-sub)}
     .jc-amt{font-family:'JetBrains Mono',monospace;font-size:12px}
     .jc-amt b{font-weight:600;color:var(--text)}
+    .jc-amt b.gen{color:var(--gold)}
     .jc-score{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+    .jc-score-wrap{display:inline-flex;align-items:center;gap:7px}
+    /* radial score ring — conic-gradient progress, green (judgment) */
+    .score-ring{--p:0;position:relative;width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+      background:conic-gradient(var(--green) calc(var(--p)*1%),var(--border-sub) 0)}
+    .score-ring::before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:var(--card)}
+    .score-ring-num{position:relative;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--green)}
+    /* ghost placeholder cards */
+    .job-card.ghost{cursor:default;border-style:dashed;border-left-style:dashed;border-color:var(--border-sub);border-left-color:var(--border-sub);opacity:.5;transition:opacity .15s}
+    .job-card.ghost:hover{transform:none;opacity:.7;box-shadow:none}
+    .jc-ghost-title{font-size:14px;font-weight:600;color:var(--subtle);margin-bottom:14px}
+    .jc-ghost-line{height:9px;border-radius:4px;background:var(--border-sub);margin-bottom:8px}
+    .jc-ghost-line.short{width:60%}
+    .ghost-foot{color:var(--subtle);font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:auto}
 
     /* ===== POST (create job) ===== */
     .post-wrap{max-width:620px;margin:0 auto}
@@ -395,6 +479,19 @@
     textarea:focus{border-color:#3A4A4E}
     textarea::placeholder{color:var(--subtle)}
     .field-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    .mono-in{font-family:'JetBrains Mono',monospace !important;letter-spacing:.02em}
+    .mono-in.money{color:var(--gold)}
+    /* live payout preview */
+    .payout-preview{background:var(--bg);border:1px solid var(--border-sub);border-radius:10px;padding:13px 15px;margin:4px 0 14px}
+    .pp-title{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--subtle);margin-bottom:10px}
+    .pp-row{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 0}
+    .pp-score{color:var(--muted);min-width:66px}
+    .pp-arrow{color:var(--subtle)}
+    .pp-full{color:var(--gold)}
+    .pp-part{color:var(--gold);opacity:.85}
+    .pp-refund{color:var(--red)}
+    .pp-fee{color:var(--subtle);font-size:10.5px}
+    .pp-warn{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--subtle)}
     .post-hint{font-size:12px;color:var(--muted);line-height:1.6;background:var(--blue-bg);border:1px solid rgba(107,211,230,.22);border-radius:9px;padding:11px 13px;margin:4px 0 18px;display:flex;gap:9px}
     .back-link{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:14px;user-select:none}
     .back-link:hover{color:var(--text)}
@@ -404,6 +501,8 @@
     @media(max-width:900px){
       .hero h1{font-size:32px}
       .flow-grid{grid-template-columns:1fr 1fr}
+      .flow-line{display:none}
+      .statement-a,.statement-b{font-size:24px}
       .why-grid{grid-template-columns:1fr}
       .field-row{grid-template-columns:1fr}
       .sb{position:fixed;top:0;left:0;height:100%;transform:translateX(-100%);transition:transform .25s;z-index:60}
@@ -436,13 +535,22 @@
 <!-- APP -->
 <div id="app" class="app">
 
+  <canvas class="net-field" id="netField" aria-hidden="true"></canvas>
+  <div class="glyphs" id="glyphs" aria-hidden="true"></div>
+  <div class="scroll-depth" id="scrollDepth" aria-hidden="true"></div>
+
   <!-- SIDEBAR -->
   <aside class="sb" id="sb">
     <div class="sb-logo">
       <div class="sb-mark"></div>
-      <div>
+      <div style="flex:1">
         <div class="sb-word">merit</div>
         <div class="sb-tag">ARBITRATED ESCROW</div>
+      </div>
+      <div class="sb-icons">
+        <a class="icon-btn" href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noopener" title="View source on GitHub" aria-label="GitHub repository">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        </a>
       </div>
     </div>
     <nav class="sb-nav">
@@ -484,16 +592,28 @@
       <!-- LANDING -->
       <section id="pg-landing" style="display:none">
         <div class="hero">
-          <div class="hero-eyebrow" id="heroBadge">
+          <div class="hero-eyebrow hero-badge-sm" id="heroBadge">
             <span class="seg"><span class="dot"></span> Network live</span>
             <span class="sep"></span>
             <span class="seg"><b id="badgeJobs"><span class="badge-load"></span></b> active jobs</span>
             <span class="sep"></span>
             <span class="seg"><b class="gen" id="badgeEscrow"><span class="badge-load"></span></b> GEN in escrow</span>
           </div>
-          <h1>The AI <span class="accent">judges the work</span> — and the contract pays out.</h1>
+          <h1>The AI <span class="accent-italic">judges</span> the work — and the contract <span class="accent">pays out</span>.</h1>
           <p class="hero-lede">Freelance escrow where an <strong>Intelligent Contract fetches the deliverable, grades it against the agreed spec, and releases or refunds funds</strong> — no human arbitrator, no platform ruling on who's right.</p>
           <p class="hero-lede">Crypto already solved holding the money. The hard part is the <strong>subjective completion call</strong>: "did the freelancer actually build what was described?" That's what runs here — on GenLayer validators, natively.</p>
+
+          <div class="terminal" id="heroTerm">
+            <div class="term-bar">
+              <div class="term-dots"><span></span><span></span><span></span></div>
+              <div class="term-label">MERIT · ESCROW MONITOR</div>
+            </div>
+            <div class="term-body" id="heroTermBody">
+              <div class="tl-cmd"><span class="tl-p">$</span> merit escrow scan --network testnet_bradbury</div>
+              <div class="tl-out"><span class="tl-dim">connecting…</span></div>
+            </div>
+          </div>
+
           <div class="hero-cta">
             <button class="btn bg btn-lg" onclick="nav('browse')">Browse open jobs →</button>
             <button class="btn bh btn-lg" onclick="nav('post')">Post a job</button>
@@ -501,13 +621,39 @@
           <div class="hero-note">server-signed demo · every action is a real transaction on testnet_bradbury</div>
         </div>
 
+        <div class="statement">
+          <div class="statement-a">No human arbitrator.</div>
+          <div class="statement-b">Just consensus.</div>
+        </div>
+
         <div class="flow">
           <div class="flow-title">How a job settles</div>
           <div class="flow-grid">
-            <div class="flow-step"><div class="flow-num">01</div><h3>Post &amp; fund</h3><p>Client writes an acceptance spec and locks GEN into a fresh escrow contract.</p></div>
-            <div class="flow-step"><div class="flow-num">02</div><h3>Submit work</h3><p>Worker accepts the terms on-chain, then submits a public URL to the deliverable.</p></div>
-            <div class="flow-step"><div class="flow-num">03</div><h3>AI evaluates</h3><p>The contract fetches the page, sandboxes it from injection, and scores it 0–100 against the spec.</p></div>
-            <div class="flow-step"><div class="flow-num">04</div><h3>Funds move</h3><p>Score ≥ threshold pays the worker; middling scores split proportionally; a fail refunds the client.</p></div>
+            <div class="flow-line"></div>
+            <div class="flow-step">
+              <div class="flow-dot"></div>
+              <div class="flow-num">01</div><h3>Post &amp; fund</h3>
+              <div class="flow-meta">CLIENT SIGNS · GEN LOCKED</div>
+              <p>Client writes an acceptance spec and locks GEN into a fresh escrow contract.</p>
+            </div>
+            <div class="flow-step">
+              <div class="flow-dot"></div>
+              <div class="flow-num">02</div><h3>Submit work</h3>
+              <div class="flow-meta">WORKER ACCEPTS · URL POSTED</div>
+              <p>Worker accepts the terms on-chain, then submits a public URL to the deliverable.</p>
+            </div>
+            <div class="flow-step active">
+              <div class="flow-dot"></div>
+              <div class="flow-num">03</div><h3>AI evaluates</h3>
+              <div class="flow-meta">AI SCORES 0–100 · CONSENSUS</div>
+              <p>The contract fetches the page, sandboxes it from injection, and scores it 0–100 against the spec.</p>
+            </div>
+            <div class="flow-step">
+              <div class="flow-dot money"></div>
+              <div class="flow-num money">04</div><h3>Funds move</h3>
+              <div class="flow-meta money">CONTRACT PAYS · OR REFUNDS</div>
+              <p>Score ≥ threshold pays the worker; middling scores split proportionally; a fail refunds the client.</p>
+            </div>
           </div>
         </div>
 
@@ -590,10 +736,11 @@
               <small>The clearer the spec, the more consistent the ruling. Min 20 characters.</small>
             </div>
             <div class="field-row">
-              <div class="field"><label>Fee %</label><input type="number" id="post-fee" value="2" min="0" max="10" step="0.5"/><small>0–10%</small></div>
-              <div class="field"><label>Min score</label><input type="number" id="post-min" value="70" min="0" max="100"/><small>full pay ≥</small></div>
-              <div class="field"><label>Partial floor</label><input type="number" id="post-floor" value="40" min="0" max="100"/><small>refund below</small></div>
+              <div class="field"><label>Fee %</label><input type="number" class="mono-in money" id="post-fee" value="2" min="0" max="10" step="0.5" oninput="renderPayoutPreview()"/><small>0–10%</small></div>
+              <div class="field"><label>Min score</label><input type="number" class="mono-in" id="post-min" value="70" min="0" max="100" oninput="renderPayoutPreview()"/><small>full pay ≥</small></div>
+              <div class="field"><label>Partial floor</label><input type="number" class="mono-in" id="post-floor" value="40" min="0" max="100" oninput="renderPayoutPreview()"/><small>refund below</small></div>
             </div>
+            <div class="payout-preview" id="payoutPreview"></div>
             <div class="post-hint"><span>ℹ️</span><span>Score <b>≥ min</b> → full payment · <b>floor–min</b> → proportional split · <b>below floor</b> → full refund. The contract enforces this automatically.</span></div>
             <button class="btn bg btn-full" id="postBtn" onclick="createJob()">Deploy escrow &amp; post job</button>
             <div class="deploy-note" id="postNote">Deploying a new contract to testnet takes ~30–90 seconds.</div>
@@ -767,6 +914,91 @@ const SPLASH_STAGES = [
   {t:60000, m:'This is taking longer than usual, but still trying…'},
 ];
 
+// ── AMBIENT NETWORK FIELD (canvas) ──────────────────────────────────────────
+// Sparse drifting nodes + proximity-connecting lines in dark green. Vanilla
+// canvas, no deps. Pauses off-landing and under prefers-reduced-motion.
+const NetField = (() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let cv, ctx, nodes=[], raf=0, W=0, H=0, running=false, dpr=1;
+  function size(){
+    if(!cv) return;
+    dpr = Math.min(devicePixelRatio||1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function seed(){
+    const count = Math.round(Math.min(38, Math.max(16, (W*H)/42000)));
+    nodes = Array.from({length:count},()=>({
+      x:Math.random()*W, y:Math.random()*H,
+      vx:(Math.random()-.5)*.16, vy:(Math.random()-.5)*.16,
+      r:Math.random()*1.4+.8,
+    }));
+  }
+  function frame(){
+    if(!running) return;
+    ctx.clearRect(0,0,W,H);
+    for(const n of nodes){
+      n.x+=n.vx; n.y+=n.vy;
+      if(n.x<0||n.x>W) n.vx*=-1;
+      if(n.y<0||n.y>H) n.vy*=-1;
+    }
+    // connecting lines
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j];
+        const dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy;
+        if(d2<19600){ // 140px
+          const o=(1-Math.sqrt(d2)/140)*.10;
+          ctx.strokeStyle=`rgba(120,180,70,${o})`;
+          ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        }
+      }
+    }
+    // nodes
+    for(const n of nodes){
+      ctx.fillStyle='rgba(150,210,90,.28)';
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,7); ctx.fill();
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function start(){
+    if(reduce||running||!cv) return;
+    running=true; raf=requestAnimationFrame(frame);
+  }
+  function stop(){ running=false; cancelAnimationFrame(raf); }
+  return {
+    init(){
+      cv=document.getElementById('netField'); if(!cv||reduce) return;
+      ctx=cv.getContext('2d'); size(); seed();
+      addEventListener('resize',()=>{size();seed();},{passive:true});
+      document.addEventListener('visibilitychange',()=>document.hidden?stop():start());
+    },
+    start, stop,
+  };
+})();
+
+// scatter a few low-opacity motif glyphs, antseed-style
+function seedGlyphs(){
+  const host=document.getElementById('glyphs'); if(!host) return;
+  const marks=['$','🔒','✓','◆','$','✓'];
+  const pos=[[12,22],[78,14],[24,68],[88,52],[62,80],[42,38]];
+  host.innerHTML = marks.map((m,i)=>`<span style="left:${pos[i][0]}%;top:${pos[i][1]}%">${m}</span>`).join('');
+}
+
+// right-edge scroll depth line, driven by the scroll container
+function initScrollDepth(){
+  const sc=document.getElementById('scroll'), bar=document.getElementById('scrollDepth');
+  if(!sc||!bar) return;
+  const upd=()=>{
+    const max=sc.scrollHeight-sc.clientHeight;
+    const pct=max>0?(sc.scrollTop/max)*100:0;
+    bar.style.setProperty('--sd', pct.toFixed(1)+'%');
+  };
+  sc.addEventListener('scroll',upd,{passive:true}); upd();
+}
+
 async function init() {
   const msgEl = document.getElementById('splashMsg');
   const stageTimers = SPLASH_STAGES.map(s=>setTimeout(()=>{ if(msgEl) msgEl.textContent = s.m; }, s.t));
@@ -778,9 +1010,13 @@ async function init() {
     document.getElementById('splash').classList.add('out');
     document.getElementById('app').classList.add('on');
     setTimeout(()=>document.getElementById('splash').remove(),600);
+    NetField.init(); NetField.start();
+    seedGlyphs(); initScrollDepth();
     nav('landing');
     loadBrowse();
     loadStats();
+    renderHeroTerminal();
+    renderPayoutPreview();
   } catch(e) {
     document.getElementById('splashErr').textContent = 'Could not connect: '+e.message;
     document.getElementById('splashErr').style.display='';
@@ -813,6 +1049,9 @@ function nav(page){
   curPage=page; showSection(page); setActive(page);
   document.getElementById('jobNav').style.display = curJob ? '' : 'none';
   if(page==='browse') loadBrowse();
+  if(page==='post') renderPayoutPreview();
+  // ambient field only animates behind the landing hero
+  if(page==='landing'){ NetField.start(); renderHeroTerminal(); } else { NetField.stop(); }
   closeSb();
 }
 // Job-detail nav (overview / manage / evaluate / contracts) — needs an open job
@@ -1143,7 +1382,8 @@ async function loadBrowse() {
       body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">🗂️</div><div class="empty-title">No jobs yet</div><div class="empty-desc">Be the first — post a job with an acceptance spec and the AI will grade whatever gets submitted against it.</div><button class="btn bg" onclick="nav('post')">+ Post the first job</button></div></div>`;
       return;
     }
-    body.innerHTML = `<div class="jobs-grid">${jobs.map(jobCardHTML).join('')}</div>`;
+    const ghosts = jobs.length < 3 ? ghostCards(3 - jobs.length) : '';
+    body.innerHTML = `<div class="jobs-grid">${jobs.map(jobCardHTML).join('')}${ghosts}</div>`;
   } catch(e) {
     body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn't load jobs</div><div class="empty-desc">${e.message}. The API may still be waking up.</div><button class="btn bh" onclick="loadBrowse()">Retry</button></div></div>`;
   }
@@ -1172,16 +1412,72 @@ async function loadStats() {
   }
 }
 
+// ── HERO TERMINAL (live escrow monitor, real /api/jobs) ─────────────────────
+async function renderHeroTerminal() {
+  const body = document.getElementById('heroTermBody');
+  if (!body) return;
+  const scan = `<div class="tl-cmd"><span class="tl-p">$</span>merit escrow scan --network testnet_bradbury</div>`;
+  try {
+    const r = await fetch(API_BASE+'/api/jobs');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const jobs = (await r.json()).jobs || [];
+    if (!jobs.length) {
+      body.innerHTML = scan +
+        `<div class="tl-out"><span class="tl-ok">✓</span> connected — <span class="tl-dim">no open jobs yet</span></div>` +
+        `<div class="tl-cmd"><span class="tl-p">$</span>merit escrow watch<span class="term-cursor"></span></div>` +
+        `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+      return;
+    }
+    const rows = jobs.slice(0,4).map(j=>{
+      const code = jobCode(j.address);
+      const st = (j.status||'UNFUNDED').toLowerCase();
+      const score = j.score!=null ? `${j.score}/100` : '—';
+      return `<div class="tl-job"><span class="tl-code">${code}</span><span>status: <span class="tl-st">${st}</span></span><span>score: ${score}</span></div>`;
+    }).join('');
+    const first = jobCode(jobs[0].address);
+    body.innerHTML = scan +
+      `<div class="tl-out"><span class="tl-ok">✓</span> found ${jobs.length} open job${jobs.length===1?'':'s'} · sorted by created_at</div>` +
+      rows +
+      `<div class="tl-cmd"><span class="tl-p">$</span>contract watch --job ${first}</div>` +
+      `<div class="tl-out"><span class="tl-ok">✓</span> pinned — polling testnet_bradbury for evaluate() call<span class="term-cursor"></span></div>` +
+      `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+  } catch(e) {
+    body.innerHTML = scan +
+      `<div class="tl-out"><span class="tl-dim">✗ registry unreachable — ${esc(e.message)}. retrying on next load.</span></div>` +
+      `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+  }
+}
+
+// status → accent family for the job card's left border + hover glow
+const JC_ACCENT = {
+  OPEN:'green', AGREED:'green', SUBMITTED:'green',
+  EVALUATED:'gold', ACCEPTED:'gold', PARTIAL:'gold',
+  REFUNDED:'red', UNFUNDED:'muted',
+};
+function scoreRing(score){
+  // small radial progress ring: green for judgment score
+  const pct = Math.max(0,Math.min(100,score));
+  return `<span class="score-ring" style="--p:${pct}"><span class="score-ring-num">${score}</span></span>`;
+}
 function jobCardHTML(j) {
   const status = j.status || 'UNFUNDED';
+  const acc = JC_ACCENT[status] || 'muted';
   const amt = (j.amount!=null && j.amount>0) ? toGEN(j.amount) : '—';
-  const scoreLine = j.score!=null ? `<span class="jc-score">AI score ${j.score}/100</span>` : `<span class="jc-score">not evaluated</span>`;
-  return `<div class="job-card" onclick="openJob('${j.id}')">
+  const scoreLine = j.score!=null
+    ? `<span class="jc-score-wrap">${scoreRing(j.score)}<span class="jc-score">AI score</span></span>`
+    : `<span class="jc-score">not evaluated</span>`;
+  return `<div class="job-card acc-${acc}" onclick="openJob('${j.id}')">
     <div class="jc-top"><span class="jc-code">${jobCode(j.address)}</span><span class="pill p-${status}">${status}</span></div>
     <div class="jc-title">${esc(j.title||'Untitled job')}</div>
     <div class="jc-spec">${esc(j.spec||'')}</div>
-    <div class="jc-foot"><span class="jc-amt">escrow <b>${amt}</b></span>${scoreLine}</div>
+    <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b></span>${scoreLine}</div>
   </div>`;
+}
+// ghost "your next job could be here" cards so a sparse grid never looks dead
+function ghostCards(n){
+  let out='';
+  for(let i=0;i<n;i++) out += `<div class="job-card ghost"><div class="jc-top"><span class="jc-code">JOB-······</span></div><div class="jc-ghost-title">your next job could be here</div><div class="jc-ghost-line"></div><div class="jc-ghost-line short"></div><div class="jc-foot ghost-foot"><span>escrow —</span><span>+ post a job</span></div></div>`;
+  return out;
 }
 
 async function openJob(id) {
@@ -1191,6 +1487,38 @@ async function openJob(id) {
   // show skeletons while the job loads
   document.getElementById('actCard').innerHTML = `<div class="card-body"><div class="skel" style="width:40%;height:10px"></div><div class="skel" style="height:20px;margin:8px 0 14px"></div><div class="skel"></div></div>`;
   await reload();
+}
+
+// ── LIVE PAYOUT PREVIEW (mirrors freelance_escrow.finalize exactly) ─────────
+function renderPayoutPreview(){
+  const el = document.getElementById('payoutPreview'); if(!el) return;
+  const feePct = parseFloat(document.getElementById('post-fee').value);
+  const min    = parseInt(document.getElementById('post-min').value);
+  const floor  = parseInt(document.getElementById('post-floor').value);
+  if ([feePct,min,floor].some(n=>isNaN(n)) || floor>min || min>100 || floor<0){
+    el.innerHTML = `<div class="pp-warn">Set fee, min score and a floor ≤ min to preview payouts.</div>`;
+    return;
+  }
+  // worker's share of escrow at a given score, per the contract:
+  //  score>=min → 100% ; floor<=score<min → score/min ; score<floor → 0%
+  const workerPct = s => s>=min ? 100 : (s>=floor ? (s/min)*100 : 0);
+  // sample scores that illustrate each band
+  const mid = Math.max(floor, Math.round((floor+min)/2));
+  const samples = [
+    {s:min,       label:`score ${min}`},
+    {s:mid,       label:`score ${mid}`},
+    {s:Math.max(0,floor-1), label:`score ${Math.max(0,floor-1)}`},
+  ];
+  const rows = samples.map(({s,label})=>{
+    const wp = workerPct(s);
+    let verdict, cls;
+    if (wp>=100){ verdict='worker gets full payment'; cls='pp-full'; }
+    else if (wp>0){ verdict=`worker gets ~${Math.round(wp)}%`; cls='pp-part'; }
+    else { verdict='full refund to client'; cls='pp-refund'; }
+    const feeNote = wp>0 && feePct>0 ? ` <span class="pp-fee">− ${feePct}% fee</span>` : '';
+    return `<div class="pp-row"><span class="pp-score">${label}</span><span class="pp-arrow">→</span><span class="${cls}">${verdict}${feeNote}</span></div>`;
+  }).join('');
+  el.innerHTML = `<div class="pp-title">Payout preview</div>${rows}`;
 }
 
 async function createJob() {
