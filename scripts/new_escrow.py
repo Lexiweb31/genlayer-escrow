@@ -14,16 +14,20 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).parents[1]
 load_dotenv(ROOT / ".env")
 
-PRIVATE_KEY = os.getenv("DEPLOYER_PRIVATE_KEY")
-if not PRIVATE_KEY:
-    sys.exit("DEPLOYER_PRIVATE_KEY not set")
+CLIENT_PRIVATE_KEY = os.getenv("DEMO_CLIENT_PRIVATE_KEY")
+WORKER_PRIVATE_KEY = os.getenv("DEMO_WORKER_PRIVATE_KEY")
+if not CLIENT_PRIVATE_KEY or not WORKER_PRIVATE_KEY:
+    sys.exit("Both DEMO_CLIENT_PRIVATE_KEY and DEMO_WORKER_PRIVATE_KEY are required")
 
 from genlayer_py import create_account, create_client, testnet_bradbury
 from genlayer_py.types.calldata import CalldataAddress
 from genlayer_py.types.transactions import TransactionStatus
 
-account = create_account(PRIVATE_KEY)
-client  = create_client(testnet_bradbury, account=account)
+client_account = create_account(CLIENT_PRIVATE_KEY)
+worker_account = create_account(WORKER_PRIVATE_KEY)
+if str(client_account.address).lower() == str(worker_account.address).lower():
+    sys.exit("Demo client and worker addresses must be different")
+client = create_client(testnet_bradbury)
 
 existing = json.loads((ROOT / "artifacts" / "deployments.json").read_text())
 EVAL_ADDR = existing["evaluate_submission"]
@@ -37,14 +41,15 @@ SPEC = (
     "and a footer with contact email."
 )
 
-print(f"\nDeployer : {account.address}")
+print(f"\nDemo client : {client_account.address}")
+print(f"Demo worker : {worker_account.address}")
 print(f"Reusing  : EvaluateSubmission @ {EVAL_ADDR}")
 print("Deploying fresh FreelanceEscrow …")
 
 tx = client.deploy_contract(
     ESCROW_CODE,
-    account=account,
-    args=[SPEC, CalldataAddress(account.address), CalldataAddress(account.address), 200, 70, 40],
+    account=client_account,
+    args=[SPEC, CalldataAddress(worker_account.address), CalldataAddress(client_account.address), 200, 70, 40],
 )
 print(f"  tx: {tx}")
 r = client.wait_for_transaction_receipt(tx, status=TransactionStatus.ACCEPTED, interval=5000, retries=120)
@@ -57,6 +62,10 @@ if not addr:
 print(f"  ✓ FreelanceEscrow → {addr}")
 
 existing["freelance_escrow"] = str(addr)
+existing["demo_client"] = str(client_account.address)
+existing["demo_worker"] = str(worker_account.address)
+existing["settlement_version"] = "safe-eoa-external-message-v2"
+existing["deployment_transaction"] = str(tx)
 existing["explorer"]["freelance_escrow"] = f"https://explorer-bradbury.genlayer.com/address/{addr}"
 (ROOT / "artifacts" / "deployments.json").write_text(json.dumps(existing, indent=2))
 

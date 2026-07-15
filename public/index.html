@@ -158,6 +158,10 @@
     .account-pop.on{display:block;animation:pageIn .24s var(--spring)}
     .account-pop-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.account-pop-title{font-weight:700}.account-pop-note{font-size:11px;color:var(--muted);margin-top:2px}
     .account-pop .addr-block{margin:8px 0 12px}.account-pop-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .demo-account-badge{display:inline-flex;align-items:center;width:max-content;margin-top:4px;padding:2px 6px;border:1px solid rgba(143,160,255,.32);border-radius:999px;background:var(--accent-bg);color:var(--accent-bright);font:8px 'DM Mono';letter-spacing:.08em;text-transform:uppercase}
+    .trust-notice{display:flex;gap:11px;align-items:flex-start;margin:0 0 14px;padding:13px 15px;border:1px solid rgba(143,160,255,.25);border-radius:12px;background:var(--accent-bg);color:var(--muted);font-size:11px;line-height:1.55}.trust-notice strong{display:block;color:var(--text);margin-bottom:2px}.trust-notice-icon{color:var(--accent-bright);font-size:15px;line-height:1.2}.trust-notice.simulated{border-color:rgba(214,169,87,.35);background:var(--yellow-bg)}
+    .legacy-warning{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px;padding:14px 16px;border:1px solid rgba(224,113,104,.4);border-radius:12px;background:var(--red-bg);color:var(--muted);font-size:11px;line-height:1.55}.legacy-warning strong{display:block;color:var(--red);margin-bottom:2px}.legacy-warning[hidden]{display:none}
+    .transfer-list{display:grid;gap:8px;margin:14px 0}.transfer-row{display:grid;grid-template-columns:115px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg);font-size:10px}.transfer-row span{color:var(--subtle);text-transform:uppercase;letter-spacing:.06em}.transfer-row code{overflow:hidden;text-overflow:ellipsis;color:var(--muted)}.transfer-row b{color:var(--gold);white-space:nowrap}.transfer-status{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:7px 10px;border-radius:8px;background:var(--yellow-bg);color:var(--yellow);font:9px 'DM Mono';text-transform:uppercase}.transfer-status.final{background:var(--ok-bg);color:var(--ok)}
 
     /* JUDGE MODE — a competition-ready guided proof layer */
     .judge-fab{position:fixed;right:22px;bottom:24px;z-index:70;display:flex;align-items:center;gap:9px;padding:11px 15px;border:1px solid rgba(123,133,232,.34);border-radius:999px;background:color-mix(in srgb,var(--card) 90%,var(--accent) 10%);color:var(--text);box-shadow:var(--shadow-card),0 0 28px var(--accent-glow);cursor:pointer;font-weight:650;font-size:12px;backdrop-filter:blur(16px);transition:transform .25s var(--spring),border-color .15s}
@@ -236,9 +240,11 @@
     .p-OPEN,.p-AGREED{background:var(--blue-bg);color:var(--blue)}
     .p-SUBMITTED{background:var(--purple-bg);color:var(--purple)}
     .p-EVALUATED{background:var(--yellow-bg);color:var(--yellow)}
+    .p-SETTLEMENT_PENDING{background:var(--yellow-bg);color:var(--yellow)}
     .p-ACCEPTED{background:var(--green-bg);color:var(--green)}
     .p-PARTIAL{background:var(--yellow-bg);color:var(--yellow)}
     .p-REFUNDED{background:var(--red-bg);color:var(--red)}
+    .p-LEGACY_UNSAFE{background:var(--red-bg);color:var(--red)}
 
     /* CARDS */
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
@@ -1047,7 +1053,7 @@
           <div class="judge-step" onclick="judgeGo('landing')"><span class="judge-step-num">01</span><div><b>Frame the trust problem</b><span>Show the live protocol and why ordinary escrow still needs humans.</span></div><span class="judge-step-go">45 sec →</span></div>
           <div class="judge-step" onclick="judgeGo('post')"><span class="judge-step-num">02</span><div><b>Create enforceable terms</b><span>Turn plain English into thresholds and a dedicated escrow contract.</span></div><span class="judge-step-go">45 sec →</span></div>
           <div class="judge-step" onclick="judgeGo('browse')"><span class="judge-step-num">03</span><div><b>Open a real job</b><span>Use the marketplace and inspect live contract-backed state.</span></div><span class="judge-step-go">30 sec →</span></div>
-          <div class="judge-step" onclick="judgeOpenJob('evaluate')"><span class="judge-step-num">04</span><div><b>Reveal the intelligence</b><span>Show validator reasoning, consensus confidence, payout math, and appeal.</span></div><span class="judge-step-go">60 sec →</span></div>
+          <div class="judge-step" onclick="judgeOpenJob('evaluate')"><span class="judge-step-num">04</span><div><b>Reveal the intelligence</b><span>Show validator reasoning, consensus confidence, queued transfer math, and appeal.</span></div><span class="judge-step-go">60 sec →</span></div>
         </div>
         <div class="judge-actions"><button class="btn bg" onclick="judgeGo('post')">Start the demo →</button><button class="btn bh" onclick="judgeOpenJob('contracts')">Show contract proof</button><a class="btn bh" href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noopener">Open source ↗</a></div>
       </div>
@@ -1096,17 +1102,20 @@
     <div class="sb-profile" id="accountWidget" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAccount(event)" onkeydown="accountKey(event)">
       <div class="prof-av" id="profAv">?</div>
       <div style="overflow:hidden">
-        <div class="prof-addr" id="profAddr">Loading…</div>
+        <div class="prof-addr" id="profAddr">Demo account</div>
         <div class="prof-net">testnet_bradbury</div>
+        <div class="demo-account-badge">Demo account</div>
       </div>
     </div>
-    <div class="account-pop" id="accountPop" role="dialog" aria-label="Demo account details">
-      <div class="account-pop-head"><div><div class="account-pop-title">Demo transaction account</div><div class="account-pop-note">Server-signed for this competition build</div></div><button class="icon-btn" onclick="closeAccount()" aria-label="Close account details">×</button></div>
-      <div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div>
-      <div class="kv" style="display:block"><span class="kv-k">Full address</span><div class="addr-block"><span class="addr-mono" id="accountFull">—</span><button class="copy-btn" onclick="cp(document.getElementById('accountFull').textContent,this)">Copy</button></div></div>
-      <div class="account-pop-actions"><a class="btn bh" id="accountExplorer" target="_blank" rel="noopener">View on Explorer ↗</a></div>
-    </div>
   </aside>
+
+  <div class="account-pop" id="accountPop" role="dialog" aria-label="Demo account details">
+    <div class="account-pop-head"><div><div class="account-pop-title">Bradbury demo accounts</div><div class="account-pop-note">Server-signed, testnet-only. No browser wallet is connected.</div></div><button class="icon-btn" onclick="closeAccount()" aria-label="Close account details">×</button></div>
+    <div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div>
+    <div class="kv" style="display:block"><span class="kv-k">Client signer</span><div class="addr-block"><span class="addr-mono" id="accountClient">Not configured</span><button class="copy-btn" onclick="cp(document.getElementById('accountClient').textContent,this)">Copy</button></div></div>
+    <div class="kv" style="display:block"><span class="kv-k">Worker signer</span><div class="addr-block"><span class="addr-mono" id="accountWorker">Not configured</span><button class="copy-btn" onclick="cp(document.getElementById('accountWorker').textContent,this)">Copy</button></div></div>
+    <div class="account-pop-note" id="accountModeNote">Live multi-role actions are disabled until two different demo accounts are configured.</div>
+  </div>
 
   <div class="overlay" id="ov" onclick="closeSb()"></div>
 
@@ -1134,8 +1143,8 @@
           <div class="hero-grid">
             <div class="hero-copy">
               <h1>Work that can <span class="accent">prove itself.</span></h1>
-              <p class="hero-lede">The escrow workspace where validators inspect submitted work against the exact agreement—then the contract settles the result on-chain.</p>
-              <p class="hero-lede hero-proof">No platform custody. No private arbitration. Every decision stays inspectable.</p>
+              <p class="hero-lede">The escrow workspace where validators inspect submitted work against the exact agreement—then the contract queues an inspectable on-chain settlement.</p>
+              <p class="hero-lede hero-proof">Contract-held testnet GEN. Separate server-signed demo roles. Every decision stays inspectable.</p>
               <div class="hero-cta">
                 <button class="btn bg btn-lg" onclick="nav('browse')">Explore marketplace →</button>
                 <button class="btn bh btn-lg" onclick="nav('post')">Create an escrow</button>
@@ -1149,7 +1158,7 @@
                 <div class="demo-node worker"><b>Freelancer</b>work submitted</div>
                 <div class="flow-beam beam-left"></div><div class="flow-beam beam-right"></div><div class="flow-beam beam-down"></div>
                 <div class="escrow-core"><span>intelligent escrow</span></div>
-                <div class="demo-node validators"><b>5 / 5 validators agree</b><span style="color:var(--ok)">settlement authorized</span></div>
+                <div class="demo-node validators"><b>5 / 5 validators agree</b><span style="color:var(--ok)">outbound transfer queued</span></div>
               </div>
               <div class="terminal" id="heroTerm">
                 <div class="term-bar"><div class="term-dots"><span></span><span></span><span></span></div><div class="term-label">MERIT · ESCROW MONITOR</div></div>
@@ -1164,13 +1173,13 @@
           <div class="story-stage">
             <div class="story-route" aria-hidden="true"></div>
             <div class="story-nodes">
-              <article class="story-node active" data-story-step="0"><div class="story-icon">◇</div><b>1. Client funds</b><span>GEN enters a dedicated escrow—not Merit’s wallet.</span></article>
+              <article class="story-node active" data-story-step="0"><div class="story-icon">◇</div><b>1. Demo client funds</b><span>A server-signed Bradbury demo client sends testnet GEN into the dedicated escrow contract.</span></article>
               <article class="story-node" data-story-step="1"><div class="story-icon">↗</div><b>2. Worker submits</b><span>A public deliverable URL is attached to the signed agreement.</span></article>
               <article class="story-node" data-story-step="2"><div class="story-icon">✦</div><b>3. Validators inspect</b><span>Independent validators score the visible work against the brief.</span></article>
-              <article class="story-node" data-story-step="3"><div class="story-icon">✓</div><b>4. Contract settles</b><span>The agreed score releases, splits, or refunds the escrow automatically.</span></article>
+              <article class="story-node" data-story-step="3"><div class="story-icon">✓</div><b>4. Contract queues settlement</b><span>The agreed score queues a payout, split, or refund; completion waits for a finalized, inspectable transfer.</span></article>
             </div>
           </div>
-          <div class="story-controls"><p class="story-caption" id="storyCaption"><b>Client funds the job.</b> The contract locks GEN until a verdict is reached.</p><button class="story-replay" type="button" onclick="playEscrowStory(true)">▶ Watch the flow</button></div>
+          <div class="story-controls"><p class="story-caption" id="storyCaption"><b>The demo client funds the job.</b> Its server signer sends testnet GEN to the contract; no visitor wallet is connected.</p><button class="story-replay" type="button" onclick="playEscrowStory(true)">▶ Watch the flow</button></div>
         </section>
 
         <div class="statement">
@@ -1186,7 +1195,7 @@
               <div class="flow-dot"></div>
               <div class="flow-num">01</div><h3>Post &amp; fund</h3>
               <div class="flow-meta">CLIENT SIGNS · GEN LOCKED</div>
-              <p>Client writes an acceptance spec and locks GEN into a fresh escrow contract.</p>
+              <p>The server-signed demo client writes an acceptance spec and funds a fresh escrow contract with testnet GEN.</p>
             </div>
             <div class="flow-step">
               <div class="flow-dot"></div>
@@ -1203,8 +1212,8 @@
             <div class="flow-step">
               <div class="flow-dot money"></div>
               <div class="flow-num money">04</div><h3>Funds move</h3>
-              <div class="flow-meta money">CONTRACT PAYS · OR REFUNDS</div>
-              <p>Score ≥ threshold pays the worker; middling scores split proportionally; a fail refunds the client.</p>
+              <div class="flow-meta money">CONTRACT QUEUES PAYOUT · SPLIT · REFUND</div>
+              <p>Score ≥ threshold queues the worker payout; middling scores queue a split; a fail queues a client refund. Transfers finish only after finalization.</p>
             </div>
           </div>
         </div>
@@ -1216,7 +1225,7 @@
             <div class="why-item"><div class="why-ic">🧠</div><div><h4>Neutral judgment</h4><p>No single party rules on the outcome — validators reach consensus on the score.</p></div></div>
             <div class="why-item"><div class="why-ic">🔍</div><div><h4>Inspectable</h4><p>The rubric prompt and the reasoning behind every verdict are visible, not a black box.</p></div></div>
             <div class="why-item"><div class="why-ic">🛡️</div><div><h4>Injection-guarded</h4><p>Fetched content is sandboxed from the instruction prompt — hidden "output ACCEPTED" tricks don't work.</p></div></div>
-            <div class="why-item"><div class="why-ic">🌍</div><div><h4>Permissionless</h4><p>Anyone with a wallet can post or take work — no banking or geography gatekeeping.</p></div></div>
+            <div class="why-item"><div class="why-ic">🌍</div><div><h4>Wallet-ready protocol</h4><p>The contracts support distinct EOA roles. This competition interface currently uses clearly labeled server-side Bradbury demo accounts.</p></div></div>
           </div>
         </div>
 
@@ -1229,7 +1238,7 @@
                 <div class="proof-event"><span class="proof-event-time">now</span><i></i><span><b>Registry connected</b> · listening for intelligent escrow state</span></div>
                 <div class="proof-event"><span class="proof-event-time">validator</span><i></i><span><b>Consensus ready</b> · independent inference enabled</span></div>
                 <div class="proof-event"><span class="proof-event-time">security</span><i></i><span><b>Injection boundary active</b> · deliverables treated as untrusted data</span></div>
-                <div class="proof-event"><span class="proof-event-time">custody</span><i></i><span><b>Non-custodial</b> · funds move only through job contracts</span></div>
+                <div class="proof-event"><span class="proof-event-time">custody</span><i></i><span><b>Contract-held</b> · this UI uses separate server demo signers, not a connected wallet</span></div>
               </div>
             </div>
             <div class="proof-stack">
@@ -1241,7 +1250,7 @@
         </section>
 
         <section class="settlement-lab" id="settlementLab" style="--lab-color:var(--ok)" aria-labelledby="labTitle">
-          <div class="lab-head"><div><h2 id="labTitle">Touch the settlement logic.</h2><p>Move the validator-agreed score. The same thresholds encoded into every Merit escrow determine exactly where the locked funds go.</p></div><span class="lab-badge">Interactive contract simulator</span></div>
+          <div class="lab-head"><div><h2 id="labTitle">Touch the settlement logic.</h2><p>Move the validator-agreed score. This simulator previews the EOA transfers the contract would queue; it never submits a transaction.</p></div><span class="lab-badge">Interactive contract simulator</span></div>
           <div class="lab-grid">
             <div class="lab-control">
               <div class="lab-spec"><b>Acceptance specification</b><br>Responsive fintech landing page with a hero, three product benefits, working call-to-action, and complete footer.</div>
@@ -1251,7 +1260,7 @@
               <div class="validator-mini" id="labValidators"><span class="on">V1<br>84</span><span class="on">V2<br>80</span><span class="on">V3<br>83</span><span class="on">V4<br>81</span><span class="on">V5<br>82</span></div>
             </div>
             <div class="lab-result">
-              <div><div class="lab-verdict-row"><div class="lab-verdict" id="labVerdict">Full payment</div><span class="lab-consensus">5 / 5 AGREE</span></div><p class="lab-result-copy" id="labResultCopy">The score clears the 70-point acceptance threshold. The contract releases the full escrow to the freelancer.</p></div>
+              <div><div class="lab-verdict-row"><div class="lab-verdict" id="labVerdict">Full payment</div><span class="lab-consensus">5 / 5 AGREE</span></div><p class="lab-result-copy" id="labResultCopy">The score clears the 70-point acceptance threshold. This simulator previews a worker payout; a live payout is only complete after the parent transaction finalizes and its outbound transfer is inspectable.</p></div>
               <div><div class="lab-money"><div class="lab-money-cell worker"><span>Freelancer receives</span><b id="labWorker">1.000 GEN</b></div><div class="lab-money-cell client"><span>Client receives</span><b id="labClient">0.000 GEN</b></div></div><div class="lab-tx"><i></i><span id="labTx">finalize() → worker · deterministic transfer</span></div></div>
             </div>
           </div>
@@ -1276,7 +1285,7 @@
 
           <details class="faq-item">
             <summary><span class="faq-q-ic">?</span> Where does my money actually sit while a job runs?<span class="faq-chev">›</span></summary>
-            <div class="faq-a"><strong>In the job's own escrow contract — not with us.</strong> Posting a job deploys a dedicated <code>FreelanceEscrow</code> contract; funding locks your GEN inside <em>that</em> contract's balance. We can't withdraw it, redirect it, or hold it back. Only <code>finalize()</code> moves funds, and it pays out strictly by the on-chain score: full release, proportional split, or refund. Every job links to its live contract on <a href="https://explorer-bradbury.genlayer.com" target="_blank" rel="noopener">explorer-bradbury.genlayer.com</a> — verify the balance yourself.</div>
+            <div class="faq-a"><strong>In the job's own escrow contract.</strong> In this competition demo, separate server-controlled Bradbury client and worker accounts sign testnet actions; no visitor wallet is connected. <code>finalize()</code> queues EOA transfers according to the on-chain score, but a payout or refund is not complete until the parent transaction finalizes and the outbound transfer record is inspectable. Every job links to its contract on <a href="https://explorer-bradbury.genlayer.com" target="_blank" rel="noopener">explorer-bradbury.genlayer.com</a>.</div>
           </details>
 
           <details class="faq-item">
@@ -1299,7 +1308,7 @@
             <div>
               <div class="market-kicker"><span class="market-kicker-dot"></span>Bradbury marketplace · live</div>
               <h1>Find work with payment already protected.</h1>
-              <p>Every listing is backed by its own intelligent escrow. Submit the work, let validators judge the agreed specification, and settle on-chain.</p>
+              <p>Every live listing is backed by its own intelligent escrow and uses separate server-signed Bradbury demo roles. Settlement remains pending until its outbound transfer is inspectable.</p>
             </div>
             <div class="market-hero-actions">
               <button class="btn bh" onclick="loadBrowse()">↻ Refresh</button>
@@ -1340,7 +1349,7 @@
             <div class="market-panel market-guide">
               <div class="market-guide-mark"></div>
               <h3>Protected by design</h3>
-              <p>Merit never holds the funds. Each job deploys a dedicated contract that releases or refunds GEN from validator consensus.</p>
+              <p>Each job uses a dedicated contract. In this testnet build, server-controlled demo accounts sign client and worker transactions; visitors do not personally control the deposited GEN.</p>
               <button class="btn bb btn-full" onclick="nav('post')">Create an escrow →</button>
             </div>
           </aside>
@@ -1352,6 +1361,7 @@
         <div class="post-wrap">
           <div class="back-link" onclick="nav('browse')">← Back to jobs</div>
           <div class="post-hero"><div><div class="market-kicker">Create protected work</div><div class="pg-title">Deploy a new intelligent escrow</div><p>Define what “done” means before work begins. Merit turns that specification into the rules for validator scoring and settlement.</p></div><span class="pill p-OPEN">Bradbury testnet</span></div>
+          <div class="trust-notice" id="postDemoNotice"><span class="trust-notice-icon">◇</span><div><strong>Bradbury demo account</strong>Deploy and fund actions are signed by a server-side demo client. A different server-side demo worker accepts and submits. No personal wallet is connected and visitors do not control the testnet GEN.</div></div>
           <div class="post-layout">
             <div class="post-card">
               <div class="form-section">
@@ -1375,14 +1385,14 @@
               <div class="form-section">
                 <div class="form-section-head"><div class="form-section-num">03</div><div><div class="form-section-title">Deploy the contract</div><div class="form-section-sub">A dedicated escrow is created for this job.</div></div></div>
                 <div class="post-hint"><span>ℹ️</span><span>Score <b>≥ min</b> → full payment · <b>floor–min</b> → proportional split · <b>below floor</b> → full refund.</span></div>
-                <button class="btn bg btn-full" id="postBtn" onclick="createJob()">Deploy escrow &amp; publish →</button>
+                <button class="btn bg btn-full" id="postBtn" onclick="createJob()">Deploy with demo client →</button>
                 <div class="deploy-note" id="postNote">Deployment usually takes 30–90 seconds on testnet.</div>
               </div>
             </div>
             <aside class="post-aside">
               <div class="post-side-card market-guide"><div class="market-guide-mark"></div><h3>Your contract, your rules</h3><p>The specification and thresholds are written into the job’s escrow. Neither Merit nor either party can silently change them later.</p></div>
               <div class="post-side-card"><h3>Before you deploy</h3><div class="trust-row"><span class="trust-check">✓</span><span>Describe visible, testable outcomes.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>Use a realistic full-payment threshold.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>The deliverable must be publicly accessible.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>Every settlement remains inspectable.</span></div></div>
-              <div class="post-side-card"><h3>Settlement model</h3><p>Five validators evaluate the same submitted page. Their agreed on-chain result determines whether funds release, split or return.</p></div>
+              <div class="post-side-card"><h3>Settlement model</h3><p>Five validators evaluate the same submitted page. Their agreed result determines which payout, split, or refund messages the contract queues for finalization.</p></div>
             </aside>
           </div>
         </div>
@@ -1403,6 +1413,7 @@
             <button class="btn bh" style="font-size:12px;padding:6px 12px" onclick="reload()">↻ Refresh</button>
           </div>
         </div>
+        <div class="legacy-warning" id="overviewLegacyWarning" hidden><span>⚠</span><div><strong>Legacy settlement contract — do not fund</strong>This immutable job predates the safe EOA transfer patch. It is read-only in Merit; create a new escrow for live demo transactions.</div></div>
 
         <div class="ctx-grid control-grid">
           <div class="card">
@@ -1453,6 +1464,8 @@
             <span id="mgPill" class="pill p-UNFUNDED">—</span>
           </div>
         </div>
+        <div class="trust-notice" id="manageDemoNotice"><span class="trust-notice-icon">◇</span><div><strong>Server-signed demo transaction</strong>Client-only steps and worker-only steps use different Bradbury demo accounts. This is not a connected personal wallet.</div></div>
+        <div class="legacy-warning" id="manageLegacyWarning" hidden><span>⚠</span><div><strong>Legacy settlement contract — do not fund</strong>Actions are disabled because this contract cannot be patched safely.</div></div>
         <div class="stepper-wrap">
           <div class="stepper">
             <div class="step" id="st0"><div class="step-dot">1</div><div class="step-name">Fund</div></div>
@@ -1470,7 +1483,7 @@
 
       <!-- EVALUATE -->
       <section id="pg-evaluate" style="display:none">
-        <div class="eval-hero"><div><div class="market-kicker">Validator intelligence</div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Watch independent validators inspect, score and settle submitted work.</div></div><div class="eval-live">Consensus network online</div></div>
+        <div class="eval-hero"><div><div class="market-kicker">Validator intelligence</div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Watch independent validators inspect and score submitted work before settlement messages are queued.</div></div><div class="eval-live">Consensus network online</div></div>
         <div class="card" id="evEmpty"><div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div></div>
 
         <div id="evContent" style="display:none">
@@ -1520,7 +1533,7 @@
               </div>
               <div class="evidence-source"><span>SOURCE · <b id="evidenceUrl">pinned public deliverable</b></span><span class="report-stamp">● CHAIN RECORD VERIFIED</span></div>
             </section>
-            <div class="settle-label">SETTLEMENT · EXECUTED BY CONTRACT</div>
+            <div class="settle-label">OUTBOUND TRANSFER RECORD · FINALIZED OR PENDING</div>
             <div id="settleRows"></div>
             <div class="btn-row" style="margin-top:16px">
               <button class="btn bh" id="appealBtn" onclick="appeal()">Open dispute · appeal</button>
@@ -1534,7 +1547,9 @@
       <!-- CONTRACTS -->
       <section id="pg-contracts" style="display:none">
         <div class="contracts-hero"><div><div class="market-kicker">On-chain infrastructure</div><div class="pg-title">Contract control plane</div><div class="pg-sub">Inspect the contracts, accounts and network responsible for this escrow.</div></div><div class="network-health">Bradbury network healthy</div></div>
-        <div class="contract-stats"><div class="contract-stat"><span>Network</span><b>testnet_bradbury</b></div><div class="contract-stat"><span>Evaluation</span><b>AI validator consensus</b></div><div class="contract-stat"><span>Custody model</span><b>Dedicated job escrow</b></div></div>
+        <div class="trust-notice" id="contractsDemoNotice"><span class="trust-notice-icon">◇</span><div><strong>Bradbury demo accounts</strong>These addresses are server-controlled testnet signers, not browser wallets. The client and worker identities must remain different.</div></div>
+        <div class="legacy-warning" id="contractsLegacyWarning" hidden><span>⚠</span><div><strong>Legacy settlement contract — do not fund</strong>Its immutable payout implementation predates the safe EOA external-message pattern.</div></div>
+        <div class="contract-stats"><div class="contract-stat"><span>Network</span><b>testnet_bradbury</b></div><div class="contract-stat"><span>Evaluation</span><b>AI validator consensus</b></div><div class="contract-stat"><span>Signer model</span><b>Separate server demo roles</b></div></div>
         <div class="cts-stack" id="ctsContent"><div class="skel" style="height:190px;border-radius:16px"></div><div class="skel" style="height:190px;border-radius:16px"></div></div>
       </section>
 
@@ -1564,21 +1579,24 @@ const API_BASE = 'https://genlayer-escrow.onrender.com';
 const JOB_PAGES = ['overview','manage','evaluate','contracts'];
 const MARKET_PAGES = ['landing','browse','post'];
 const ALL_PAGES = [...MARKET_PAGES, ...JOB_PAGES];
-const S2I = {UNFUNDED:0,OPEN:1,AGREED:2,SUBMITTED:3,EVALUATED:4,ACCEPTED:5,PARTIAL:5,REFUNDED:5};
+const S2I = {UNFUNDED:0,OPEN:1,AGREED:2,SUBMITTED:3,EVALUATED:4,SETTLEMENT_PENDING:4,ACCEPTED:5,PARTIAL:5,REFUNDED:5,LEGACY_UNSAFE:0};
 const TERM = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
-const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'};
+const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',SETTLEMENT_PENDING:'var(--yellow)',ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)',LEGACY_UNSAFE:'var(--red)'};
 let data = null, logOpen = false, logN = 0, curPage = 'landing', curJob = null;
 let theatreRunning = false, theatreTimers = [], actionBusy = false;
 let browseJobs = [];
 let demoMode = false;
+let liveActionsEnabled = false;
+let demoConfig = {mode:'simulated-walkthrough',live_actions_enabled:false,client_address:null,worker_address:null,notice:'Live actions are disabled.'};
 let savedOnly=false;
 let savedJobs=new Set();try{savedJobs=new Set(JSON.parse(localStorage.getItem('merit-saved-jobs')||'[]'))}catch(e){}
 const DEMO_ADDRESS='0xd3a000000000000000000000000000000000092a';
 const DEMO_DATA={
-  meta:{title:'Fintech launch experience'},
-  job:{address:DEMO_ADDRESS,client:'0xc11e000000000000000000000000000000000104',worker:'0xf33e000000000000000000000000000000000207',status:'ACCEPTED',amount:5000000000000000,fee_bps:200,min_score:70,partial_floor:40,terms_agreed:true,appeal_used:false,submission_url:'https://demo.merit.work/fintech-launch',spec:'Build a responsive fintech landing page with a clear hero, three product benefits, security section, working call-to-action, accessible mobile navigation, and a complete footer.'},
+  meta:{title:'Fintech launch experience',legacy_contract:false},
+  job:{address:DEMO_ADDRESS,client:'0xc11e000000000000000000000000000000000104',worker:'0xf33e000000000000000000000000000000000207',status:'ACCEPTED',amount:0,fee_bps:200,min_score:70,partial_floor:40,terms_agreed:true,appeal_used:false,submission_url:'https://demo.merit.work/fintech-launch',spec:'Build a responsive fintech landing page with a clear hero, three product benefits, security section, working call-to-action, accessible mobile navigation, and a complete footer.',settlement:{outcome:'ACCEPTED',settlement_type:'FULL_WORKER_PAYOUT',transfer_status:'FINALIZED',transfers:[{recipient:'0xf33e000000000000000000000000000000000207',amount:4900000000000000,settlement_type:'WORKER_PAYOUT'}],transfer_reference:['SIMULATED-WALKTHROUGH'],explorer:null}},
   result:{score:86,status:'ACCEPTED',reasoning:'The submission satisfies the required structure and observable behavior. The hero and call-to-action are clear, all three benefit sections are present, mobile navigation remains usable, and the security and footer requirements are complete.'},
-  addresses:{escrow:DEMO_ADDRESS,evaluator:'0xe7a1000000000000000000000000000000000042',deployer:'0xde910000000000000000000000000000000088',explorer_escrow:'https://explorer-bradbury.genlayer.com/address/'+DEMO_ADDRESS,explorer_evaluator:'https://explorer-bradbury.genlayer.com/address/0xe7a1000000000000000000000000000000000042'}
+  addresses:{escrow:DEMO_ADDRESS,evaluator:'0xe7a1000000000000000000000000000000000042',demo_client:'0xc11e000000000000000000000000000000000104',demo_worker:'0xf33e000000000000000000000000000000000207',account_mode:'Bradbury demo account',explorer_escrow:'https://explorer-bradbury.genlayer.com/address/'+DEMO_ADDRESS,explorer_evaluator:'https://explorer-bradbury.genlayer.com/address/0xe7a1000000000000000000000000000000000042'},
+  demo:{mode:'simulated-walkthrough',live_actions_enabled:false,notice:'Clearly labeled sample state. No on-chain transaction is submitted.'}
 };
 const DEMO_JOBS=[
   {...DEMO_DATA.job,title:'Fintech launch experience',score:86,created_at:new Date(Date.now()-1000*60*18).toISOString()},
@@ -1644,7 +1662,8 @@ async function init() {
   try {
     const r = await fetchWithTimeout(API_BASE+'/api/health', 90000);
     if (!r.ok) throw new Error('Server error '+r.status);
-    await r.json();
+    const health=await r.json();
+    applyDemoConfig(health.demo||{});
     await delay(300);
     document.getElementById('splash').classList.add('out');
     document.getElementById('app').classList.add('on');
@@ -1666,6 +1685,7 @@ async function init() {
 }
 async function enterDemoMode(){
   demoMode=true;
+  applyDemoConfig({mode:'simulated-walkthrough',live_actions_enabled:false,notice:'Presentation fallback uses clearly labeled sample state and never submits an on-chain transaction.'});
   const splash=document.getElementById('splash');splash?.classList.add('out');
   document.getElementById('app').classList.add('on');document.getElementById('demoRibbon').style.display='';
   setTimeout(()=>splash?.remove(),600);initScrollDepth();await applyInitialRoute();loadBrowse();loadStats();renderHeroTerminal();renderPayoutPreview();
@@ -1679,8 +1699,29 @@ async function fetchWithTimeout(url, ms) {
   catch(e) { if (e.name==='AbortError') throw new Error('Timed out after '+Math.round(ms/1000)+'s'); throw e; }
   finally { clearTimeout(t); }
 }
+function applyDemoConfig(config={}){
+  demoConfig={...demoConfig,...config};
+  liveActionsEnabled=!demoMode&&Boolean(demoConfig.live_actions_enabled);
+  const simulated=!liveActionsEnabled;
+  const notice=demoConfig.notice||(simulated?'Live multi-role actions are disabled. This walkthrough never fakes an on-chain transaction.':'Transactions are signed by separate server-side Bradbury demo accounts.');
+  ['postDemoNotice','manageDemoNotice','contractsDemoNotice'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.classList.toggle('simulated',simulated);const strong=el.querySelector('strong');if(strong)strong.textContent=simulated?'Simulated walkthrough · live actions disabled':'Server-signed Bradbury demo accounts';const body=strong?.parentElement;if(body){const text=document.createTextNode(notice+' No browser wallet is connected.');while(body.childNodes.length>1)body.removeChild(body.lastChild);body.appendChild(text)}});
+  const client=demoConfig.client_address||'',worker=demoConfig.worker_address||'';
+  const clientEl=document.getElementById('accountClient'),workerEl=document.getElementById('accountWorker'),noteEl=document.getElementById('accountModeNote');
+  if(clientEl)clientEl.textContent=client||'Not configured';if(workerEl)workerEl.textContent=worker||'Not configured';if(noteEl)noteEl.textContent=notice;
+  const postBtn=document.getElementById('postBtn');if(postBtn){postBtn.disabled=simulated;postBtn.textContent=simulated?'Live deployment disabled · use walkthrough':'Deploy with demo client →'}
+}
+function apiError(payload,status){
+  const detail=payload?.detail,info=detail&&typeof detail==='object'?detail:{message:typeof detail==='string'?detail:''};
+  const err=new Error(info.message||payload?.message||('HTTP '+status));err.code=info.code||'';err.info=info;err.httpStatus=status;return err;
+}
 function humanError(err){
   const raw=String(err?.message||err||'').replace(/^['"]|['"]$/g,'');
+  if(err?.code==='INSUFFICIENT_DEMO_GEN')return 'Insufficient demo GEN: fund the configured Bradbury demo client account, then retry.';
+  if(err?.code==='WRONG_ROLE')return 'Wrong demo role: this step must be signed by the distinct on-chain client or worker account shown for the job.';
+  if(err?.code==='STALE_STATE')return 'Stale job state: refresh the contract and continue from its current on-chain step.';
+  if(err?.code==='LEGACY_SETTLEMENT_CONTRACT')return 'Legacy settlement contract — do not fund. Create a new escrow after the safety patch.';
+  if(err?.code==='DEMO_ROLES_UNAVAILABLE')return 'Live actions are disabled until two different Bradbury demo accounts are configured. Use the simulated walkthrough; no transaction will be faked.';
+  if(err?.code==='TESTNET_REJECTION')return 'Bradbury rejected the server-signed demo transaction. '+(err?.info?.testnet_detail||'Refresh the job and inspect the testnet response before retrying.');
   if(/failed to fetch|networkerror|load failed|timed out/i.test(raw))return "Couldn't reach the server — check your connection and try again.";
   if(/^\d+$/.test(raw))return 'The testnet rejected this transaction. Refresh the job state and retry the current available action.';
   if(/status.*(ACCEPTED|PARTIAL|REFUNDED)|already funded|not open|nothing to evaluate|not yet evaluated/i.test(raw))return 'This action is no longer available for the job’s current on-chain state. Refresh and continue from the highlighted step.';
@@ -1760,8 +1801,10 @@ const relativeTime = iso=>{const sec=Math.round((new Date(iso)-Date.now())/1000)
 function renderAll() {
   if(!data) return;
   const {job,result,addresses} = data;
+  if(data.demo)applyDemoConfig(data.demo);
   renderPills(job.status);
   renderProfile(addresses);
+  renderSafety(job);
   renderNavDots(job,result);
   renderOverview(job,result,addresses);
   renderManage(job,result);
@@ -1774,12 +1817,17 @@ function renderPills(s) {
 }
 
 function renderProfile(addr) {
-  const a=addr?.deployer||'';
-  document.getElementById('profAddr').textContent=short(a);
+  const a=addr?.demo_client||demoConfig.client_address||'',w=addr?.demo_worker||demoConfig.worker_address||'';
+  document.getElementById('profAddr').textContent=a?('Demo client · '+short(a)):'Demo account · simulated';
   document.getElementById('profAv').textContent=a?a.slice(2,4).toUpperCase():'?';
   document.getElementById('mobAccount').textContent=a?a.slice(2,4).toUpperCase():'?';
-  document.getElementById('accountFull').textContent=a||'—';
-  const ex=document.getElementById('accountExplorer');if(ex)ex.href=a?'https://explorer-bradbury.genlayer.com/address/'+a:'#';
+  document.getElementById('accountClient').textContent=a||'Not configured';
+  document.getElementById('accountWorker').textContent=w||'Not configured';
+}
+
+function renderSafety(job){
+  const legacy=Boolean(job?.legacy_contract||data?.meta?.legacy_contract||job?.status==='LEGACY_UNSAFE');
+  ['overviewLegacyWarning','manageLegacyWarning','contractsLegacyWarning'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=!legacy});
 }
 
 function renderNavDots(job,result) {
@@ -1793,13 +1841,13 @@ function renderNavDots(job,result) {
 
 // ── OVERVIEW ───────────────────────────────────────────────────────────────
 function renderOverview(job, result, addresses) {
-  const s=job.status, i=S2I[s]??0;
+  const s=job.status, i=S2I[s]??0, settlement=job.settlement||{}, pending=s==='SETTLEMENT_PENDING', legacy=s==='LEGACY_UNSAFE'||job.legacy_contract;
   document.getElementById('ovCode').textContent=jobCode(addresses?.escrow);
   const t=document.getElementById('ovTitle'); if(t) t.textContent=data?.meta?.title || 'Escrow Job';
-  document.getElementById('ovMeta').textContent='testnet_bradbury'+(job.terms_agreed?' · terms signed on-chain':'');
-  const stage=Math.min(TERM.has(s)?5:i,5);
-  const stageLabels=['Awaiting funding','Escrow funded','Terms accepted','Deliverable submitted','Validator score ready','Settlement complete'];
-  document.getElementById('ovStageLabel').textContent=stageLabels[stage];
+  document.getElementById('ovMeta').textContent='testnet_bradbury'+(job.terms_agreed?' · terms signed on-chain':'')+(legacy?' · LEGACY CONTRACT — DO NOT FUND':'');
+  const stage=Math.min(TERM.has(s)||pending?5:i,5);
+  const stageLabels=['Awaiting funding','Escrow funded','Terms accepted','Deliverable submitted','Validator score ready','Transfer finalized'];
+  document.getElementById('ovStageLabel').textContent=legacy?'Legacy contract · read only':pending?'Settlement transfer pending finalization':stageLabels[stage];
   document.getElementById('ovStageCount').textContent=stage+'/5';
   requestAnimationFrame(()=>{document.getElementById('ovStageFill').style.width=(stage/5*100)+'%'});
 
@@ -1807,8 +1855,8 @@ function renderOverview(job, result, addresses) {
   document.getElementById('p-worker').textContent=short(job.worker);
 
   document.getElementById('bal-val').textContent=toGENNum(job.amount);
-  document.getElementById('bal-hint').textContent=TERM.has(s)?'Settled':job.amount>0?'Locked in contract until settlement':'Not yet funded';
-  document.getElementById('bal-dot').style.background=TERM.has(s)?'var(--subtle)':job.amount>0?'var(--ok)':'var(--subtle)';
+  document.getElementById('bal-hint').textContent=pending?'Outbound transfer pending finalization':TERM.has(s)?'Transfer finalized':job.amount>0?'Locked in contract until settlement':legacy?'Legacy contract · do not fund':'Not yet funded';
+  document.getElementById('bal-dot').style.background=pending?'var(--yellow)':TERM.has(s)?'var(--ok)':job.amount>0?'var(--ok)':'var(--subtle)';
   document.getElementById('escrowOrbit').classList.toggle('funded',job.amount>0&&!TERM.has(s));
   document.getElementById('bal-addr').textContent=short(addresses?.escrow);
   document.getElementById('bal-fee').textContent=(job.fee_bps/100)+'%';
@@ -1824,7 +1872,7 @@ function renderOverview(job, result, addresses) {
     {l:'Terms Accepted',    d:'Worker agreed to the job specification'},
     {l:'Work Submitted',    d:'Deliverable URL provided for evaluation'},
     {l:'AI Evaluated',      d:result?.score!=null?`Scored ${result.score}/100`:'AI graded the submission'},
-    {l:'Payout Finalized',  d:{ACCEPTED:'Full payment released',PARTIAL:'Partial payment released',REFUNDED:'Refund issued'}[s]||'Funds released'},
+    {l:'Transfer Finalized', d:pending?'Outcome fixed; EOA transfer record is still pending':{ACCEPTED:'Worker payout transfer finalized',PARTIAL:'Split transfers finalized',REFUNDED:'Client refund transfer finalized'}[s]||'Awaiting an inspectable outbound transfer record'},
   ];
   document.getElementById('tl').innerHTML=steps.map((st,n)=>{
     const done=n<i||TERM.has(s), active=!TERM.has(s)&&n===i;
@@ -1839,10 +1887,14 @@ function renderOverview(job, result, addresses) {
     {title:'Accept Terms',         desc:'Worker reviews and agrees to the job specification.',       btn:'Accept Terms →', page:'manage',  cls:'bb'},
     {title:'Submit Deliverable',   desc:'Provide the URL of the completed work for AI grading.',    btn:'Submit Work →',  page:'manage',  cls:'bb'},
     {title:'Request Evaluation',   desc:'AI will fetch and score the submission against the spec.',  btn:'Evaluate →',    page:'manage',   cls:'bp'},
-    {title:'Finalize Payout',      desc:`Score: ${result?.score??'?'}/100. Ready to release funds.`, btn:'Finalize →',   page:'manage',   cls:'bg'},
+    {title:'Queue Settlement',     desc:`Score: ${result?.score??'?'}/100. Finalization queues inspectable EOA transfers.`, btn:'Review settlement →', page:'manage', cls:'bg'},
   ];
-  if(TERM.has(s)){
-    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:${s==='ACCEPTED'?'var(--ok)':s==='PARTIAL'?'var(--yellow)':'var(--red)'}">${{ACCEPTED:'🎉 Complete',PARTIAL:'⚠️ Partial Payout',REFUNDED:'↩️ Refunded'}[s]}</div><div class="qa-desc">This escrow is finalized. See the AI Evaluation page for the full score and reasoning.</div><button class="btn bh btn-full" onclick="go('evaluate')">View Evaluation →</button>`;
+  if(legacy){
+    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:var(--red)">Legacy contract · actions disabled</div><div class="qa-desc">Do not fund this immutable deployment. Create a new escrow using the patched EOA settlement contract.</div><button class="btn bg btn-full" onclick="nav('post')">Create safe escrow →</button>`;
+  } else if(pending){
+    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:var(--yellow)">Settlement pending finalization</div><div class="qa-desc">Outcome: ${esc(settlement.outcome||'recorded')}. Merit will not call this paid or refunded until the outbound transfer message is finalized and inspectable.</div><button class="btn bh btn-full" onclick="reload()">Refresh transfer status →</button>`;
+  } else if(TERM.has(s)){
+    document.getElementById('qa').innerHTML=`<div class="qa-title" style="color:${s==='ACCEPTED'?'var(--ok)':s==='PARTIAL'?'var(--yellow)':'var(--red)'}">${{ACCEPTED:'✓ Worker transfer finalized',PARTIAL:'✓ Split transfers finalized',REFUNDED:'✓ Refund transfer finalized'}[s]}</div><div class="qa-desc">The outbound transfer record is finalized and inspectable. See Manage Job for destinations, amounts, and references.</div><button class="btn bh btn-full" onclick="go('manage')">View settlement record →</button>`;
   } else {
     const qa=qas[Math.min(i,4)];
     document.getElementById('qa').innerHTML=`<div class="qa-title">${qa.title}</div><div class="qa-desc">${qa.desc}</div><button class="btn ${qa.cls} btn-full" onclick="go('${qa.page}')">${qa.btn}</button>`;
@@ -1850,6 +1902,18 @@ function renderOverview(job, result, addresses) {
 }
 
 // ── MANAGE ─────────────────────────────────────────────────────────────────
+function settlementReceiptHTML(job,result){
+  const settlement=job.settlement||{},outcome=settlement.outcome||result?.settlement_outcome||job.status;
+  const simulated=demoMode,final=settlement.transfer_status==='FINALIZED',pending=!final;
+  const labels={ACCEPTED:'Full worker payout',PARTIAL:'Proportional split',REFUNDED:'Full client refund'};
+  const colors={ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'},color=colors[outcome]||'var(--yellow)';
+  const transfers=(settlement.transfers||[]).filter(t=>Number(t.amount)>0);
+  const transferRows=transfers.length?transfers.map(t=>`<div class="transfer-row"><span>${esc((t.settlement_type||'transfer').replaceAll('_',' '))}</span><code title="${esc(t.recipient||'')}">${short(t.recipient)}</code><b>${toGEN(Number(t.amount)||0)}</b></div>`).join(''):`<div class="transfer-row"><span>Transfer</span><code>Waiting for contract record</code><b>—</b></div>`;
+  const refs=Array.isArray(settlement.transfer_reference)?settlement.transfer_reference:[settlement.transfer_reference].filter(Boolean),reference=refs[0]||settlement.parent_transaction||'Pending';
+  const refHTML=settlement.explorer?`<a class="btn bh" href="${esc(settlement.explorer)}" target="_blank" rel="noopener">Open transfer reference ↗</a>`:`<span class="mono" style="font-size:9px;color:var(--subtle)">${esc(String(reference))}</span>`;
+  return `<div class="settlement-receipt"><div class="receipt-mark" style="color:${color};background:color-mix(in srgb,${color} 10%,transparent)">${simulated?'◇':final?'✓':'…'}</div><div class="step-tag">${simulated?'Simulated settlement example':`Settlement outcome · ${final?'outbound transfer finalized':'pending finalization'}`}</div><div class="receipt-title" style="color:${color}">${esc(labels[outcome]||outcome||'Settlement recorded')}</div><div class="receipt-copy">${simulated?'Clearly labeled sample state for the walkthrough. No on-chain transaction or GEN transfer occurred.':final?'The parent transaction finalized and an inspectable outbound transfer record is visible.':'The contract has fixed the outcome, but Merit will not call the funds paid or refunded until the outbound EOA transfer is finalized and inspectable.'}</div><div class="transfer-status ${final&&!simulated?'final':''}">${simulated?'◇ simulated · no transaction':final?'● transfer finalized':'◌ pending finalization'}</div><div class="transfer-list">${transferRows}</div><div class="receipt-grid"><div class="receipt-cell"><span>Final score</span><b>${result?.score??'—'}/100</b></div><div class="receipt-cell"><span>Outcome</span><b>${esc(labels[outcome]||outcome||'—')}</b></div><div class="receipt-cell"><span>Transfer reference</span><b title="${esc(String(reference))}">${short(String(reference))}</b></div></div><div class="receipt-actions">${!simulated?refHTML:''}<button class="btn bh" onclick="${simulated?"nav('browse')":"reload()"}">${simulated?'Continue walkthrough':'Refresh status'}</button><button class="btn bh" onclick="go('evaluate')">View evaluation →</button></div></div>`;
+}
+
 function renderManage(job, result) {
   const s=job.status, i=S2I[s]??0;
   for(let n=0;n<5;n++){
@@ -1857,22 +1921,25 @@ function renderManage(job, result) {
     el.className='step'+(TERM.has(s)||n<i?' done':n===i?' active':'');
     el.querySelector('.step-dot').textContent=(TERM.has(s)||n<i)?'✓':n+1;
   }
-  if(TERM.has(s)){
-    const c={ACCEPTED:{icon:'✓',title:'Payment released',msg:`Score ${result?.score}/100 met the ${job.min_score}-point threshold. The contract released full payment to the freelancer.`,color:'var(--ok)'},PARTIAL:{icon:'↗',title:'Payment split',msg:`Score ${result?.score}/100 landed between the ${job.partial_floor}-point floor and full-pay threshold. The contract settled proportionally.`,color:'var(--yellow)'},REFUNDED:{icon:'↩',title:'Funds refunded',msg:`Score ${result?.score}/100 fell below the ${job.partial_floor}-point floor. The contract returned funds to the client.`,color:'var(--red)'}}[s];
-    document.getElementById('actCard').innerHTML=`<div class="settlement-receipt"><div class="receipt-mark" style="color:${c.color};background:color-mix(in srgb,${c.color} 10%,transparent)">${c.icon}</div><div class="step-tag">On-chain settlement receipt</div><div class="receipt-title" style="color:${c.color}">${c.title}</div><div class="receipt-copy">${c.msg}</div><div class="receipt-grid"><div class="receipt-cell"><span>Final score</span><b>${result?.score}/100</b></div><div class="receipt-cell"><span>Consensus</span><b>5 / 5 validators</b></div><div class="receipt-cell"><span>Network</span><b>Bradbury testnet</b></div></div><div class="receipt-actions"><button class="btn bg" onclick="go('evaluate')">View evaluation →</button><button class="btn bh" onclick="nav('browse')">Browse marketplace</button><button class="btn bh" onclick="nav('post')">Create similar job</button></div></div>`;
+  if(s==='LEGACY_UNSAFE'||job.legacy_contract){
+    document.getElementById('actCard').innerHTML=`<div class="settlement-receipt"><div class="receipt-mark" style="color:var(--red);background:var(--red-bg)">!</div><div class="step-tag">Safety lock</div><div class="receipt-title" style="color:var(--red)">Legacy settlement contract — do not fund</div><div class="receipt-copy">This immutable deployment predates the correct EOA external-message transfer pattern. All live actions are disabled.</div><div class="receipt-actions"><button class="btn bg" onclick="nav('post')">Create a safe escrow →</button></div></div>`;
+    document.getElementById('specCard').style.display='none';return;
+  }
+  if(TERM.has(s)||s==='SETTLEMENT_PENDING'){
+    document.getElementById('actCard').innerHTML=settlementReceiptHTML(job,result);
     document.getElementById('specCard').style.display='none';return;
   }
   if(job.spec){document.getElementById('specTxt').textContent=job.spec;document.getElementById('specCard').style.display='';}
   const sc=result?.score, sh=sc!=null?`<div class="hint hb" style="margin-bottom:14px"><span>ℹ️</span><span>Score <strong>${sc}/100</strong> — ${sc>=job.min_score?`full pay (≥${job.min_score})`:sc>=job.partial_floor?`partial pay (above floor ${job.partial_floor})`:`refund (below floor ${job.partial_floor})`}</span></div>`:'';
   const steps=[
-    {tag:'Step 1 of 5',title:'Fund the Escrow',desc:'Deposit GEN tokens. Funds are locked in the contract until evaluation is complete.',form:`<div class="field"><label>Amount (wei)</label><input type="number" id="inp-a" value="1000000000000000"/><small>1,000,000,000,000,000 wei = 0.001 GEN</small></div><button class="btn bg btn-full" onclick="fund()">Fund Escrow</button>`},
-    {tag:'Step 2 of 5',title:'Accept Terms',desc:'The worker reviews the job specification and agrees to deliver the described work.',form:`<button class="btn bb btn-full" onclick="acceptTerms()">Accept Terms &amp; Begin Work</button>`},
-    {tag:'Step 3 of 5',title:'Submit Your Deliverable',desc:'Provide a public URL to the completed work. The AI evaluator will fetch and score this page.',form:`<div class="field"><label>Deliverable URL</label><input type="url" id="inp-u" placeholder="https://your-work-url.com"/><small>Must be publicly accessible — the AI fetches this URL directly</small></div><button class="btn bb btn-full" onclick="submitWork()">Submit Work</button>`},
-    {tag:'Step 4 of 5',title:'Request AI Evaluation',desc:'An AI validator fetches your submission and scores it against the job specification. This determines the payout.',form:`<div class="hint hy"><span>⏱</span><span>Takes <strong>30–60 seconds</strong> on testnet while the AI reads and grades the page.</span></div><button class="btn bp btn-full" onclick="evaluate()">Start AI Evaluation</button>`},
-    {tag:'Step 5 of 5',title:'Finalize Payout',desc:'Release funds based on the AI score. The contract automatically calculates the split.',form:`${sh}<div class="btn-row"><button class="btn bg btn-full" onclick="finalize()">Release Funds</button>${!job.appeal_used?`<button class="btn bh" onclick="appeal()">Appeal</button>`:''}</div>`},
+    {tag:'Step 1 of 5 · demo client signer',title:'Fund the Escrow',desc:'The server-side Bradbury demo client deposits testnet GEN. No visitor wallet is connected.',form:`<div class="field"><label>Amount (wei)</label><input type="number" id="inp-a" value="1000000000000000"/><small>1,000,000,000,000,000 wei = 0.001 testnet GEN</small></div><button class="btn bg btn-full" onclick="fund()" ${liveActionsEnabled?'':'disabled'}>Fund with demo client</button>`},
+    {tag:'Step 2 of 5 · demo worker signer',title:'Accept Terms',desc:'The distinct server-side Bradbury demo worker accepts the specification.',form:`<button class="btn bb btn-full" onclick="acceptTerms()" ${liveActionsEnabled?'':'disabled'}>Accept with demo worker</button>`},
+    {tag:'Step 3 of 5 · demo worker signer',title:'Submit Your Deliverable',desc:'The demo worker attaches a public URL for validator inspection.',form:`<div class="field"><label>Deliverable URL</label><input type="url" id="inp-u" placeholder="https://your-work-url.com"/><small>Must be publicly accessible — validators fetch this URL directly</small></div><button class="btn bb btn-full" onclick="submitWork()" ${liveActionsEnabled?'':'disabled'}>Submit with demo worker</button>`},
+    {tag:'Step 4 of 5 · demo client signer',title:'Request AI Evaluation',desc:'The demo client submits the evaluation transaction; validators independently score the public evidence.',form:`<div class="hint hy"><span>⏱</span><span>Takes <strong>30–60 seconds</strong> on testnet while validators inspect the page.</span></div><button class="btn bp btn-full" onclick="evaluate()" ${liveActionsEnabled?'':'disabled'}>Start server-signed evaluation</button>`},
+    {tag:'Step 5 of 5 · demo client signer',title:'Queue Settlement Transfers',desc:'Fix the score-based outcome and queue EOA transfers for parent-transaction finalization.',form:`${sh}<div class="btn-row"><button class="btn bg btn-full" onclick="finalize()" ${liveActionsEnabled?'':'disabled'}>Queue outbound transfers</button>${!job.appeal_used?`<button class="btn bh" onclick="appeal()" ${liveActionsEnabled?'':'disabled'}>Appeal with demo client</button>`:''}</div>`},
   ];
   const st=steps[Math.min(i,4)];
-  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="action-visual"><div class="action-num">${Math.min(i+1,5)}</div><div><div class="action-overline">${st.tag} · current action</div><div class="act-title" style="margin-bottom:0">${st.title}</div></div></div><div class="act-desc">${st.desc}</div>${st.form}</div>`;
+  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="action-visual"><div class="action-num">${Math.min(i+1,5)}</div><div><div class="action-overline">${st.tag} · current action</div><div class="act-title" style="margin-bottom:0">${st.title}</div></div></div><div class="act-desc">${st.desc}</div>${!liveActionsEnabled?'<div class="hint hy" style="margin-bottom:14px"><span>◇</span><span>Simulated walkthrough only. Live actions are disabled and no transaction will be faked.</span></div>':''}${st.form}</div>`;
 }
 
 // ── EVALUATION THEATRE ───────────────────────────────────────────────────────
@@ -1947,11 +2014,11 @@ function staticConsensusHTML(job, sc) {
 function validatorOffset(index){ return [-3,1,2,0,4][index]||0; }
 
 function renderVerdictCard(job, result) {
-  const sc = result.score, s = result.status;
-  const outcome = s==='ACCEPTED'?'accept':s==='PARTIAL'?'partial':'reject';
+  const sc = result.score, s = result.status, settlement=job.settlement||{};
+  const decided=settlement.outcome||result.settlement_outcome||'', outcome = decided==='ACCEPTED'?'accept':decided==='PARTIAL'?'partial':decided==='REFUNDED'?'reject':outcomeOf(job,sc);
   const c = outcomeColor(outcome), bg = outcomeBg(outcome);
   const iconMap = {accept:'✓', partial:'—', reject:'✕'};
-  const labelMap = {ACCEPTED:'✓ Accepted',PARTIAL:'⚠ Partial Pay',REFUNDED:'↩ Refunded'};
+  const labelMap = {ACCEPTED:'✓ Worker payout outcome',PARTIAL:'⚠ Proportional split outcome',REFUNDED:'↩ Client refund outcome'};
   const verdict=document.getElementById('verdictCard');verdict.style.display='';verdict.classList.remove('enter');void verdict.offsetWidth;verdict.classList.add('enter');
   verdict.style.boxShadow=`var(--shadow-card),0 0 34px ${outcome==='accept'?'rgba(111,191,142,.16)':outcome==='partial'?'rgba(216,169,78,.14)':'rgba(217,112,102,.16)'}`;
   document.getElementById('verdictTop').style.background=bg;
@@ -1959,7 +2026,8 @@ function renderVerdictCard(job, result) {
   document.getElementById('verdictIcon').style.background=c;
   document.getElementById('verdictIcon').style.color='var(--bg)';
   document.getElementById('verdictIcon').textContent=iconMap[outcome];
-  document.getElementById('verdictLabel').textContent=labelMap[s]||s;
+  const outcomeKey=decided||({accept:'ACCEPTED',partial:'PARTIAL',reject:'REFUNDED'}[outcome]);
+  document.getElementById('verdictLabel').textContent=(s==='EVALUATED'?'Recommended · ':'')+(labelMap[outcomeKey]||outcomeKey);
   document.getElementById('verdictLabel').style.color=c;
   document.getElementById('verdictScore').textContent=sc+'/100';
   document.getElementById('verdictScore').style.color=c;
@@ -1967,15 +2035,9 @@ function renderVerdictCard(job, result) {
   document.getElementById('rText').textContent=result.reasoning||'No reasoning provided.';
   renderEvidenceRoom(job,result);
 
-  const amount = job.amount; // 0 once finalized — use last-known amount if terminal state already zeroed it
-  let release=0, refund=0;
-  if (s==='ACCEPTED') release = amount;
-  else if (s==='PARTIAL') { release = Math.floor(amount * sc / job.min_score); refund = amount - release; }
-  else refund = amount;
-  const rows=[];
-  if (release>0) rows.push(`<div class="settle-row" style="background:var(--ok-bg)"><span>→ Released to worker</span><span class="settle-amt" style="color:var(--ok)">${toGEN(release)}</span></div>`);
-  if (refund>0) rows.push(`<div class="settle-row" style="background:var(--red-bg)"><span>↺ Refunded to client</span><span class="settle-amt" style="color:var(--red)">${toGEN(refund)}</span></div>`);
-  document.getElementById('settleRows').innerHTML = rows.join('') || `<div class="settle-row" style="background:var(--border-sub)"><span>Awaiting finalize()</span><span class="settle-amt">—</span></div>`;
+  const transferFinal=settlement.transfer_status==='FINALIZED',transfers=(settlement.transfers||[]).filter(t=>Number(t.amount)>0);
+  const rows=transfers.map(t=>`<div class="settle-row" style="background:${t.settlement_type==='CLIENT_REFUND'?'var(--red-bg)':'var(--ok-bg)'}"><span>${transferFinal?'✓ Finalized':'◌ Queued'} · ${esc((t.settlement_type||'transfer').replaceAll('_',' ').toLowerCase())} → ${short(t.recipient)}</span><span class="settle-amt" style="color:${t.settlement_type==='CLIENT_REFUND'?'var(--red)':'var(--ok)'}">${toGEN(Number(t.amount)||0)}</span></div>`);
+  document.getElementById('settleRows').innerHTML = rows.join('') || `<div class="settle-row" style="background:var(--border-sub)"><span>${s==='EVALUATED'?'Outcome ready · finalize() not submitted':'Transfer record pending finalization'}</span><span class="settle-amt">—</span></div>`;
   // Appeals are valid only before settlement. Terminal jobs previously exposed
   // this button, causing the chain to reject the call with opaque error code 14.
   document.getElementById('appealBtn').style.display = (!job.appeal_used && s==='EVALUATED') ? '' : 'none';
@@ -1998,6 +2060,7 @@ function exportSettlementReport(){
 }
 
 async function runEvalTheatre() {
+  if(!liveActionsEnabled){toast('Simulated walkthrough only','info','Live evaluation is disabled; no on-chain transaction will be faked.');return}
   if(actionBusy||theatreRunning)return;actionBusy=true;
   theatreRunning = true;
   theatreClearTimers();
@@ -2044,7 +2107,7 @@ async function runEvalTheatre() {
   try {
     const r = await fetch(API_BASE+'/api/jobs/'+curJob+'/evaluate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
     const d = await r.json();
-    if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    if (!r.ok) throw apiError(d,r.status);
     log('✓ '+(d.status||'done'),'ok');
   } catch(e) {
     ok = false; errMsg = humanError(e);
@@ -2073,12 +2136,13 @@ async function runEvalTheatre() {
 // ── CONTRACTS ──────────────────────────────────────────────────────────────
 function renderContracts(addresses) {
   if(!addresses) return;
-  const cCard=(title,type,role,addr,exUrl)=>`<div class="card contract-card"><div class="card-head"><span>${title}</span><span class="verified">✓ verified</span></div><div class="card-body"><div class="contract-type">${type}</div><div class="contract-role">${role}</div><div class="addr-block"><span class="addr-mono" title="${addr}">${short(addr)}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div><div class="contract-actions">${exUrl?`<a class="btn bh" href="${exUrl}" target="_blank" rel="noopener">Open explorer ↗</a>`:''}<span class="network-health">active</span></div></div></div>`;
+  const cCard=(title,type,role,addr,exUrl)=>`<div class="card contract-card"><div class="card-head"><span>${title}</span><span class="verified">${addr?'✓ configured':'demo disabled'}</span></div><div class="card-body"><div class="contract-type">${type}</div><div class="contract-role">${role}</div><div class="addr-block"><span class="addr-mono" title="${esc(addr||'Not configured')}">${addr?short(addr):'Not configured'}</span>${addr?`<button class="copy-btn" onclick="cp('${addr}',this)">Copy</button>`:''}</div><div class="contract-actions">${addr&&exUrl?`<a class="btn bh" href="${exUrl}" target="_blank" rel="noopener">Open explorer ↗</a>`:''}<span class="network-health">${addr?'active':'simulated'}</span></div></div></div>`;
   document.getElementById('ctsContent').innerHTML=
-    cCard('Freelance Escrow','Job contract','Holds job terms and GEN, controls lifecycle state, and executes the final payment or refund.',addresses.escrow,addresses.explorer_escrow)+
+    cCard('Freelance Escrow','Job contract','Holds testnet GEN and queues EOA external-message transfers. Merit waits for finalization and an inspectable transfer record before calling settlement complete.',addresses.escrow,addresses.explorer_escrow)+
     cCard('Evaluation Engine','Intelligent contract','Fetches the submitted page, applies the acceptance rubric and records the validator-agreed score.',addresses.evaluator,addresses.explorer_evaluator)+
-    cCard('Transaction Account','Server signer','Competition demo account used to submit testnet transactions on behalf of the interface.',addresses.deployer,'https://explorer-bradbury.genlayer.com/address/'+addresses.deployer)+
-    `<div class="card contract-card"><div class="card-head"><span>Protocol profile</span><span class="verified">open source</span></div><div class="card-body"><div class="contract-type">GenLayer</div><div class="contract-role">Python Intelligent Contracts with AI-mediated consensus and inspectable settlement outcomes.</div><div class="kv-list"><div class="kv"><span class="kv-k">Settlement</span><span class="kv-v">Non-custodial</span></div><div class="kv"><span class="kv-k">Validator model</span><span class="kv-v">5-way consensus</span></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">Bradbury testnet</span></div></div></div></div>`;
+    cCard('Demo Client Account','Server signer · client role','Server-controlled Bradbury testnet account used only to deploy, fund, evaluate, appeal, and queue settlement.',addresses.demo_client||demoConfig.client_address,'https://explorer-bradbury.genlayer.com/address/'+(addresses.demo_client||demoConfig.client_address||''))+
+    cCard('Demo Worker Account','Server signer · worker role','Different server-controlled Bradbury testnet account used only to accept terms and submit public work.',addresses.demo_worker||demoConfig.worker_address,'https://explorer-bradbury.genlayer.com/address/'+(addresses.demo_worker||demoConfig.worker_address||''))+
+    `<div class="card contract-card"><div class="card-head"><span>Protocol profile</span><span class="verified">open source</span></div><div class="card-body"><div class="contract-type">GenLayer</div><div class="contract-role">Testnet-only server-signed demo. Browser wallet signing is not implemented and visitors do not control either account.</div><div class="kv-list"><div class="kv"><span class="kv-k">Settlement</span><span class="kv-v">EOA external message · finalized only</span></div><div class="kv"><span class="kv-k">Signer separation</span><span class="kv-v">Client ≠ worker</span></div><div class="kv"><span class="kv-k">Registry</span><span class="kv-v">Shared SQLite store</span></div></div></div></div>`;
 }
 
 async function cp(addr,btn){try{await navigator.clipboard.writeText(addr);const o=btn.textContent;btn.textContent='✓ Copied!';btn.style.color='var(--ok)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1600)}catch(e){toast('Copy failed','err','Select the address and copy it manually.')}}
@@ -2094,6 +2158,7 @@ async function loadBrowse() {
     const r = await fetch(API_BASE+'/api/jobs');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
+    if(d.demo)applyDemoConfig(d.demo);
     browseJobs = d.jobs || [];
     updateMarketplaceSummary(browseJobs);
     filterBrowse();
@@ -2181,7 +2246,7 @@ async function renderHeroTerminal() {
       body.innerHTML = scan +
         `<div class="tl-out"><span class="tl-ok">✓</span> connected — <span class="tl-dim">no open jobs yet</span></div>` +
         `<div class="tl-cmd"><span class="tl-p">$</span>merit escrow watch<span class="term-cursor"></span></div>` +
-        `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+        `<div class="term-foot">server-signed Bradbury demo · separate client and worker roles</div>`;
       return;
     }
     const rows = jobs.slice(0,4).map(j=>{
@@ -2196,19 +2261,19 @@ async function renderHeroTerminal() {
       rows +
       `<div class="tl-cmd"><span class="tl-p">$</span>contract watch --job ${first}</div>` +
       `<div class="tl-out"><span class="tl-ok">✓</span> pinned — polling testnet_bradbury for evaluate() call<span class="term-cursor"></span></div>` +
-      `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+      `<div class="term-foot">server-signed Bradbury demo · separate client and worker roles</div>`;
   } catch(e) {
     body.innerHTML = scan +
       `<div class="tl-out"><span class="tl-dim">✗ registry unreachable — ${esc(e.message)}. retrying on next load.</span></div>` +
-      `<div class="term-foot">funds settle on-chain · no platform custody</div>`;
+      `<div class="term-foot">server-signed Bradbury demo · separate client and worker roles</div>`;
   }
 }
 
 // status → accent family for the job card's left border + hover glow
 const JC_ACCENT = {
   OPEN:'green', AGREED:'green', SUBMITTED:'green',
-  EVALUATED:'gold', ACCEPTED:'gold', PARTIAL:'gold',
-  REFUNDED:'red', UNFUNDED:'muted',
+  EVALUATED:'gold', SETTLEMENT_PENDING:'gold', ACCEPTED:'gold', PARTIAL:'gold',
+  REFUNDED:'red', LEGACY_UNSAFE:'red', UNFUNDED:'muted',
 };
 function scoreRing(score){
   // small radial progress ring: green for judgment score
@@ -2224,7 +2289,7 @@ function jobCardHTML(j) {
     : `<span class="jc-score">not evaluated</span>`;
   const when=j.created_at?`<span title="${new Date(j.created_at).toLocaleString()}">${relativeTime(j.created_at)}</span>`:'';
   const category=jobCategory(j.title||'',j.spec||'');
-  const stateNote=TERM.has(status)?'settled on-chain':status==='UNFUNDED'?'awaiting funding':status==='OPEN'?'accepting worker':'work in progress';
+  const stateNote=status==='LEGACY_UNSAFE'?'do not fund · legacy contract':status==='SETTLEMENT_PENDING'?'transfer pending finalization':TERM.has(status)?'transfer finalized':status==='UNFUNDED'?'awaiting demo-client funding':status==='OPEN'?'awaiting demo worker':'work in progress';
   const id=j.id||j.address,key=j.address||j.id,isSaved=savedJobs.has(key);
   return `<div class="job-card acc-${acc}" onclick="openJob('${id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openJob('${id}')} ">
     <button class="save-job ${isSaved?'on':''}" onclick="toggleSaveJob(event,'${key}')" aria-label="${isSaved?'Remove from':'Save to'} watchlist" title="${isSaved?'Remove from':'Save to'} watchlist">${isSaved?'★':'☆'}</button>
@@ -2232,7 +2297,7 @@ function jobCardHTML(j) {
     <div class="jc-category">${category}</div>
     <div class="jc-title">${esc(j.title||'Untitled job')}</div>
     <div class="jc-spec">${esc(j.spec||'')}</div>
-    <div class="jc-meta"><span class="jc-chip">5 validators</span><span class="jc-chip">${stateNote}</span><span class="jc-chip">public deliverable</span></div>
+    <div class="jc-meta"><span class="jc-chip">${status==='LEGACY_UNSAFE'?'⚠ legacy unsafe':'5 validators'}</span><span class="jc-chip">${stateNote}</span><span class="jc-chip">${status==='LEGACY_UNSAFE'?'read only':'public deliverable'}</span></div>
     <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b>${when?` · ${when}`:''}</span>${scoreLine}</div>
   </div>`;
 }
@@ -2323,7 +2388,7 @@ async function renderTermsFingerprint(){
 async function copyTermsFingerprint(){const el=document.getElementById('termsFingerprint'),value=el?.dataset.full;if(!value){toast('Nothing to copy','info','Write the acceptance specification first.');return}try{await navigator.clipboard.writeText(value);toast('Fingerprint copied','ok','Any terms change produces a different identity.')}catch(e){toast('Copy failed','err','Select and copy the fingerprint manually.')}}
 
 async function createJob() {
-  if(demoMode){toast('Live deployment paused','info','Reconnect to Bradbury to publish a contract. The form remains usable for your presentation.');return}
+  if(demoMode||!liveActionsEnabled){toast('Simulated walkthrough only','info','Configure two different Bradbury demo accounts to enable deployment. No on-chain transaction will be faked.');return}
   const spec  = document.getElementById('post-spec').value.trim();
   const title = document.getElementById('post-title').value.trim();
   const feePct= parseFloat(document.getElementById('post-fee').value)||0;
@@ -2347,10 +2412,10 @@ async function createJob() {
       spec, title: title||null, fee_bps: Math.round(feePct*100), min_score: min, partial_floor: floor,
     })});
     const d = await r.json();
-    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    if(!r.ok) throw apiError(d,r.status);
     log('✓ deployed '+d.job.address,'ok');
     completeTxTracker('Contract deployed · registry synchronized');
-    toast('Job posted', 'ok', 'Escrow deployed to testnet');
+    toast('Demo escrow deployed', 'ok', 'Server-signed by the Bradbury demo client account');
     loadStats();
     // reset form
     document.getElementById('post-spec').value=''; document.getElementById('post-title').value='';analyzeSpecification();renderTermsFingerprint();
@@ -2361,7 +2426,7 @@ async function createJob() {
     failTxTracker(msg);
     toast('Deploy failed', 'err', msg);
   } finally {
-    btn.disabled=false; btn.innerHTML='Deploy escrow &amp; post job';
+    btn.disabled=!liveActionsEnabled; btn.innerHTML=liveActionsEnabled?'Deploy with demo client →':'Live deployment disabled · use walkthrough';
   }
 }
 
@@ -2372,7 +2437,7 @@ async function reload() {
   const targets=['actCard','ctsContent'];const slow=setTimeout(()=>targets.forEach(id=>{const e=document.getElementById(id);if(e&&e.querySelector('.skel'))e.insertAdjacentHTML('beforeend','<div class="load-note">Still loading — reading the job from testnet…</div>')}),3000);
   try{
     const r=await fetch(API_BASE+'/api/jobs/'+curJob);
-    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||'HTTP '+r.status)}
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw apiError(d,r.status)}
     data=await r.json();renderAll();updateTitle();log('Job refreshed','ok');
   }catch(e){const msg=humanError(e);log('Refresh failed: '+msg,'err');toast('Couldn’t refresh job','err',msg);document.getElementById('actCard').innerHTML=`<div class="empty"><div class="empty-title">Couldn’t load this job</div><div class="empty-desc">${esc(msg)}</div><button class="btn bh" onclick="reload()">Retry</button></div>`;document.getElementById('ctsContent').innerHTML=`<div class="card"><div class="empty"><div class="empty-title">Contracts unavailable</div><div class="empty-desc">${esc(msg)}</div><button class="btn bh" onclick="reload()">Retry</button></div></div>`;if(!logOpen)toggleLog()}finally{clearTimeout(slow)}
 }
@@ -2386,7 +2451,7 @@ function disableAct(on){
 }
 
 async function call(action,body={}){
-  if(demoMode){toast('Live action unavailable in fallback','info','Reconnect to Bradbury before submitting an on-chain transaction.');return}
+  if(demoMode||!liveActionsEnabled){toast('Simulated walkthrough only','info','Live multi-role actions are disabled and Merit will not fake an on-chain transaction.');return}
   if(actionBusy)return;if(!curJob){log('No job selected','err');return;}actionBusy=true;
   const path='/api/jobs/'+curJob+'/'+action;
   const txNames={fund:'Funding escrow',accept_terms:'Signing acceptance terms',submit:'Submitting deliverable',appeal:'Opening validator appeal',finalize:'Finalizing settlement'};
@@ -2394,11 +2459,12 @@ async function call(action,body={}){
   log('→ '+path); if(!logOpen)toggleLog(); disableAct(true);
   try{
     const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json().catch(()=>({})); if(!r.ok)throw new Error(d.detail||('HTTP '+r.status));
-    completeTxTracker((d.status||'State confirmed')+' · chain synchronized');
+    const d=await r.json().catch(()=>({})); if(!r.ok)throw apiError(d,r.status);
+    const settlementPending=action==='finalize'&&d.status==='PENDING_FINALIZATION';
+    completeTxTracker(settlementPending?'Parent accepted · outbound transfer pending finalization':((d.status||'State confirmed')+' · server-signed demo transaction'));
     log('✓ '+(d.status||'done'),'ok');
-    const labels={fund:'Escrow funded',submit:'Work submitted',evaluate:'Evaluation complete',settle:'Settled on-chain',refund:'Refund issued'};
-    toast(labels[action]||'Done', 'ok', d.status?('Status: '+d.status):'');
+    const labels={fund:'Demo client funded escrow',accept_terms:'Demo worker accepted terms',submit:'Demo worker submitted work',evaluate:'Evaluation submitted',appeal:'Demo client opened appeal',finalize:'Settlement outcome recorded'};
+    toast(labels[action]||'Server-signed demo transaction', settlementPending?'info':'ok', settlementPending?'Outbound EOA transfer pending finalization':(d.transaction_type||'server-signed demo transaction'));
     await reload(); loadStats();
   }catch(e){const msg=humanError(e);failTxTracker(msg);log('✗ '+msg,'err');toast('Action failed','err',msg,()=>call(action,body))}finally{disableAct(false);actionBusy=false}
 }
@@ -2441,7 +2507,7 @@ const COMMANDS=[
   {icon:'▦',title:'Browse marketplace',desc:'Search contract-backed jobs',key:'G B',run:()=>nav('browse')},
   {icon:'＋',title:'Create intelligent escrow',desc:'Write terms and deploy a job',key:'G P',run:()=>nav('post')},
   {icon:'✦',title:'Open AI evaluation',desc:'Validator reasoning and evidence room',key:'G E',run:()=>curJob?go('evaluate'):(nav('browse'),toast('Choose a job','info','Open a listing to inspect its evaluation.'))},
-  {icon:'◇',title:'Inspect contracts',desc:'Addresses, custody, and network proof',key:'G C',run:()=>curJob?go('contracts'):(nav('browse'),toast('Choose a job','info','Open a listing to inspect its contracts.'))},
+  {icon:'◇',title:'Inspect contracts',desc:'Addresses, demo signers, and network proof',key:'G C',run:()=>curJob?go('contracts'):(nav('browse'),toast('Choose a job','info','Open a listing to inspect its contracts.'))},
   {icon:'▶',title:'Launch Judge Mode',desc:'Guided three-minute competition demo',key:'⌘ J',run:openJudgeMode},
   {icon:'◐',title:'Switch light / dark mode',desc:'Toggle and remember appearance',key:'T',run:toggleTheme},
   {icon:'↻',title:'Refresh live marketplace',desc:'Sync registry and network statistics',key:'R',run:()=>{loadBrowse();loadStats();toast('Refreshing network','info','Syncing the latest contract state.')}},
@@ -2468,7 +2534,7 @@ function animateProofHead(){
 function updateSettlementLab(raw){
   const score=Math.max(0,Math.min(100,Number(raw)||0)),lab=document.getElementById('settlementLab');if(!lab)return;
   const full=70,floor=40,worker=score>=full?1:score<floor?0:score/100,client=1-worker;
-  const state=score>=full?{name:'Full payment',color:'var(--ok)',copy:'The score clears the 70-point acceptance threshold. The contract releases the full escrow to the freelancer.',tx:'finalize() → worker · deterministic transfer'}:score<floor?{name:'Client refund',color:'var(--red)',copy:'The score falls below the 40-point quality floor. The contract returns the complete escrow to the client.',tx:'finalize() → client · deterministic refund'}:{name:'Proportional split',color:'var(--yellow)',copy:'The work is useful but below the full-pay threshold. The contract pays the score-weighted share and refunds the remainder.',tx:'finalize() → split · score-weighted transfer'};
+  const state=score>=full?{name:'Full payment',color:'var(--ok)',copy:'The score clears the 70-point acceptance threshold. This simulation previews the worker payout that finalize() would queue.',tx:'simulated finalize() → worker · pending until parent finalizes'}:score<floor?{name:'Client refund',color:'var(--red)',copy:'The score falls below the 40-point quality floor. This simulation previews the client refund that finalize() would queue.',tx:'simulated finalize() → client · pending until parent finalizes'}:{name:'Proportional split',color:'var(--yellow)',copy:'The work is useful but below the full-pay threshold. This simulation previews the score-weighted payout and refund messages.',tx:'simulated finalize() → split · pending until parent finalizes'};
   lab.style.setProperty('--lab-color',state.color);
   document.getElementById('labScoreValue').textContent=score;
   document.getElementById('labVerdict').textContent=state.name;
@@ -2491,10 +2557,10 @@ function useJobTemplate(kind){
 
 let escrowStoryTimer;
 const ESCROW_STORY=[
-  ['Client funds the job.','The contract locks GEN until a verdict is reached.'],
-  ['The worker submits public work.','The deliverable URL is bound to the job and its acceptance terms.'],
+  ['The demo client funds the job.','A server-side Bradbury signer sends testnet GEN to the escrow contract; no visitor wallet is connected.'],
+  ['The demo worker submits public work.','A different server-side Bradbury signer binds the deliverable URL to the job and its acceptance terms.'],
   ['Validators inspect the evidence.','They compare the visible result with the exact agreement—not a private opinion.'],
-  ['The contract settles automatically.','Consensus determines a payout, proportional split, or client refund.']
+  ['The contract queues settlement.','Consensus determines the outbound messages; completion waits for parent finalization and an inspectable transfer record.']
 ];
 function setEscrowStory(step){
   const nodes=[...document.querySelectorAll('[data-story-step]')],caption=document.getElementById('storyCaption');

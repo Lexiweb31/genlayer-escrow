@@ -7,6 +7,8 @@
 - Press `Cmd/Ctrl + J` and keep Judge Mode ready.
 - Keep the GitHub repository and Bradbury explorer in background tabs.
 - If services are slow for eight seconds, use **Enter resilient demo**. Say explicitly that it is labeled fallback data.
+- State up front that this is a **server-signed Bradbury testnet demo**. No visitor wallet is connected or controls the testnet GEN.
+- Confirm the Contracts page shows different demo client and worker addresses before attempting live actions. If either signer is missing, stay in the simulated walkthrough.
 
 ## 0:00–0:30 — the problem
 
@@ -18,7 +20,7 @@ Show the animated escrow lifecycle and the “living protocol” telemetry.
 
 Open **Post a Job**. Apply the landing-page template.
 
-> The client defines “done” before work begins. Merit checks whether the agreement is clear and testable, previews all payout bands, and fingerprints the exact terms. Those terms become the validator rubric and settlement rules.
+> The Bradbury demo client signer defines “done” before work begins. Merit checks whether the agreement is clear and testable, previews all settlement bands, and fingerprints the exact terms. Those terms become the validator rubric and settlement rules.
 
 Point out:
 
@@ -31,7 +33,7 @@ Point out:
 
 Open **Browse Jobs** and select a funded or completed listing.
 
-> Every listing maps to a dedicated escrow contract. Merit does not custody marketplace funds.
+> Every live listing maps to a dedicated escrow contract. Separate server-controlled Bradbury accounts sign the client and worker steps; this is role-separated demo infrastructure, not browser-wallet custody.
 
 Briefly show search, status filtering, saved jobs, and the contract-backed job timeline.
 
@@ -58,13 +60,13 @@ Do not describe score-derived rubric signals as independent on-chain scores. The
 
 Open **Contracts** or the explorer.
 
-> The final score does not merely produce a dashboard result. It controls an actual contract transfer: full payment, proportional settlement, or refund.
+> The final score does not merely produce a dashboard result. It queues native GEN external messages: worker payout, proportional split, or client refund. Merit reports completion only after the parent transaction finalizes and an outbound transfer reference is inspectable.
 
-Show the job contract, evaluation engine, network, and explorer links.
+Show the job contract, distinct demo signers, settlement status, recipient, amount, transfer reference, and explorer link. For a pending record, say “pending finalization,” not “paid” or “refunded.”
 
 ## 2:50–3:00 — close
 
-> Merit gives digital work something it has never had on-chain: an agreement that can understand evidence, explain its decision, and enforce payment without a private arbitrator.
+> Merit demonstrates an agreement that can understand public evidence, explain its decision, and queue score-based settlement on GenLayer. This competition build is server-signed and testnet-only; user wallet signing is future work.
 
 Finish on the evidence report or settlement receipt.
 

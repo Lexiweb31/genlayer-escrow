@@ -1,120 +1,112 @@
 # Merit
 
-**AI-arbitrated freelance escrow on GenLayer.**
+**AI-arbitrated freelance escrow on GenLayer’s Bradbury testnet.**
 
-Merit turns a plain-English acceptance specification into enforceable payment rules. A client posts and funds work, a freelancer accepts the terms and submits a public deliverable, and GenLayer validators evaluate that work before the intelligent contract releases, splits, or refunds the escrow.
+Merit turns a plain-English acceptance specification into settlement rules. GenLayer validators inspect a public deliverable and record a score; the escrow then queues a full worker payout, proportional split, or client refund.
 
 [Live application](https://lexiweb31.github.io/genlayer-escrow/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Demo script](DEMO_SCRIPT.md)
 
-## Why this needs GenLayer
+## Trust model — read before funding
 
-Traditional smart contracts can verify deterministic facts such as signatures and transfers. They cannot read a website and decide whether it satisfies a natural-language agreement.
+The competition interface is a **server-signed, testnet-only demo**. It does not connect a visitor’s browser wallet, and visitors do not personally control deposited GEN.
 
-Merit uses GenLayer to:
+- `DEMO_CLIENT_PRIVATE_KEY` signs only deploy, fund, evaluate, appeal, and finalize calls.
+- `DEMO_WORKER_PRIVATE_KEY` signs only accept and submit calls.
+- Both keys must be configured and must derive to different addresses. Otherwise all live actions are disabled and the UI offers a clearly labeled simulated walkthrough that never submits a transaction.
+- Each newly created job rejects a client address that is also the worker address.
+- Contracts deployed before the safe EOA transfer patch are marked **“legacy settlement contract — do not fund”** and remain read-only. Immutable deployed contracts are not silently migrated or deleted.
 
-- retrieve a submitted public deliverable;
-- isolate fetched content as untrusted evidence;
-- evaluate it against immutable acceptance terms;
-- reach validator consensus on a score and rationale;
-- settle escrow according to pre-agreed thresholds;
-- preserve an inspectable appeal and settlement trail.
+The demo server controls both testnet keys, so this is role separation—not real user custody. Browser-wallet signing must be implemented before describing Merit as user-wallet custody.
+
+## Safe settlement
+
+Native GEN payouts and refunds use GenLayer’s EOA external-message transfer pattern. The contract records the outcome and queued destinations before emitting transfers. Merit does not call a payout or refund complete merely because `finalize()` changed the parent contract state.
+
+A settlement view exposes:
+
+- outcome and settlement type;
+- every recipient and amount;
+- parent transaction and outbound transfer reference when available;
+- `PENDING_FINALIZATION` until the parent transaction finalizes and an inspectable outbound message/triggered transaction is visible.
+
+GenLayer executes external messages only when the parent transaction finalizes. See the official [value-transfer](https://docs.genlayer.com/developers/intelligent-contracts/features/value-transfers) and [message](https://docs.genlayer.com/developers/intelligent-contracts/features/messages) documentation.
 
 ## Settlement model
 
-| Validator score | Outcome |
+| Validator score | Queued outcome |
 |---|---|
-| Score ≥ full-payment threshold | Full payment to freelancer |
-| Partial floor ≤ score < full-payment threshold | Proportional payment and client refund |
-| Score < partial floor | Full refund to client |
+| Score ≥ full-payment threshold | Worker payout, less declared fee |
+| Partial floor ≤ score < full-payment threshold | Proportional worker payout, client refund, and fee |
+| Score < partial floor | Full client refund |
 
-The client, freelancer, and platform cannot silently change these rules after deployment.
+The client, worker, and platform cannot change these thresholds after deployment.
 
-## Product journey
+## Durable marketplace registry
 
-```mermaid
-flowchart LR
-    A[Client writes acceptance specification] --> B[Dedicated escrow contract deployed]
-    B --> C[GEN funded]
-    C --> D[Freelancer accepts terms]
-    D --> E[Public deliverable submitted]
-    E --> F[GenLayer validators evaluate]
-    F --> G{Consensus score}
-    G -->|Pass| H[Full payment]
-    G -->|Partial| I[Proportional split]
-    G -->|Fail| J[Client refund]
-    F --> K[Appeal before final settlement]
+The API stores marketplace records in SQLite instead of relying on `artifacts/jobs.json`. The schema includes the job address, terms, client and worker, lifecycle state, deployment transaction, settlement details, and timestamps. Every browser reads the same API-backed registry.
+
+`PERSIST_DATA_DIR` selects the database directory:
+
+- Local development: unset it to use `.data/`, or set an absolute/relative development path.
+- Render production: upgrade the web service to a disk-compatible paid plan, attach a persistent disk in **Dashboard → Service → Disks**, use a mount such as `/var/data/merit`, and set `PERSIST_DATA_DIR=/var/data/merit`.
+
+Only writes beneath the disk mount survive a Render restart or redeploy. Do not set a production `PERSIST_DATA_DIR` outside the attached mount. Existing `artifacts/jobs.json` entries, when present, are imported once as read-only legacy warnings; the source file is not rewritten or deleted.
+
+## Required environment
+
+```bash
+DEMO_CLIENT_PRIVATE_KEY=0x...   # server secret; Bradbury testnet only
+DEMO_WORKER_PRIVATE_KEY=0x...   # different server secret/address
+PERSIST_DATA_DIR=/var/data/merit
 ```
+
+Never expose either key to frontend code, logs, screenshots, commits, or browser environment variables. Fund only the demo client with the minimum Bradbury testnet GEN needed for the walkthrough.
+
+`DEPLOYER_PRIVATE_KEY` is retained only for older integration tooling. The dashboard API no longer uses it for marketplace actions.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    UI[Merit web application] --> API[Python API]
-    API --> ESC[FreelanceEscrow intelligent contract]
-    ESC --> WEB[Submitted public URL]
-    ESC --> VAL[GenLayer validator consensus]
-    VAL --> ESC
-    ESC --> PAY[On-chain payment or refund]
-    UI --> EXP[Bradbury explorer]
-```
-
-### Core components
-
-- `contracts/freelance_escrow.py` — job lifecycle, funding, evaluation, appeal, and settlement.
-- `contracts/evaluate_submission.py` — standalone intelligent evaluation contract.
-- `dashboard/api.py` — registry and transaction API used by the web interface.
-- `docs/index.html` — GitHub Pages frontend.
-- `public/index.html` — mirrored static frontend for alternative hosting.
-- `tests/` — direct and integration contract tests.
-
-## Competition-ready UX
-
-- Judge Mode with a guided three-minute route.
-- Light and dark themes.
-- Resilient, clearly labeled fallback when testnet services are slow.
-- Interactive payout simulator.
-- Live agreement-quality analysis before deployment.
-- SHA-256 agreement fingerprint preview.
-- Validator reasoning and decision evidence room.
-- Printable settlement evidence report.
-- Persistent transaction progress tracking.
-- Search, sorting, saved jobs, deep links, and keyboard command center.
-- Responsive mobile layout and reduced-motion support.
-
-## Security and trust model
-
-- **Non-custodial:** each job uses a dedicated escrow contract.
-- **Prompt-injection boundary:** fetched deliverables are treated as untrusted data, not evaluator instructions.
-- **Consensus:** no single model response controls payment.
-- **Immutable settlement rules:** score thresholds are fixed before work begins.
-- **Inspectable outcomes:** contract addresses, rationale, score, and settlement are surfaced in the application.
-- **Honest fallback:** demo state is visibly labeled and cannot submit simulated chain actions.
+- `contracts/freelance_escrow.py` — role-gated lifecycle, intelligent evaluation, appeal, and EOA settlement messages.
+- `dashboard/api.py` — distinct demo signers, role/state checks, testnet transaction submission, and transfer-status recovery.
+- `dashboard/store.py` — shared SQLite marketplace and settlement registry.
+- `docs/index.html` and `public/index.html` — identical static frontends.
+- `tests/direct/` — contract behavior, including full payout, split, and refund cases.
+- `tests/backend/` — durable storage, legacy import, and demo-role configuration checks.
 
 ## Run locally
 
-The frontend is static and expects the deployed API configured in `API_BASE`.
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn dashboard.api:app --reload
+```
+
+In a second terminal:
 
 ```bash
 python3 -m http.server 8080 --directory docs
 ```
 
-Open `http://localhost:8080`.
-
-For API and contract requirements, install the dependencies from `requirements.txt` and configure the Bradbury deployment addresses in `artifacts/deployments.json`.
+If the two demo keys are absent, the API starts safely with live actions disabled. Open `http://localhost:8080` to use the simulated walkthrough.
 
 ## Verification
 
 ```bash
 python3 -m pytest tests/direct -q
-python3 -m pytest tests/integration -q
+python3 -m pytest tests/backend -q
+python3 -m py_compile dashboard/api.py dashboard/store.py scripts/*.py
+genvm-lint contracts/freelance_escrow.py
+cmp -s docs/index.html public/index.html
 ```
 
-The frontend's inline JavaScript can be extracted and checked with Node.js as part of release validation. Keep `docs/index.html` and `public/index.html` synchronized before publishing.
+Integration tests require a configured Bradbury/local validator environment and funded test accounts. The fallback demo is visibly labeled and cannot submit simulated chain activity.
 
-## Demo safety
+## Competition UX
 
-If the live API does not respond quickly, select **Enter resilient demo**. The fallback preserves the complete presentation journey while labeling sample state and disabling all actions that would otherwise submit a transaction.
+Merit includes Judge Mode, light/dark themes, an animated escrow explainer, agreement-quality guidance, marketplace search and filters, AI evaluation evidence, an interactive settlement simulator, a settlement receipt, deep links, mobile account access, bottom navigation, horizontally scrollable validator cards, and reduced-motion support.
 
 ## License
 
-Built as an open competition prototype for GenLayer's Bradbury testnet.
+Built as an open competition prototype for GenLayer’s Bradbury testnet.

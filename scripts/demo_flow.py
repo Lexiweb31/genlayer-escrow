@@ -2,7 +2,7 @@
 End-to-end demo of the FreelanceEscrow flow on testnet_bradbury.
 
 Walks through every state:
-  UNFUNDED → OPEN → AGREED → SUBMITTED → EVALUATED → ACCEPTED/PARTIAL/REFUNDED
+  UNFUNDED → OPEN → AGREED → SUBMITTED → EVALUATED → SETTLEMENT_PENDING
 
 Usage:
     source .venv/bin/activate
@@ -19,9 +19,10 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).parents[1]
 load_dotenv(ROOT / ".env")
 
-PRIVATE_KEY = os.getenv("DEPLOYER_PRIVATE_KEY")
-if not PRIVATE_KEY:
-    sys.exit("DEPLOYER_PRIVATE_KEY not set")
+CLIENT_PRIVATE_KEY = os.getenv("DEMO_CLIENT_PRIVATE_KEY")
+WORKER_PRIVATE_KEY = os.getenv("DEMO_WORKER_PRIVATE_KEY")
+if not CLIENT_PRIVATE_KEY or not WORKER_PRIVATE_KEY:
+    sys.exit("Both DEMO_CLIENT_PRIVATE_KEY and DEMO_WORKER_PRIVATE_KEY are required")
 
 from genlayer_py import create_account, create_client, testnet_bradbury
 from genlayer_py.abi.calldata.decoder import decode as calldata_decode
@@ -33,8 +34,11 @@ from genlayer_py.types.transactions import TransactionStatus
 deployments = json.loads((ROOT / "artifacts" / "deployments.json").read_text())
 ESCROW_ADDR = deployments["freelance_escrow"]
 
-account = create_account(PRIVATE_KEY)
-client  = create_client(testnet_bradbury, account=account)
+client_account = create_account(CLIENT_PRIVATE_KEY)
+worker_account = create_account(WORKER_PRIVATE_KEY)
+if str(client_account.address).lower() == str(worker_account.address).lower():
+    sys.exit("Demo client and worker addresses must be different")
+client = create_client(testnet_bradbury)
 
 FUND_AMOUNT = 1_000_000_000_000_000   # 0.001 GEN in wei
 SUBMIT_URL  = "https://stripe.com"    # real fintech page the AI will fetch & grade
@@ -52,7 +56,7 @@ def read(method, args=None):
         params=[{
             "type": "read",
             "to": ESCROW_ADDR,
-            "from": account.address,
+            "from": client_account.address,
             "data": tx_serialize(data),
             "transaction_hash_variant": "latest-nonfinal",
         }],
@@ -61,11 +65,13 @@ def read(method, args=None):
     return calldata_decode(eth_utils.hexadecimal.decode_hex("0x" + hex_str))
 
 
-def write(method, args=None, value=0):
-    print(f"  → calling {method}() …", end="", flush=True)
+def write(method, role, args=None, value=0):
+    signer = client_account if role == "client" else worker_account
+    print(f"  → {role} demo account calling {method}() …", end="", flush=True)
     tx = client.write_contract(
         address=ESCROW_ADDR,
         function_name=method,
+        account=signer,
         args=args or [],
         value=value,
     )
@@ -87,7 +93,8 @@ def banner(msg):
 # ── Flow ──────────────────────────────────────────────────────────────────────
 
 banner("Freelance Escrow — end-to-end demo")
-print(f"  Deployer : {account.address}")
+print(f"  Client   : {client_account.address}")
+print(f"  Worker   : {worker_account.address}")
 print(f"  Contract : {ESCROW_ADDR}")
 print(f"  URL      : {SUBMIT_URL}")
 
@@ -97,28 +104,28 @@ print(f"\n  Current status: {job['status']}")
 # 1. Fund
 if job["status"] == "UNFUNDED":
     banner("Step 1 / 5 — Fund")
-    write("fund", value=FUND_AMOUNT)
+    write("fund", "client", value=FUND_AMOUNT)
     job = json.loads(read("get_job"))
     print(f"  Amount locked : {job['amount']} wei")
 
-# 2. Accept terms (demo: deployer is also the worker)
+# 2. Accept terms with the distinct server-side worker demo account
 if job["status"] == "OPEN":
     banner("Step 2 / 5 — Accept Terms")
-    write("accept_terms")
+    write("accept_terms", "worker")
     job = json.loads(read("get_job"))
     print(f"  Terms agreed  : {job['terms_agreed']}")
 
 # 3. Submit work
 if job["status"] == "AGREED":
     banner("Step 3 / 5 — Submit Work")
-    write("submit_work", args=[SUBMIT_URL])
+    write("submit_work", "worker", args=[SUBMIT_URL])
     job = json.loads(read("get_job"))
     print(f"  Submission    : {job.get('submission_url', SUBMIT_URL)}")
 
 # 4. Evaluate (AI fetches URL and scores it — takes ~30 s on testnet)
 if job["status"] == "SUBMITTED":
     banner("Step 4 / 5 — Evaluate  (AI is reading the page…)")
-    write("evaluate")
+    write("evaluate", "client")
     result_raw = read("get_result")
     result = json.loads(result_raw)
     score = result.get("score", 0)
@@ -129,7 +136,8 @@ if job["status"] == "SUBMITTED":
 job = json.loads(read("get_job"))
 if job["status"] == "EVALUATED":
     banner("Step 5 / 5 — Finalize")
-    write("finalize")
+    receipt = write("finalize", "client")
+    print("  Outbound EOA transfers remain pending until this parent transaction is FINALIZED.")
 
 # ── Final state ───────────────────────────────────────────────────────────────
 banner("Final state")

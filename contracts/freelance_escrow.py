@@ -8,12 +8,29 @@ OPEN      = "OPEN"       # funded, waiting for worker to accept terms
 AGREED    = "AGREED"     # worker accepted terms, waiting for submission
 SUBMITTED = "SUBMITTED"  # URL submitted, pending evaluation
 EVALUATED = "EVALUATED"  # AI verdict stored, awaiting finalize or appeal
-ACCEPTED  = "ACCEPTED"   # full payment released to worker
-PARTIAL   = "PARTIAL"    # proportional payment released; partial refund to client
-REFUNDED  = "REFUNDED"   # full refund to client
+SETTLEMENT_PENDING = "SETTLEMENT_PENDING"  # outcome fixed; EOA transfers await finalization
+ACCEPTED  = "ACCEPTED"   # compatibility label exposed only after transfer confirmation off-chain
+PARTIAL   = "PARTIAL"    # compatibility label exposed only after transfer confirmation off-chain
+REFUNDED  = "REFUNDED"   # compatibility label exposed only after transfer confirmation off-chain
 
 MAX_FEE_BPS = u256(1000)   # 10% ceiling
 MAX_SCORE   = u256(100)
+
+
+@gl.evm.contract_interface
+class _Recipient:
+    """Empty EVM interface used by GenLayer for external transfers to EOAs."""
+    class View:
+        pass
+
+    class Write:
+        pass
+
+
+def _send_gen(recipient: Address, amount: u256) -> None:
+    """Queue a native GEN external message to an EOA for parent finalization."""
+    if amount > u256(0):
+        _Recipient(recipient).emit_transfer(value=amount)
 
 # ── Prompt injection guard ─────────────────────────────────────────────────────
 _GUARD = (
@@ -103,6 +120,15 @@ class FreelanceEscrow(gl.Contract):
     score:          u256
     reasoning:      str
 
+    # ── Settlement audit state ────────────────────────────────────────────────
+    settlement_outcome:         str
+    settlement_type:            str
+    settlement_transfer_status: str
+    settlement_reference:       str
+    settlement_worker_amount:   u256
+    settlement_client_amount:   u256
+    settlement_platform_fee:    u256
+
     def __init__(
         self,
         spec:          str,
@@ -118,6 +144,8 @@ class FreelanceEscrow(gl.Contract):
             raise gl.vm.UserError("[EXPECTED] min_score cannot exceed 100")
         if partial_floor > min_score:
             raise gl.vm.UserError("[EXPECTED] partial_floor cannot exceed min_score")
+        if worker == gl.message.sender_address:
+            raise gl.vm.UserError("[EXPECTED] Client and worker must use different addresses")
 
         self.status         = UNFUNDED
         self.client         = gl.message.sender_address
@@ -133,6 +161,13 @@ class FreelanceEscrow(gl.Contract):
         self.appeal_used    = False
         self.score          = u256(0)
         self.reasoning      = ""
+        self.settlement_outcome         = ""
+        self.settlement_type            = ""
+        self.settlement_transfer_status = "NOT_STARTED"
+        self.settlement_reference       = ""
+        self.settlement_worker_amount   = u256(0)
+        self.settlement_client_amount   = u256(0)
+        self.settlement_platform_fee    = u256(0)
 
     # ── Views ──────────────────────────────────────────────────────────────────
 
@@ -150,17 +185,43 @@ class FreelanceEscrow(gl.Contract):
             "partial_floor": int(self.partial_floor),
             "terms_agreed":  self.terms_agreed,
             "appeal_used":   self.appeal_used,
+            "submission_url": self.submission_url,
+            "settlement": {
+                "outcome":          self.settlement_outcome,
+                "settlement_type":  self.settlement_type,
+                "transfer_status":  self.settlement_transfer_status,
+                "transfer_reference": self.settlement_reference,
+                "transfers": [
+                    {
+                        "recipient": str(self.worker),
+                        "amount": int(self.settlement_worker_amount),
+                        "settlement_type": "WORKER_PAYOUT",
+                    },
+                    {
+                        "recipient": str(self.client),
+                        "amount": int(self.settlement_client_amount),
+                        "settlement_type": "CLIENT_REFUND",
+                    },
+                    {
+                        "recipient": str(self.platform),
+                        "amount": int(self.settlement_platform_fee),
+                        "settlement_type": "PLATFORM_FEE",
+                    },
+                ],
+            },
         })
 
     @gl.public.view
     def get_result(self) -> str:
-        if self.status not in (EVALUATED, ACCEPTED, PARTIAL, REFUNDED):
+        if self.status not in (EVALUATED, SETTLEMENT_PENDING, ACCEPTED, PARTIAL, REFUNDED):
             return json.dumps({"status": self.status})
         return json.dumps({
             "status":    self.status,
             "score":     int(self.score),
             "reasoning": self.reasoning,
             "min_score": int(self.min_score),
+            "settlement_outcome": self.settlement_outcome,
+            "transfer_status": self.settlement_transfer_status,
         })
 
     # ── Writes ─────────────────────────────────────────────────────────────────
@@ -262,33 +323,42 @@ class FreelanceEscrow(gl.Contract):
         client_addr   = self.client
         plat_addr     = self.platform
 
-        # Zero out before external calls to prevent re-entrancy
+        # Zero out and lock settlement before emitting external messages. EOA
+        # transfers execute asynchronously only after this parent transaction
+        # finalizes, so the contract deliberately stays SETTLEMENT_PENDING.
         self.amount = u256(0)
+        self.status = SETTLEMENT_PENDING
+        self.settlement_transfer_status = "PENDING_FINALIZATION"
 
         if score >= min_score:
             # Full payment
-            self.status = ACCEPTED
+            self.settlement_outcome = ACCEPTED
+            self.settlement_type = "FULL_WORKER_PAYOUT"
             fee    = (amount * fee_bps) // u256(10000)
             payout = amount - fee
-            gl.get_contract_at(worker_addr).emit_transfer(value=payout)
-            if fee > u256(0):
-                gl.get_contract_at(plat_addr).emit_transfer(value=fee)
+            self.settlement_worker_amount = payout
+            self.settlement_platform_fee = fee
+            _send_gen(worker_addr, payout)
+            _send_gen(plat_addr, fee)
 
         elif score >= partial_floor:
             # Proportional payment: worker earns score/min_score of the total
-            self.status  = PARTIAL
+            self.settlement_outcome = PARTIAL
+            self.settlement_type = "PROPORTIONAL_SPLIT"
             worker_share = (amount * score) // min_score
             client_share = amount - worker_share
             fee          = (worker_share * fee_bps) // u256(10000)
             payout       = worker_share - fee
-            if payout > u256(0):
-                gl.get_contract_at(worker_addr).emit_transfer(value=payout)
-            if fee > u256(0):
-                gl.get_contract_at(plat_addr).emit_transfer(value=fee)
-            if client_share > u256(0):
-                gl.get_contract_at(client_addr).emit_transfer(value=client_share)
+            self.settlement_worker_amount = payout
+            self.settlement_client_amount = client_share
+            self.settlement_platform_fee = fee
+            _send_gen(worker_addr, payout)
+            _send_gen(plat_addr, fee)
+            _send_gen(client_addr, client_share)
 
         else:
             # Full refund
-            self.status = REFUNDED
-            gl.get_contract_at(client_addr).emit_transfer(value=amount)
+            self.settlement_outcome = REFUNDED
+            self.settlement_type = "FULL_CLIENT_REFUND"
+            self.settlement_client_amount = amount
+            _send_gen(client_addr, amount)

@@ -107,6 +107,15 @@ class TestStateMachine:
         assert job["min_score"]     == MIN_SCORE
         assert job["partial_floor"] == FLOOR
         assert job["terms_agreed"]  is False
+        assert job["settlement"]["transfer_status"] == "NOT_STARTED"
+
+    def test_client_and_worker_must_be_different(self, direct_deploy, direct_vm):
+        client = _addr("default_sender")
+        with pytest.raises(Exception):
+            direct_deploy(
+                str(_CONTRACT), SPEC, client, _addr("platform"), FEE_BPS,
+                MIN_SCORE, FLOOR,
+            )
 
     def test_fund_moves_to_open(self, direct_deploy, direct_vm):
         contract, _, _ = _setup(direct_deploy, direct_vm, with_terms=False, with_submission=False)
@@ -156,15 +165,27 @@ class TestAcceptTerms:
 class TestFullPayment:
 
     def test_score_above_min_gives_accepted(self, direct_deploy, direct_vm):
-        """score >= min_score → ACCEPTED, escrow zeroed."""
-        contract, _, _ = _setup(direct_deploy, direct_vm)
+        """Full payout is recorded and remains pending until the parent finalizes."""
+        contract, worker, _ = _setup(direct_deploy, direct_vm)
         direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
         direct_vm.mock_llm(".*", _llm(88))
         contract.evaluate()
         contract.finalize()
         result = json.loads(contract.get_result())
-        assert result["status"] == "ACCEPTED"
-        assert json.loads(contract.get_job())["amount"] == 0
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "ACCEPTED"
+        job = json.loads(contract.get_job())
+        settlement = job["settlement"]
+        assert job["amount"] == 0
+        assert settlement["settlement_type"] == "FULL_WORKER_PAYOUT"
+        assert settlement["transfer_status"] == "PENDING_FINALIZATION"
+        assert settlement["transfers"][0] == {
+            "recipient": str(worker),
+            "amount": 9800,
+            "settlement_type": "WORKER_PAYOUT",
+        }
+        assert settlement["transfers"][1]["amount"] == 0
+        assert settlement["transfers"][2]["amount"] == 200
 
     def test_exact_min_score_accepted(self, direct_deploy, direct_vm):
         """score exactly equal to min_score → ACCEPTED."""
@@ -173,7 +194,9 @@ class TestFullPayment:
         direct_vm.mock_llm(".*", _llm(MIN_SCORE))
         contract.evaluate()
         contract.finalize()
-        assert json.loads(contract.get_result())["status"] == "ACCEPTED"
+        result = json.loads(contract.get_result())
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "ACCEPTED"
 
 
 # ── Tests: finalize — partial payment ─────────────────────────────────────────
@@ -181,15 +204,30 @@ class TestFullPayment:
 class TestPartialPayment:
 
     def test_score_between_floor_and_min_gives_partial(self, direct_deploy, direct_vm):
-        """FLOOR <= score < min_score → PARTIAL payout."""
-        contract, _, _ = _setup(direct_deploy, direct_vm)
+        """FLOOR <= score < min_score records every leg of the split."""
+        contract, worker, client = _setup(direct_deploy, direct_vm)
         direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_PARTIAL})
         direct_vm.mock_llm(".*", _llm(55))   # 55 is between 40 and 70
         contract.evaluate()
         contract.finalize()
         result = json.loads(contract.get_result())
-        assert result["status"] == "PARTIAL"
-        assert json.loads(contract.get_job())["amount"] == 0
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "PARTIAL"
+        job = json.loads(contract.get_job())
+        settlement = job["settlement"]
+        worker_share = (AMOUNT * 55) // MIN_SCORE
+        fee = (worker_share * FEE_BPS) // 10000
+        assert job["amount"] == 0
+        assert settlement["settlement_type"] == "PROPORTIONAL_SPLIT"
+        assert settlement["transfer_status"] == "PENDING_FINALIZATION"
+        assert settlement["transfers"][0]["recipient"] == str(worker)
+        assert settlement["transfers"][0]["amount"] == worker_share - fee
+        assert settlement["transfers"][2]["amount"] == fee
+        assert settlement["transfers"][1] == {
+            "recipient": str(client),
+            "amount": AMOUNT - worker_share,
+            "settlement_type": "CLIENT_REFUND",
+        }
 
     def test_exact_partial_floor_gives_partial(self, direct_deploy, direct_vm):
         """score exactly at partial_floor → PARTIAL (not REFUNDED)."""
@@ -198,7 +236,9 @@ class TestPartialPayment:
         direct_vm.mock_llm(".*", _llm(FLOOR))
         contract.evaluate()
         contract.finalize()
-        assert json.loads(contract.get_result())["status"] == "PARTIAL"
+        result = json.loads(contract.get_result())
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "PARTIAL"
 
 
 # ── Tests: finalize — full refund ─────────────────────────────────────────────
@@ -206,15 +246,27 @@ class TestPartialPayment:
 class TestRefund:
 
     def test_score_below_floor_gives_refund(self, direct_deploy, direct_vm):
-        """score < partial_floor → REFUNDED."""
-        contract, _, _ = _setup(direct_deploy, direct_vm)
+        """score < partial_floor queues a full EOA refund and stays pending."""
+        contract, _, client = _setup(direct_deploy, direct_vm)
         direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_EMPTY})
         direct_vm.mock_llm(".*", _llm(10))
         contract.evaluate()
         contract.finalize()
         result = json.loads(contract.get_result())
-        assert result["status"] == "REFUNDED"
-        assert json.loads(contract.get_job())["amount"] == 0
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "REFUNDED"
+        job = json.loads(contract.get_job())
+        settlement = job["settlement"]
+        assert job["amount"] == 0
+        assert settlement["settlement_type"] == "FULL_CLIENT_REFUND"
+        assert settlement["transfer_status"] == "PENDING_FINALIZATION"
+        assert settlement["transfers"][0]["amount"] == 0
+        assert settlement["transfers"][2]["amount"] == 0
+        assert settlement["transfers"][1] == {
+            "recipient": str(client),
+            "amount": AMOUNT,
+            "settlement_type": "CLIENT_REFUND",
+        }
 
 
 # ── Tests: appeal ─────────────────────────────────────────────────────────────
@@ -303,7 +355,9 @@ class TestAppeal:
         direct_vm.sender = client
 
         contract.finalize()
-        assert json.loads(contract.get_result())["status"] == "ACCEPTED"
+        result = json.loads(contract.get_result())
+        assert result["status"] == "SETTLEMENT_PENDING"
+        assert result["settlement_outcome"] == "ACCEPTED"
 
     def test_cannot_appeal_before_evaluation(self, direct_deploy, direct_vm):
         """appeal() before evaluate() should raise."""
