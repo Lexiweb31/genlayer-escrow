@@ -1,9 +1,55 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17172a"/><stop offset="1" stop-color="#0a0a0c"/></linearGradient><filter id="b"><feGaussianBlur stdDeviation="60"/></filter></defs>
-  <rect width="1200" height="630" fill="url(#g)"/><circle cx="920" cy="120" r="210" fill="#5e6ad2" opacity=".18" filter="url(#b)"/>
-  <rect x="90" y="104" width="68" height="68" rx="18" fill="#5e6ad2"/><path d="M112 126h24v8h-16v16h-8z" fill="#0a0a0c"/>
-  <text x="90" y="260" fill="#f7f8f8" font-family="Inter,Arial,sans-serif" font-size="76" font-weight="700">The AI judges the work.</text>
-  <text x="90" y="345" fill="#7b85e8" font-family="Inter,Arial,sans-serif" font-size="76" font-weight="700">The contract pays out.</text>
-  <text x="94" y="430" fill="#8a8f98" font-family="Inter,Arial,sans-serif" font-size="30">AI-arbitrated freelance escrow on GenLayer</text>
-  <rect x="92" y="498" width="410" height="54" rx="27" fill="#5e6ad2" opacity=".13" stroke="#5e6ad2"/><text x="122" y="533" fill="#9ba3ff" font-family="monospace" font-size="22">testnet_bradbury · verified on-chain</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#11121b"/><stop offset=".55" stop-color="#090a0e"/><stop offset="1" stop-color="#0d0e17"/></linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7b85e8"/><stop offset="1" stop-color="#515bc8"/></linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#5e6ad2" stop-opacity="0"/><stop offset=".5" stop-color="#7b85e8"/><stop offset="1" stop-color="#6fbf8e" stop-opacity=".1"/></linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#fff" opacity=".055"/></pattern>
+    <filter id="glow"><feGaussianBlur stdDeviation="28"/></filter>
+    <filter id="soft"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity=".45"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <circle cx="960" cy="110" r="250" fill="#5e6ad2" opacity=".18" filter="url(#glow)"/>
+  <circle cx="170" cy="610" r="210" fill="#6fbf8e" opacity=".07" filter="url(#glow)"/>
+
+  <g transform="translate(72 62)">
+    <rect width="52" height="52" rx="14" fill="url(#brand)"/>
+    <path d="M16 16h22v8H24v14h-8z" fill="#0a0a0c"/>
+    <text x="68" y="27" fill="#f7f8f8" font-family="Inter,Arial,sans-serif" font-size="27" font-weight="700">merit</text>
+    <text x="68" y="45" fill="#777d89" font-family="monospace" font-size="11" letter-spacing="2">ARBITRATED ESCROW</text>
+  </g>
+
+  <g transform="translate(72 178)">
+    <rect width="174" height="32" rx="16" fill="#5e6ad2" opacity=".14" stroke="#7b85e8" stroke-opacity=".34"/>
+    <circle cx="19" cy="16" r="4" fill="#6fbf8e"/>
+    <text x="31" y="21" fill="#aeb4ff" font-family="monospace" font-size="11" letter-spacing="1">GENLAYER · LIVE</text>
+    <text y="104" fill="#f7f8f8" font-family="Inter,Arial,sans-serif" font-size="67" font-weight="700" letter-spacing="-3">Work verified.</text>
+    <text y="174" fill="#7b85e8" font-family="Inter,Arial,sans-serif" font-size="67" font-weight="700" letter-spacing="-3">Payments settled.</text>
+    <text y="228" fill="#969ca8" font-family="Inter,Arial,sans-serif" font-size="22">AI validators judge the agreement. The contract moves the funds.</text>
+  </g>
+
+  <g transform="translate(72 492)">
+    <rect width="176" height="50" rx="12" fill="#14151d" stroke="#fff" stroke-opacity=".09"/>
+    <text x="17" y="20" fill="#737985" font-family="monospace" font-size="9" letter-spacing="1">CONSENSUS</text><text x="17" y="39" fill="#f7f8f8" font-family="Inter,Arial" font-size="17" font-weight="700">5 / 5 validators</text>
+    <rect x="188" width="176" height="50" rx="12" fill="#14151d" stroke="#fff" stroke-opacity=".09"/>
+    <text x="205" y="20" fill="#737985" font-family="monospace" font-size="9" letter-spacing="1">CUSTODY</text><text x="205" y="39" fill="#f7f8f8" font-family="Inter,Arial" font-size="17" font-weight="700">Non-custodial</text>
+    <rect x="376" width="176" height="50" rx="12" fill="#14151d" stroke="#fff" stroke-opacity=".09"/>
+    <text x="393" y="20" fill="#737985" font-family="monospace" font-size="9" letter-spacing="1">NETWORK</text><text x="393" y="39" fill="#f7f8f8" font-family="Inter,Arial" font-size="17" font-weight="700">Bradbury testnet</text>
+  </g>
+
+  <g transform="translate(745 160)" filter="url(#soft)">
+    <rect width="385" height="342" rx="28" fill="#131419" stroke="#fff" stroke-opacity=".12"/>
+    <text x="24" y="34" fill="#737985" font-family="monospace" font-size="10" letter-spacing="1.4">INTELLIGENT SETTLEMENT</text>
+    <circle cx="192" cy="171" r="70" fill="#5e6ad2" opacity=".12" stroke="#7b85e8" stroke-opacity=".44"/>
+    <circle cx="192" cy="171" r="46" fill="#171925" stroke="#7b85e8"/>
+    <path d="M180 159h24v8h-16v16h-8z" fill="#7b85e8"/>
+    <text x="192" y="202" text-anchor="middle" fill="#959dff" font-family="monospace" font-size="8">ESCROW</text>
+    <path d="M66 101H144" stroke="url(#beam)" stroke-width="2"/><path d="M241 101H319" stroke="url(#beam)" stroke-width="2"/>
+    <path d="M192 219V260" stroke="url(#beam)" stroke-width="2"/>
+    <rect x="24" y="72" width="108" height="58" rx="11" fill="#0d0e12" stroke="#fff" stroke-opacity=".1"/><text x="38" y="94" fill="#f7f8f8" font-family="Inter,Arial" font-size="11" font-weight="700">Client</text><text x="38" y="113" fill="#6fbf8e" font-family="monospace" font-size="9">GEN locked</text>
+    <rect x="253" y="72" width="108" height="58" rx="11" fill="#0d0e12" stroke="#fff" stroke-opacity=".1"/><text x="267" y="94" fill="#f7f8f8" font-family="Inter,Arial" font-size="11" font-weight="700">Freelancer</text><text x="267" y="113" fill="#969ca8" font-family="monospace" font-size="9">work submitted</text>
+    <rect x="94" y="260" width="196" height="57" rx="11" fill="#0d0e12" stroke="#6fbf8e" stroke-opacity=".35"/><circle cx="113" cy="281" r="4" fill="#6fbf8e"/><text x="126" y="285" fill="#f7f8f8" font-family="Inter,Arial" font-size="11" font-weight="700">Consensus reached</text><text x="113" y="303" fill="#6fbf8e" font-family="monospace" font-size="9">payment authorized on-chain</text>
+  </g>
+
+  <text x="1128" y="586" text-anchor="end" fill="#626873" font-family="monospace" font-size="11">lexiweb31.github.io/genlayer-escrow</text>
 </svg>
