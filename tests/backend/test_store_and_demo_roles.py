@@ -201,6 +201,42 @@ def test_status_name_handles_sdk_enum_values():
     assert api._status_name({"status_name": TransactionStatus.ACCEPTED}) == "ACCEPTED"
 
 
+def test_wait_tolerates_unknown_bradbury_intermediate_status(monkeypatch):
+    class FakeProvider:
+        def __init__(self):
+            self.statuses = iter(["Activated", "Accepted"])
+
+        def make_request(self, *, method, params):
+            assert method == "gen_getTransactionStatus"
+            assert params == [{"txId": "0xtx"}]
+            return {"result": {"status": next(self.statuses), "statusCode": 14}}
+
+    class FakeClient:
+        provider = FakeProvider()
+
+        def get_transaction(self, transaction_hash):
+            assert transaction_hash == "0xtx"
+            return {
+                "status_name": TransactionStatus.ACCEPTED,
+                "tx_execution_result_name": "SUCCESS",
+            }
+
+    monkeypatch.setattr(api, "network_client", FakeClient())
+    monkeypatch.setattr(api.time, "sleep", lambda _seconds: None)
+    receipt = api._wait("0xtx")
+    assert receipt["status_name"] == TransactionStatus.ACCEPTED
+
+
+def test_wait_classifies_out_of_fee_as_insufficient_demo_gen(monkeypatch):
+    class FakeProvider:
+        def make_request(self, **_kwargs):
+            return {"result": {"status": "Out of fee", "statusCode": 14}}
+
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(provider=FakeProvider()))
+    with pytest.raises(RuntimeError, match="Insufficient demo GEN"):
+        api._wait("0xtx")
+
+
 @pytest.mark.parametrize(
     ("parent_status", "messages", "triggered", "expected"),
     [

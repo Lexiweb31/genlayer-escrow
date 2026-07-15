@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -175,13 +176,47 @@ def _require_safe_job(job: dict[str, Any]) -> None:
 
 # ── Chain helpers ─────────────────────────────────────────────────────────────
 def _wait(tx_hash: str, status: TransactionStatus = TransactionStatus.ACCEPTED) -> dict[str, Any]:
-    receipt = network_client.wait_for_transaction_receipt(
-        tx_hash,
-        status=status,
-        interval=5000,
-        retries=120,
-        full_transaction=True,
-    )
+    # Bradbury can expose intermediate statuses that older genlayer-py builds
+    # cannot decode. Poll the official lightweight status RPC first, then ask
+    # the SDK for the full transaction only once it reaches a stable status.
+    # https://docs.genlayer.com/api-references/genlayer-node/gen/gen_getTransactionStatus
+    receipt: dict[str, Any] | None = None
+    last_status = "UNKNOWN"
+    terminal_failures = {
+        "CANCELED",
+        "UNDETERMINED",
+        "VALIDATORS_TIMEOUT",
+        "LEADER_TIMEOUT",
+        "OUT_OF_FEE",
+        "OUTOFFEE",
+    }
+    for _attempt in range(120):
+        response = network_client.provider.make_request(
+            method="gen_getTransactionStatus",
+            params=[{"txId": tx_hash}],
+        )
+        result = response.get("result") or {}
+        last_status = str(result.get("status") or result.get("statusCode") or "UNKNOWN")
+        normalized = last_status.replace(" ", "_").replace("-", "_").upper()
+        reached_target = normalized == "FINALIZED" or (
+            status == TransactionStatus.ACCEPTED and normalized == "ACCEPTED"
+        )
+        if reached_target:
+            receipt = dict(network_client.get_transaction(tx_hash))
+            break
+        if normalized in terminal_failures:
+            if normalized in {"OUT_OF_FEE", "OUTOFFEE"}:
+                raise RuntimeError(
+                    f"Insufficient demo GEN: transaction {tx_hash} entered {normalized}."
+                )
+            raise RuntimeError(
+                f"Testnet rejected transaction {tx_hash} with status {normalized}."
+            )
+        time.sleep(5)
+    if receipt is None:
+        raise RuntimeError(
+            f"Transaction {tx_hash} did not reach {status.value}; last status {last_status}."
+        )
     status_name = _status_name(receipt)
     execution = str(receipt.get("tx_execution_result_name") or "")
     if status_name not in {"ACCEPTED", "FINALIZED", "5", "7"}:
