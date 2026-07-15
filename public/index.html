@@ -215,7 +215,7 @@
     .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
     .field label{font-family:'Inter';font-size:10px;letter-spacing:.06em;font-weight:500;color:var(--subtle);text-transform:uppercase}
     .field small{font-size:11px;color:var(--subtle)}
-    input[type="url"],input[type="number"]{width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;font-family:'Inter';outline:none;transition:border-color .15s}
+    input[type="text"],input[type="url"],input[type="number"]{width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;font-family:'Inter';outline:none;transition:border-color .15s}
     input:focus{border-color:#3A4A4E}
     input::placeholder{color:var(--subtle)}
 
@@ -475,8 +475,38 @@
     .faq-a a{color:var(--blue)}
 
     /* ===== BROWSE (jobs marketplace) ===== */
-    .jobs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-    .job-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:border-color .15s,transform .1s,box-shadow .15s;display:flex;flex-direction:column;gap:0}
+    #pg-browse{max-width:var(--content);margin:0 auto}
+    .market-hero{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:22px;padding:28px 30px;margin-bottom:18px;background:linear-gradient(120deg,rgba(94,106,210,.16),rgba(19,19,22,.92) 46%,rgba(19,19,22,.72));box-shadow:var(--shadow-card)}
+    .market-hero::before{content:'';position:absolute;right:-90px;top:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(123,133,232,.18);box-shadow:0 0 0 48px rgba(123,133,232,.025),0 0 0 96px rgba(123,133,232,.018);animation:orbitDrift 12s ease-in-out infinite alternate}
+    .market-hero::after{content:'';position:absolute;right:12%;bottom:-90px;width:320px;height:180px;background:radial-gradient(ellipse,var(--accent-glow),transparent 70%);filter:blur(20px);pointer-events:none}
+    @keyframes orbitDrift{to{transform:translate(-24px,18px) rotate(8deg)}}
+    .market-hero-inner{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+    .market-kicker{display:flex;align-items:center;gap:8px;color:var(--accent-bright);font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+    .market-kicker-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:livePulse 2s ease-in-out infinite}
+    @keyframes livePulse{50%{opacity:.45;box-shadow:0 0 3px var(--ok)}}
+    .market-hero h1{font-size:34px;line-height:1.08;letter-spacing:-.035em;margin-bottom:9px;max-width:650px}
+    .market-hero p{color:var(--muted);font-size:13.5px;max-width:610px}
+    .market-hero-actions{display:flex;gap:9px;flex-shrink:0}
+    .market-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .market-stat{position:relative;overflow:hidden;background:rgba(19,19,22,.78);border:1px solid var(--border);border-radius:14px;padding:15px 17px;min-height:82px}
+    .market-stat::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);opacity:.5}
+    .market-stat-label{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--subtle);margin-bottom:7px}
+    .market-stat-val{font-size:23px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+    .market-stat-val.money{color:var(--gold)}
+    .market-stat-note{font-size:10.5px;color:var(--subtle);margin-top:2px}
+    .market-toolbar{display:flex;align-items:center;gap:10px;padding:11px;background:rgba(19,19,22,.72);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;backdrop-filter:blur(12px)}
+    .market-search{position:relative;flex:1;min-width:180px}
+    .market-search::before{content:'⌕';position:absolute;left:13px;top:50%;transform:translateY(-51%);font-size:18px;color:var(--subtle);pointer-events:none}
+    .market-search input{width:100%;height:38px;padding:0 14px 0 38px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px;outline:none}
+    .market-search input:focus{border-color:var(--accent)}
+    .market-filter{height:38px;padding:0 32px 0 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-family:inherit;font-size:11.5px;outline:none;cursor:pointer}
+    .market-filter:focus{border-color:var(--accent)}
+    .market-count{font-family:'JetBrains Mono';font-size:10px;color:var(--subtle);padding:0 6px;white-space:nowrap}
+    .market-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start}
+    .jobs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .job-card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(19,19,22,.98),rgba(13,13,16,.96));border:1px solid var(--border);border-left:3px solid var(--border);border-radius:16px;padding:19px;min-height:248px;cursor:pointer;transition:border-color .15s,transform .1s,box-shadow .15s;display:flex;flex-direction:column;gap:0}
+    .job-card::after{content:'';position:absolute;inset:auto -30% -55% 20%;height:150px;background:radial-gradient(ellipse,rgba(94,106,210,.12),transparent 70%);opacity:0;transition:opacity .25s;pointer-events:none}
+    .job-card:hover::after{opacity:1}
     /* left accent border + hover glow, colored by status */
     .job-card.acc-green{border-left-color:var(--green)}
     .job-card.acc-gold{border-left-color:var(--gold)}
@@ -487,10 +517,14 @@
     .job-card.acc-gold:hover{border-color:var(--gold);border-left-color:var(--gold);box-shadow:0 12px 32px -16px var(--gold)}
     .job-card.acc-red:hover{border-color:var(--red);border-left-color:var(--red);box-shadow:0 12px 32px -16px var(--red)}
     .job-card.acc-muted:hover{border-color:#2C3A3E}
-    .jc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .jc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}
     .jc-code{font-family:'Inter';font-size:10px;color:var(--subtle)}
-    .jc-title{font-size:15.5px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px;line-height:1.3}
-    .jc-spec{font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:16px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+    .jc-category{display:inline-flex;align-items:center;gap:6px;font-size:9.5px;color:var(--accent-bright);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px}
+    .jc-category::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+    .jc-title{font-size:17px;font-weight:650;letter-spacing:-.02em;margin-bottom:8px;line-height:1.3}
+    .jc-spec{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:15px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+    .jc-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:15px}
+    .jc-chip{padding:4px 7px;border:1px solid var(--border-sub);background:rgba(255,255,255,.018);border-radius:6px;font-size:9.5px;color:var(--subtle)}
     .jc-foot{display:flex;align-items:center;justify-content:space-between;padding-top:14px;border-top:1px solid var(--border-sub)}
     .jc-amt{font-family:'Inter';font-size:12px}
     .jc-amt b{font-weight:600;color:var(--text)}
@@ -502,13 +536,129 @@
       background:conic-gradient(var(--green) calc(var(--p)*1%),var(--border-sub) 0)}
     .score-ring::before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:var(--card)}
     .score-ring-num{position:relative;font-family:'Inter';font-size:9.5px;font-weight:700;color:var(--green)}
-    /* ghost placeholder cards */
-    .job-card.ghost{cursor:default;border-style:dashed;border-left-style:dashed;border-color:var(--border-sub);border-left-color:var(--border-sub);opacity:.5;transition:opacity .15s}
-    .job-card.ghost:hover{transform:none;opacity:.7;box-shadow:none}
-    .jc-ghost-title{font-size:14px;font-weight:600;color:var(--subtle);margin-bottom:14px}
-    .jc-ghost-line{height:9px;border-radius:4px;background:var(--border-sub);margin-bottom:8px}
-    .jc-ghost-line.short{width:60%}
-    .ghost-foot{color:var(--subtle);font-family:'Inter';font-size:11px;margin-top:auto}
+    .market-side{display:flex;flex-direction:column;gap:14px}
+    .market-panel{background:rgba(19,19,22,.78);border:1px solid var(--border);border-radius:16px;padding:17px;box-shadow:var(--shadow-card)}
+    .market-panel-head{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:15px}
+    .market-panel-head span:last-child{font-family:'JetBrains Mono';font-size:9px;color:var(--ok);font-weight:400}
+    .activity-item{position:relative;padding:0 0 15px 19px;color:var(--muted);font-size:11.5px;line-height:1.45}
+    .activity-item:last-child{padding-bottom:0}
+    .activity-item::before{content:'';position:absolute;left:1px;top:4px;width:7px;height:7px;border:2px solid var(--accent);background:var(--card);border-radius:50%;z-index:1}
+    .activity-item::after{content:'';position:absolute;left:5px;top:12px;bottom:0;width:1px;background:var(--border)}
+    .activity-item:last-child::after{display:none}
+    .activity-item b{color:var(--text);font-weight:550}
+    .activity-time{display:block;font-family:'JetBrains Mono';font-size:9px;color:var(--subtle);margin-top:3px}
+    .market-guide{background:linear-gradient(145deg,rgba(94,106,210,.15),rgba(19,19,22,.88));}
+    .market-guide-mark{width:38px;height:38px;border-radius:11px;background:var(--accent);display:grid;place-items:center;margin-bottom:13px;box-shadow:0 8px 25px -8px var(--accent)}
+    .market-guide-mark::after{content:'';width:13px;height:13px;border:2px solid #fff;border-radius:4px;transform:rotate(45deg)}
+    .market-guide h3{font-size:15px;margin-bottom:6px}
+    .market-guide p{font-size:11.5px;color:var(--muted);line-height:1.55;margin-bottom:14px}
+    .market-empty{grid-column:1/-1;background:linear-gradient(135deg,rgba(94,106,210,.1),rgba(19,19,22,.9));border:1px dashed var(--border-strong);border-radius:16px;padding:44px 26px;text-align:center}
+    .market-empty-orbit{width:58px;height:58px;margin:0 auto 16px;border:1px solid var(--accent);border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 8px var(--accent-bg),0 0 30px var(--accent-glow);color:var(--accent-bright);font-size:24px}
+
+    /* ===== JOB CONTROL ROOM ===== */
+    #pg-overview,#pg-manage,#pg-evaluate{max-width:1320px}
+    .job-hero{position:relative;overflow:hidden;align-items:flex-end;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(125deg,rgba(94,106,210,.15),rgba(19,19,22,.94) 48%,rgba(19,19,22,.76));box-shadow:var(--shadow-card)}
+    .job-hero::after{content:'';position:absolute;right:-80px;top:-130px;width:360px;height:360px;border:1px solid rgba(123,133,232,.16);border-radius:50%;box-shadow:0 0 0 42px rgba(123,133,232,.025),0 0 0 84px rgba(123,133,232,.015);pointer-events:none}
+    .job-hero .ov-code{display:inline-flex;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:rgba(10,10,12,.4);margin-bottom:10px;color:var(--accent-bright)}
+    .job-hero .pg-title{font-size:29px;margin-bottom:7px}
+    .job-hero .pg-right{position:relative;z-index:1}
+    .job-stage{display:flex;align-items:center;gap:9px;margin-top:12px;color:var(--muted);font-size:11px}
+    .job-stage-track{width:180px;height:5px;border-radius:10px;background:var(--border);overflow:hidden}
+    .job-stage-fill{height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--ok));transition:width .8s var(--spring)}
+    .ctx-grid.control-grid{grid-template-columns:.85fr .9fr 1.35fr;gap:14px}
+    .control-grid .card{min-height:190px;background:linear-gradient(145deg,rgba(19,19,22,.96),rgba(13,13,16,.92))}
+    .party-av{position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),0 8px 22px -10px currentColor}
+    .party-av::after{content:'';position:absolute;right:-2px;bottom:-2px;width:8px;height:8px;border:2px solid var(--card);border-radius:50%;background:var(--ok)}
+    .escrow-orbit{position:relative;width:58px;height:58px;border:1px solid var(--accent);border-radius:50%;display:grid;place-items:center;margin:0 0 15px;box-shadow:0 0 0 7px var(--accent-bg),0 0 28px var(--accent-glow)}
+    .escrow-orbit::before{content:'';width:18px;height:18px;border:2px solid var(--accent-bright);border-radius:5px;transform:rotate(45deg)}
+    .escrow-orbit.funded::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:escrowOrbit 4s linear infinite}
+    @keyframes escrowOrbit{from{transform:rotate(0deg) translateX(37px) rotate(0deg)}to{transform:rotate(360deg) translateX(37px) rotate(-360deg)}}
+    .ov-grid.control-bottom{grid-template-columns:1.2fr .8fr;gap:14px}
+    .control-bottom .card{min-height:315px}
+    .tl-item{position:relative}
+    .tl-item:not(:last-child)::after{content:'';position:absolute;left:12px;top:40px;bottom:-1px;width:1px;background:var(--border)}
+    .tl-item:has(.td-done):not(:last-child)::after{background:linear-gradient(var(--ok),var(--border))}
+    .next-action-card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(94,106,210,.13),rgba(19,19,22,.94))}
+    .next-action-card::after{content:'→';position:absolute;right:22px;bottom:8px;font-size:94px;font-weight:700;color:rgba(123,133,232,.055);line-height:1}
+    .qa-title{font-size:19px}.qa-desc{max-width:420px}.next-action-card .btn{position:relative;z-index:1}
+
+    /* Manage lifecycle */
+    .manage-head{position:relative;overflow:hidden;padding:23px 25px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.13),rgba(19,19,22,.9));box-shadow:var(--shadow-card)}
+    .manage-head-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .manage-head .pg-title{font-size:27px}.manage-head .pg-sub{max-width:600px}
+    .stepper-wrap{padding:22px 28px;background:rgba(19,19,22,.86);backdrop-filter:blur(10px)}
+    .mg-grid.control-manage{grid-template-columns:1.1fr .9fr;gap:14px}
+    .mg-grid.control-manage .card{min-height:300px}
+    #actCard{background:linear-gradient(145deg,rgba(19,19,22,.98),rgba(12,12,15,.95))}
+    .action-visual{display:flex;align-items:center;gap:13px;margin-bottom:18px}
+    .action-num{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:var(--accent-bg);border:1px solid rgba(123,133,232,.25);color:var(--accent-bright);font-size:18px;font-weight:700;box-shadow:0 0 24px var(--accent-glow)}
+    .action-overline{font-size:9.5px;color:var(--subtle);letter-spacing:.11em;text-transform:uppercase;margin-bottom:2px}
+    .settlement-receipt{padding:26px}
+    .receipt-mark{width:62px;height:62px;border-radius:18px;display:grid;place-items:center;margin-bottom:18px;font-size:26px;border:1px solid currentColor;box-shadow:0 0 30px currentColor}
+    .receipt-title{font-size:25px;font-weight:700;letter-spacing:-.03em;margin-bottom:7px}
+    .receipt-copy{font-size:13px;color:var(--muted);line-height:1.6;max-width:560px}
+    .receipt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:22px 0}
+    .receipt-cell{padding:13px;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:10px}
+    .receipt-cell span{display:block;font-size:9px;color:var(--subtle);text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px}
+    .receipt-cell b{font-size:14px;font-weight:600}
+    .receipt-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* Evaluation command centre */
+    .eval-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.16),rgba(19,19,22,.94));box-shadow:var(--shadow-card)}
+    .eval-hero .pg-title{font-size:28px;margin-bottom:5px}
+    .eval-live{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--ok);letter-spacing:.08em;text-transform:uppercase}
+    .eval-live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px var(--ok)}
+    .eval-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
+    .eval-fact{padding:13px 15px;border:1px solid var(--border);border-radius:12px;background:rgba(19,19,22,.75)}
+    .eval-fact span{display:block;font-size:9px;color:var(--subtle);letter-spacing:.09em;text-transform:uppercase;margin-bottom:4px}
+    .eval-fact b{font-size:12px;font-weight:550;color:var(--text)}
+    .theatre-card{border-radius:18px}.theatre-head{padding:21px 23px}.pipeline-strip{background:rgba(10,10,12,.45)}
+    .validators-grid{gap:9px}.v-card{position:relative;overflow:hidden;background:linear-gradient(160deg,rgba(19,19,22,.98),rgba(10,10,12,.92))}
+    .v-card::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--accent);opacity:.35}
+    .verdict-card{border-radius:18px!important;margin-top:14px}
+
+    /* ===== SIGNATURE LANDING EXPERIENCE ===== */
+    .hero{padding:34px 0 14px}
+    .hero-grid{display:grid;grid-template-columns:minmax(0,1.03fr) minmax(460px,.97fr);gap:46px;align-items:center}
+    .hero-copy h1{font-size:58px;max-width:760px}
+    .hero-copy .hero-lede{font-size:15.5px;max-width:650px}
+    .hero-live{position:relative}
+    .escrow-demo{position:relative;min-height:280px;border:1px solid var(--border);border-radius:22px;background:radial-gradient(circle at 50% 45%,rgba(94,106,210,.18),transparent 35%),linear-gradient(145deg,rgba(19,19,22,.98),rgba(9,9,12,.96));overflow:hidden;box-shadow:var(--shadow-card),0 24px 80px -40px var(--accent)}
+    .escrow-demo::before{content:'';position:absolute;inset:0;background:radial-gradient(rgba(255,255,255,.045) 1px,transparent 1px) 0 0/22px 22px;mask-image:linear-gradient(to bottom,#000,transparent)}
+    .demo-label{position:absolute;top:16px;left:18px;font-family:'JetBrains Mono';font-size:9px;color:var(--subtle);letter-spacing:.12em;text-transform:uppercase}
+    .demo-live{position:absolute;top:15px;right:17px;display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-size:8.5px;color:var(--ok);text-transform:uppercase}
+    .demo-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+    .escrow-core{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:94px;height:94px;border:1px solid var(--accent);border-radius:27px;display:grid;place-items:center;background:rgba(94,106,210,.11);box-shadow:0 0 0 12px rgba(94,106,210,.045),0 0 48px rgba(94,106,210,.2);animation:coreBreathe 3.6s ease-in-out infinite}
+    .escrow-core::before{content:'';width:31px;height:31px;border:2px solid var(--accent-bright);border-radius:9px;transform:rotate(45deg)}
+    .escrow-core span{position:absolute;top:108px;white-space:nowrap;font-family:'JetBrains Mono';font-size:9px;color:var(--accent-bright);letter-spacing:.08em;text-transform:uppercase}
+    @keyframes coreBreathe{50%{box-shadow:0 0 0 18px rgba(94,106,210,.025),0 0 66px rgba(94,106,210,.28)}}
+    .demo-node{position:absolute;width:118px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:rgba(19,19,22,.94);font-size:10px;color:var(--muted);box-shadow:var(--shadow-card)}
+    .demo-node b{display:block;color:var(--text);font-size:11px;margin-bottom:3px}.demo-node.client{left:20px;top:82px}.demo-node.worker{right:20px;top:82px}.demo-node.validators{left:50%;bottom:18px;transform:translateX(-50%);text-align:center;width:170px}
+    .demo-node-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:5px;box-shadow:0 0 7px var(--ok)}
+    .flow-beam{position:absolute;height:2px;overflow:hidden;background:var(--border)}
+    .flow-beam::after{content:'';position:absolute;width:38%;height:100%;background:linear-gradient(90deg,transparent,var(--accent-bright),transparent);animation:beamMove 2.2s linear infinite}
+    .beam-left{left:138px;right:calc(50% + 48px);top:128px}.beam-right{left:calc(50% + 48px);right:138px;top:128px}.beam-down{width:2px;height:53px;left:50%;top:calc(48% + 47px)}
+    .beam-down::after{width:100%;height:38%;background:linear-gradient(transparent,var(--ok),transparent);animation-name:beamDown}
+    @keyframes beamMove{from{left:-40%}to{left:110%}}@keyframes beamDown{from{top:-40%}to{top:110%}}
+    .hero-live .terminal{max-width:none;margin-top:12px}
+
+    /* Guided job creation */
+    #pg-post{max-width:1180px;margin:0 auto}
+    .post-wrap{max-width:none}
+    .post-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.15),rgba(19,19,22,.92));box-shadow:var(--shadow-card)}
+    .post-hero .pg-title{font-size:28px;margin-bottom:5px}.post-hero p{font-size:13px;color:var(--muted);max-width:600px}
+    .post-layout{display:grid;grid-template-columns:minmax(0,1fr) 315px;gap:14px;align-items:start}
+    .post-card{padding:25px 27px;border-radius:18px;background:linear-gradient(145deg,rgba(19,19,22,.98),rgba(11,11,14,.96))}
+    .form-section{padding-bottom:21px;margin-bottom:21px;border-bottom:1px solid var(--border-sub)}.form-section:last-of-type{border-bottom:0;margin-bottom:8px;padding-bottom:0}
+    .form-section-head{display:flex;gap:11px;align-items:center;margin-bottom:16px}.form-section-num{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--accent-bg);color:var(--accent-bright);font-size:11px;font-weight:700}.form-section-title{font-size:13px;font-weight:600}.form-section-sub{font-size:10.5px;color:var(--subtle);margin-top:1px}
+    .post-aside{display:flex;flex-direction:column;gap:12px}.post-side-card{padding:18px;border:1px solid var(--border);border-radius:16px;background:rgba(19,19,22,.78);box-shadow:var(--shadow-card)}.post-side-card h3{font-size:14px;margin-bottom:7px}.post-side-card p{font-size:11.5px;color:var(--muted);line-height:1.55}.trust-row{display:flex;gap:9px;padding:11px 0;border-bottom:1px solid var(--border-sub);font-size:11px;color:var(--muted)}.trust-row:last-child{border-bottom:0;padding-bottom:0}.trust-check{color:var(--ok)}
+
+    /* Contract infrastructure */
+    #pg-contracts{max-width:1320px}
+    .contracts-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.15),rgba(19,19,22,.92));box-shadow:var(--shadow-card)}
+    .contracts-hero .pg-title{font-size:28px;margin-bottom:5px}.network-health{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--ok)}.network-health::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px var(--ok)}
+    .contract-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.contract-stat{padding:15px 17px;border:1px solid var(--border);border-radius:13px;background:rgba(19,19,22,.76)}.contract-stat span{display:block;font-size:9px;color:var(--subtle);letter-spacing:.09em;text-transform:uppercase;margin-bottom:5px}.contract-stat b{font-size:15px;font-weight:600}
+    .cts-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.contract-card{position:relative;overflow:hidden;min-height:190px;background:linear-gradient(145deg,rgba(19,19,22,.98),rgba(11,11,14,.94))}.contract-card::after{content:'';position:absolute;right:-55px;bottom:-80px;width:180px;height:180px;border:1px solid rgba(123,133,232,.12);border-radius:50%;box-shadow:0 0 0 26px rgba(123,133,232,.02)}.contract-role{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:15px}.contract-actions{display:flex;gap:8px;align-items:center;position:relative;z-index:1}.contract-type{display:inline-flex;padding:4px 7px;border-radius:6px;background:var(--accent-bg);color:var(--accent-bright);font-size:9px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.08em}
 
     /* ===== POST (create job) ===== */
     .post-wrap{max-width:620px;margin:0 auto}
@@ -538,6 +688,9 @@
     /* RESPONSIVE */
     @media(max-width:1180px){
       .scroll{padding:26px 32px 36px}
+      .market-layout{grid-template-columns:1fr}.market-side{display:grid;grid-template-columns:1fr 1fr}.market-stats{grid-template-columns:repeat(2,1fr)}
+      .ctx-grid.control-grid{grid-template-columns:1fr 1fr}.ctx-grid.control-grid .card:last-child{grid-column:1/-1}.ov-grid.control-bottom{grid-template-columns:1fr 1fr}
+      .hero-grid{grid-template-columns:1fr}.hero-copy h1{font-size:50px}.hero-live{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hero-live .terminal{margin-top:0}.post-layout{grid-template-columns:minmax(0,1fr) 280px}
       .why-grid{grid-template-columns:1fr 1fr}
       .flow-grid{grid-template-columns:1fr 1fr;gap:20px}
       .flow-line{display:none}
@@ -545,6 +698,9 @@
       .statement-a,.statement-b{font-size:40px}
     }
     @media(max-width:900px){
+      .market-hero-inner{align-items:flex-start;flex-direction:column}.market-hero h1{font-size:29px}.market-hero-actions{width:100%}.market-toolbar{flex-wrap:wrap}.market-search{flex-basis:100%}.jobs-grid{grid-template-columns:1fr}
+      .ctx-grid.control-grid,.ov-grid.control-bottom,.mg-grid.control-manage{grid-template-columns:1fr}.ctx-grid.control-grid .card:last-child{grid-column:auto}.eval-facts{grid-template-columns:1fr}.eval-hero{align-items:flex-start;flex-direction:column}
+      .hero-live{grid-template-columns:1fr}.hero-copy h1{font-size:42px}.post-layout{grid-template-columns:1fr}.post-aside{display:grid;grid-template-columns:1fr 1fr}.cts-stack{grid-template-columns:1fr}
       .hero h1{font-size:32px}
       .flow-grid{grid-template-columns:1fr 1fr;gap:14px}
       .flow-line{display:none}
@@ -708,11 +864,16 @@
     .toast-sub{display:block;color:var(--muted);font-weight:400;font-size:11.5px;margin-top:2px}
 
     @media(prefers-reduced-motion:reduce){
-      .btn,.job-card,.flow-step,.why-item,.faq-a,.toast{transition:none;animation:none}
+      .btn,.job-card,.flow-step,.why-item,.faq-a,.toast,.market-hero::before,.market-kicker-dot{transition:none;animation:none}
+      .escrow-orbit.funded::after{animation:none}
+      .escrow-core,.flow-beam::after{animation:none}
       #pg-landing::before{display:none}
     }
     @media(max-width:600px){
-      .scroll{padding:18px 14px 96px}.pg-hdr,.ov-top{flex-direction:column}.pg-right{width:100%;flex-wrap:wrap}.ctx-grid,.ov-grid,.mg-grid{grid-template-columns:1fr!important}.validators-wrap{margin-left:14px;margin-right:14px;overflow:hidden}.validators-grid{grid-template-columns:repeat(5,104px);overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}.v-card{scroll-snap-align:start}.pipeline-strip{overflow-x:auto}.pipeline-track{min-width:470px}.consensus-wrap{margin-left:14px;margin-right:14px;align-items:stretch;flex-direction:column}.consensus-num{border-right:0;border-bottom:1px solid var(--border-sub);padding:0 0 12px}.theatre-row{margin-left:14px;margin-right:14px}.theatre-note{margin-left:14px;margin-right:14px}.verdict-card{padding:14px}.verdict-top{align-items:flex-start;gap:12px;padding:14px}.verdict-left{gap:10px}.verdict-score{font-size:22px}.account-pop{left:12px;right:12px;bottom:82px;width:auto}.addr-mono{font-size:10px}.step-name{font-size:8px}.hero{padding-top:28px}.hero h1{font-size:34px}.hero-lede{font-size:15px}.terminal{max-width:100%}.btn-row{flex-direction:column}.btn-row .btn{width:100%}.jobs-grid{grid-template-columns:1fr}.card,.post-card,.stepper-wrap{border-radius:12px}}
+      .scroll{padding:20px 14px 92px}.pg-hdr,.ov-top{flex-direction:column}.pg-right{width:100%;flex-wrap:wrap}.ctx-grid,.ov-grid,.mg-grid{grid-template-columns:1fr!important}.validators-grid{grid-template-columns:repeat(2,1fr)}.consensus-wrap{align-items:stretch;flex-direction:column}.consensus-num{border-right:0;border-bottom:1px solid var(--border-sub);padding:0 0 12px}.verdict-top{align-items:flex-start;gap:12px}.account-pop{left:12px;right:12px;bottom:76px;width:auto}.addr-mono{font-size:10px}.step-name{font-size:8px}.market-hero{padding:22px 19px;border-radius:18px}.market-hero-actions .btn{flex:1}.market-stats{grid-template-columns:1fr 1fr}.market-stat{padding:13px;min-height:76px}.market-stat-val{font-size:20px}.market-filter{flex:1}.market-count{width:100%;text-align:center}.market-side{display:flex}.job-card{min-height:230px}.job-hero,.manage-head,.eval-hero{padding:20px 18px}.job-hero .pg-title,.manage-head .pg-title,.eval-hero .pg-title{font-size:24px}.job-stage{flex-wrap:wrap}.job-stage-track{order:3;width:100%}.receipt-grid{grid-template-columns:1fr}.receipt-actions .btn{width:100%}.hero-copy h1{font-size:36px}.escrow-demo{min-height:330px}.demo-node.client{left:12px}.demo-node.worker{right:12px}.beam-left{left:130px}.beam-right{right:130px}.post-hero,.contracts-hero{padding:20px 18px;align-items:flex-start;flex-direction:column}.post-aside{display:flex}.post-card{padding:20px 18px}.contract-stats{grid-template-columns:1fr}.contracts-hero .pg-title,.post-hero .pg-title{font-size:24px}}
+    @media(max-width:600px){
+      .scroll{padding:18px 14px 96px}.validators-wrap{margin-left:14px;margin-right:14px;overflow:hidden}.validators-grid{grid-template-columns:repeat(5,104px);overflow-x:auto;padding:2px 2px 10px;scroll-snap-type:x proximity}.v-card{scroll-snap-align:start}.pipeline-strip{overflow-x:auto}.pipeline-track{min-width:470px}.consensus-wrap{margin-left:14px;margin-right:14px}.theatre-row,.theatre-note{margin-left:14px;margin-right:14px}.verdict-card{padding:14px}.verdict-top{padding:14px}.verdict-left{gap:10px}.verdict-score{font-size:22px}.account-pop{bottom:82px}.btn-row{flex-direction:column}.btn-row .btn{width:100%}.card,.stepper-wrap{border-radius:12px}
+    }
   </style>
 </head>
 <body>
@@ -802,26 +963,32 @@
             <span class="sep"></span>
             <span class="seg"><b class="gen" id="badgeEscrow"><span class="badge-load"></span></b> GEN in escrow</span>
           </div>
-          <h1>The AI <span class="accent-italic">judges</span> the work — and the contract <span class="accent">pays out</span>.</h1>
-          <p class="hero-lede">Freelance escrow where an <strong>Intelligent Contract fetches the deliverable, grades it against the agreed spec, and releases or refunds funds</strong> — no human arbitrator, no platform ruling on who's right.</p>
-          <p class="hero-lede">Crypto already solved holding the money. The hard part is the <strong>subjective completion call</strong>: "did the freelancer actually build what was described?" That's what runs here — on GenLayer validators, natively.</p>
-
-          <div class="terminal" id="heroTerm">
-            <div class="term-bar">
-              <div class="term-dots"><span></span><span></span><span></span></div>
-              <div class="term-label">MERIT · ESCROW MONITOR</div>
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <h1>Work verified. <span class="accent">Payments settled.</span></h1>
+              <p class="hero-lede">The freelance escrow where <strong>AI validators inspect submitted work against the exact agreement</strong>, then the contract pays or refunds automatically.</p>
+              <p class="hero-lede">No platform custody. No private arbitration. Just an acceptance specification, inspectable reasoning and on-chain settlement.</p>
+              <div class="hero-cta">
+                <button class="btn bg btn-lg" onclick="nav('browse')">Explore marketplace →</button>
+                <button class="btn bh btn-lg" onclick="nav('post')">Create an escrow</button>
+              </div>
+              <div class="hero-note">every action is a real Bradbury testnet transaction</div>
             </div>
-            <div class="term-body" id="heroTermBody">
-              <div class="tl-cmd"><span class="tl-p">$</span> merit escrow scan --network testnet_bradbury</div>
-              <div class="tl-out"><span class="tl-dim">connecting…</span></div>
+            <div class="hero-live">
+              <div class="escrow-demo" aria-label="Animated intelligent escrow lifecycle">
+                <div class="demo-label">Live settlement simulation</div><div class="demo-live">validators online</div>
+                <div class="demo-node client"><b>Client</b><span class="demo-node-dot"></span>GEN deposited</div>
+                <div class="demo-node worker"><b>Freelancer</b>work submitted</div>
+                <div class="flow-beam beam-left"></div><div class="flow-beam beam-right"></div><div class="flow-beam beam-down"></div>
+                <div class="escrow-core"><span>intelligent escrow</span></div>
+                <div class="demo-node validators"><b>5 / 5 validators agree</b><span style="color:var(--ok)">settlement authorized</span></div>
+              </div>
+              <div class="terminal" id="heroTerm">
+                <div class="term-bar"><div class="term-dots"><span></span><span></span><span></span></div><div class="term-label">MERIT · ESCROW MONITOR</div></div>
+                <div class="term-body" id="heroTermBody"><div class="tl-cmd"><span class="tl-p">$</span> merit escrow scan --network testnet_bradbury</div><div class="tl-out"><span class="tl-dim">connecting…</span></div></div>
+              </div>
             </div>
           </div>
-
-          <div class="hero-cta">
-            <button class="btn bg btn-lg" onclick="nav('browse')">Browse open jobs →</button>
-            <button class="btn bh btn-lg" onclick="nav('post')">Post a job</button>
-          </div>
-          <div class="hero-note">server-signed demo · every action is a real transaction on testnet_bradbury</div>
         </div>
 
         <div class="statement">
@@ -908,19 +1075,54 @@
 
       <!-- BROWSE -->
       <section id="pg-browse" style="display:none">
-        <div class="pg-hdr">
-          <div><div class="pg-title">Open jobs</div><div class="pg-sub">Each job is its own escrow contract on testnet_bradbury</div></div>
-          <div class="pg-right">
-            <button class="btn bh" style="font-size:12px;padding:6px 12px" onclick="loadBrowse()">↻ Refresh</button>
-            <button class="btn bg" style="font-size:12px;padding:6px 14px" onclick="nav('post')">+ Post a Job</button>
+        <div class="market-hero">
+          <div class="market-hero-inner">
+            <div>
+              <div class="market-kicker"><span class="market-kicker-dot"></span>Bradbury marketplace · live</div>
+              <h1>Find work with payment already protected.</h1>
+              <p>Every listing is backed by its own intelligent escrow. Submit the work, let validators judge the agreed specification, and settle on-chain.</p>
+            </div>
+            <div class="market-hero-actions">
+              <button class="btn bh" onclick="loadBrowse()">↻ Refresh</button>
+              <button class="btn bg" onclick="nav('post')">Post a job&nbsp; →</button>
+            </div>
           </div>
         </div>
+
+        <div class="market-stats" aria-label="Marketplace summary">
+          <div class="market-stat"><div class="market-stat-label">Open opportunities</div><div class="market-stat-val" id="mkOpen">—</div><div class="market-stat-note">ready to accept</div></div>
+          <div class="market-stat"><div class="market-stat-label">GEN protected</div><div class="market-stat-val money" id="mkGen">—</div><div class="market-stat-note">held by contracts</div></div>
+          <div class="market-stat"><div class="market-stat-label">Settled jobs</div><div class="market-stat-val" id="mkSettled">—</div><div class="market-stat-note">validator-resolved</div></div>
+          <div class="market-stat"><div class="market-stat-label">Network</div><div class="market-stat-val" style="color:var(--ok)">Live</div><div class="market-stat-note">testnet_bradbury</div></div>
+        </div>
+
+        <div class="market-toolbar">
+          <div class="market-search"><input id="jobSearch" type="search" placeholder="Search jobs or acceptance specs…" aria-label="Search jobs" oninput="filterBrowse()"></div>
+          <select id="jobStatusFilter" class="market-filter" aria-label="Filter by status" onchange="filterBrowse()">
+            <option value="ALL">All statuses</option><option value="OPEN">Open</option><option value="ACTIVE">In progress</option><option value="SETTLED">Settled</option>
+          </select>
+          <span class="market-count" id="marketCount">loading registry…</span>
+        </div>
+
+        <div class="market-layout">
         <div id="browseBody">
           <div class="jobs-grid" id="jobsGrid">
-            <div class="skel" style="height:200px;border-radius:14px"></div>
-            <div class="skel" style="height:200px;border-radius:14px"></div>
-            <div class="skel" style="height:200px;border-radius:14px"></div>
+            <div class="skel" style="height:248px;border-radius:16px"></div>
+            <div class="skel" style="height:248px;border-radius:16px"></div>
           </div>
+        </div>
+          <aside class="market-side" aria-label="Marketplace activity">
+            <div class="market-panel">
+              <div class="market-panel-head"><span>Contract activity</span><span>● LIVE</span></div>
+              <div id="marketActivity"><div class="activity-item"><b>Registry connected</b><span class="activity-time">listening for escrow events</span></div></div>
+            </div>
+            <div class="market-panel market-guide">
+              <div class="market-guide-mark"></div>
+              <h3>Protected by design</h3>
+              <p>Merit never holds the funds. Each job deploys a dedicated contract that releases or refunds GEN from validator consensus.</p>
+              <button class="btn bb btn-full" onclick="nav('post')">Create an escrow →</button>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -928,27 +1130,35 @@
       <section id="pg-post" style="display:none">
         <div class="post-wrap">
           <div class="back-link" onclick="nav('browse')">← Back to jobs</div>
-          <div class="pg-hdr"><div><div class="pg-title">Post a job</div><div class="pg-sub">Deploys a fresh escrow contract for this job</div></div></div>
-          <div class="post-card">
-            <div class="field">
-              <label>Job title</label>
-              <input type="url" id="post-title" placeholder="e.g. Fintech landing page" style="font-family:'Inter'"/>
-              <small>Short label shown on the job card. Optional — we'll derive one from the spec.</small>
+          <div class="post-hero"><div><div class="market-kicker">Create protected work</div><div class="pg-title">Deploy a new intelligent escrow</div><p>Define what “done” means before work begins. Merit turns that specification into the rules for validator scoring and settlement.</p></div><span class="pill p-OPEN">Bradbury testnet</span></div>
+          <div class="post-layout">
+            <div class="post-card">
+              <div class="form-section">
+                <div class="form-section-head"><div class="form-section-num">01</div><div><div class="form-section-title">Describe the work</div><div class="form-section-sub">Give the marketplace a clear, recognizable listing.</div></div></div>
+                <div class="field"><label>Job title</label><input type="text" id="post-title" placeholder="e.g. Fintech landing page" style="font-family:'Inter'"/><small>Short label shown on the marketplace card.</small></div>
+                <div class="field"><label>Acceptance specification</label><textarea id="post-spec" placeholder="Describe exactly what a complete deliverable must contain. Include required sections, features, content and observable behaviour."></textarea><small>This becomes the validator rubric. Be concrete and testable.</small></div>
+              </div>
+              <div class="form-section">
+                <div class="form-section-head"><div class="form-section-num">02</div><div><div class="form-section-title">Set the settlement rules</div><div class="form-section-sub">Control full payment, proportional payment and refund thresholds.</div></div></div>
+                <div class="field-row">
+                  <div class="field"><label>Fee %</label><input type="number" class="mono-in money" id="post-fee" value="2" min="0" max="10" step="0.5" oninput="renderPayoutPreview()"/><small>0–10%</small></div>
+                  <div class="field"><label>Min score</label><input type="number" class="mono-in" id="post-min" value="70" min="0" max="100" oninput="renderPayoutPreview()"/><small>full pay ≥</small></div>
+                  <div class="field"><label>Partial floor</label><input type="number" class="mono-in" id="post-floor" value="40" min="0" max="100" oninput="renderPayoutPreview()"/><small>refund below</small></div>
+                </div>
+                <div class="payout-preview" id="payoutPreview"></div>
+              </div>
+              <div class="form-section">
+                <div class="form-section-head"><div class="form-section-num">03</div><div><div class="form-section-title">Deploy the contract</div><div class="form-section-sub">A dedicated escrow is created for this job.</div></div></div>
+                <div class="post-hint"><span>ℹ️</span><span>Score <b>≥ min</b> → full payment · <b>floor–min</b> → proportional split · <b>below floor</b> → full refund.</span></div>
+                <button class="btn bg btn-full" id="postBtn" onclick="createJob()">Deploy escrow &amp; publish →</button>
+                <div class="deploy-note" id="postNote">Deployment usually takes 30–90 seconds on testnet.</div>
+              </div>
             </div>
-            <div class="field">
-              <label>Acceptance spec</label>
-              <textarea id="post-spec" placeholder="Describe exactly what a complete deliverable must contain. The AI grades the submission against this, so be concrete: required sections, features, content."></textarea>
-              <small>The clearer the spec, the more consistent the ruling. Min 20 characters.</small>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Fee %</label><input type="number" class="mono-in money" id="post-fee" value="2" min="0" max="10" step="0.5" oninput="renderPayoutPreview()"/><small>0–10%</small></div>
-              <div class="field"><label>Min score</label><input type="number" class="mono-in" id="post-min" value="70" min="0" max="100" oninput="renderPayoutPreview()"/><small>full pay ≥</small></div>
-              <div class="field"><label>Partial floor</label><input type="number" class="mono-in" id="post-floor" value="40" min="0" max="100" oninput="renderPayoutPreview()"/><small>refund below</small></div>
-            </div>
-            <div class="payout-preview" id="payoutPreview"></div>
-            <div class="post-hint"><span>ℹ️</span><span>Score <b>≥ min</b> → full payment · <b>floor–min</b> → proportional split · <b>below floor</b> → full refund. The contract enforces this automatically.</span></div>
-            <button class="btn bg btn-full" id="postBtn" onclick="createJob()">Deploy escrow &amp; post job</button>
-            <div class="deploy-note" id="postNote">Deploying a new contract to testnet takes ~30–90 seconds.</div>
+            <aside class="post-aside">
+              <div class="post-side-card market-guide"><div class="market-guide-mark"></div><h3>Your contract, your rules</h3><p>The specification and thresholds are written into the job’s escrow. Neither Merit nor either party can silently change them later.</p></div>
+              <div class="post-side-card"><h3>Before you deploy</h3><div class="trust-row"><span class="trust-check">✓</span><span>Describe visible, testable outcomes.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>Use a realistic full-payment threshold.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>The deliverable must be publicly accessible.</span></div><div class="trust-row"><span class="trust-check">✓</span><span>Every settlement remains inspectable.</span></div></div>
+              <div class="post-side-card"><h3>Settlement model</h3><p>Five validators evaluate the same submitted page. Their agreed on-chain result determines whether funds release, split or return.</p></div>
+            </aside>
           </div>
         </div>
       </section>
@@ -956,11 +1166,12 @@
       <!-- OVERVIEW -->
       <section id="pg-overview" style="display:none">
         <div class="back-link" onclick="nav('browse')">← All jobs</div>
-        <div class="ov-top">
+        <div class="ov-top job-hero">
           <div>
             <div class="ov-code" id="ovCode">JOB-000000</div>
             <div class="pg-title" id="ovTitle">Escrow Job</div>
             <div class="ov-meta" id="ovMeta">testnet_bradbury</div>
+            <div class="job-stage"><span id="ovStageLabel">Preparing escrow</span><div class="job-stage-track"><div class="job-stage-fill" id="ovStageFill"></div></div><span id="ovStageCount">0/5</span></div>
           </div>
           <div class="pg-right">
             <span id="ovPill" class="pill p-UNFUNDED">—</span>
@@ -968,7 +1179,7 @@
           </div>
         </div>
 
-        <div class="ctx-grid">
+        <div class="ctx-grid control-grid">
           <div class="card">
             <div class="card-head"><span>Parties</span></div>
             <div class="card-body">
@@ -986,6 +1197,7 @@
           <div class="card">
             <div class="card-head"><span>Escrow Balance</span></div>
             <div class="card-body">
+              <div class="escrow-orbit" id="escrowOrbit" aria-hidden="true"></div>
               <div class="bal-num"><span class="bal-val" id="bal-val">0</span><span class="bal-unit">GEN</span></div>
               <div class="bal-hint"><span class="bal-hint-dot" id="bal-dot"></span><span id="bal-hint">Not yet funded</span></div>
               <div class="bal-kv"><span>contract</span><span id="bal-addr">—</span></div>
@@ -1002,17 +1214,19 @@
           </div>
         </div>
 
-        <div class="ov-grid">
+        <div class="ov-grid control-bottom">
           <div class="card"><div class="card-head"><span><span class="ch-icon">🗺️</span> Timeline</span></div><div class="card-body" style="padding:0 18px"><div id="tl"></div></div></div>
-          <div class="card"><div class="card-head"><span><span class="ch-icon">⚡</span> Next Action</span></div><div class="card-body" id="qa"></div></div>
+          <div class="card next-action-card"><div class="card-head"><span><span class="ch-icon">⚡</span> Next Action</span></div><div class="card-body" id="qa"></div></div>
         </div>
       </section>
 
       <!-- MANAGE -->
       <section id="pg-manage" style="display:none">
-        <div class="pg-hdr">
-          <div><div class="pg-title">Manage Job</div><div class="pg-sub">Step-by-step escrow flow</div></div>
-          <span id="mgPill" class="pill p-UNFUNDED">—</span>
+        <div class="manage-head">
+          <div class="manage-head-row">
+            <div><div class="market-kicker"><span class="market-kicker-dot"></span>Intelligent escrow workflow</div><div class="pg-title">Manage Job</div><div class="pg-sub">Move the job from protected funding to validator-controlled settlement.</div></div>
+            <span id="mgPill" class="pill p-UNFUNDED">—</span>
+          </div>
         </div>
         <div class="stepper-wrap">
           <div class="stepper">
@@ -1023,7 +1237,7 @@
             <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
           </div>
         </div>
-        <div class="mg-grid">
+        <div class="mg-grid control-manage">
           <div class="card" id="actCard"><div class="card-body"><div class="skel" style="width:40%;height:10px"></div><div class="skel" style="height:20px;margin:8px 0 14px"></div><div class="skel"></div></div></div>
           <div class="card" id="specCard" style="display:none"><div class="card-head"><span><span class="ch-icon">📋</span> Job Specification</span></div><div class="card-body"><p class="spec-text" id="specTxt" style="margin-bottom:0"></p></div></div>
         </div>
@@ -1031,10 +1245,15 @@
 
       <!-- EVALUATE -->
       <section id="pg-evaluate" style="display:none">
-        <div class="pg-hdr"><div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Automated scoring of submitted work</div></div></div>
+        <div class="eval-hero"><div><div class="market-kicker">Validator intelligence</div><div class="pg-title">AI Evaluation</div><div class="pg-sub">Watch independent validators inspect, score and settle submitted work.</div></div><div class="eval-live">Consensus network online</div></div>
         <div class="card" id="evEmpty"><div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div></div>
 
         <div id="evContent" style="display:none">
+          <div class="eval-facts">
+            <div class="eval-fact"><span>Deliverable</span><b id="evalDeliverable">Public URL snapshot</b></div>
+            <div class="eval-fact"><span>Full-pay threshold</span><b id="evalThreshold">—</b></div>
+            <div class="eval-fact"><span>Consensus model</span><b>5 independent validators</b></div>
+          </div>
           <div class="card theatre-card">
             <div class="theatre-head">
               <div class="theatre-mark"></div>
@@ -1075,8 +1294,9 @@
 
       <!-- CONTRACTS -->
       <section id="pg-contracts" style="display:none">
-        <div class="pg-hdr"><div><div class="pg-title">Contracts</div><div class="pg-sub">Smart contracts deployed on testnet_bradbury</div></div></div>
-        <div class="cts-stack" id="ctsContent"><div class="skel" style="height:100px;border-radius:12px;margin-bottom:14px"></div><div class="skel" style="height:100px;border-radius:12px"></div></div>
+        <div class="contracts-hero"><div><div class="market-kicker">On-chain infrastructure</div><div class="pg-title">Contract control plane</div><div class="pg-sub">Inspect the contracts, accounts and network responsible for this escrow.</div></div><div class="network-health">Bradbury network healthy</div></div>
+        <div class="contract-stats"><div class="contract-stat"><span>Network</span><b>testnet_bradbury</b></div><div class="contract-stat"><span>Evaluation</span><b>AI validator consensus</b></div><div class="contract-stat"><span>Custody model</span><b>Dedicated job escrow</b></div></div>
+        <div class="cts-stack" id="ctsContent"><div class="skel" style="height:190px;border-radius:16px"></div><div class="skel" style="height:190px;border-radius:16px"></div></div>
       </section>
 
     </div><!-- /scroll -->
@@ -1110,6 +1330,7 @@ const TERM = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
 const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'};
 let data = null, logOpen = false, logN = 0, curPage = 'landing', curJob = null;
 let theatreRunning = false, theatreTimers = [], actionBusy = false;
+let browseJobs = [];
 
 // ── SPLASH ─────────────────────────────────────────────────────────────────
 const SPLASH_STAGES = [
@@ -1287,6 +1508,11 @@ function renderOverview(job, result, addresses) {
   document.getElementById('ovCode').textContent=jobCode(addresses?.escrow);
   const t=document.getElementById('ovTitle'); if(t) t.textContent=data?.meta?.title || 'Escrow Job';
   document.getElementById('ovMeta').textContent='testnet_bradbury'+(job.terms_agreed?' · terms signed on-chain':'');
+  const stage=Math.min(TERM.has(s)?5:i,5);
+  const stageLabels=['Awaiting funding','Escrow funded','Terms accepted','Deliverable submitted','Validator score ready','Settlement complete'];
+  document.getElementById('ovStageLabel').textContent=stageLabels[stage];
+  document.getElementById('ovStageCount').textContent=stage+'/5';
+  requestAnimationFrame(()=>{document.getElementById('ovStageFill').style.width=(stage/5*100)+'%'});
 
   document.getElementById('p-client').textContent=short(job.client);
   document.getElementById('p-worker').textContent=short(job.worker);
@@ -1294,6 +1520,7 @@ function renderOverview(job, result, addresses) {
   document.getElementById('bal-val').textContent=toGENNum(job.amount);
   document.getElementById('bal-hint').textContent=TERM.has(s)?'Settled':job.amount>0?'Locked in contract until settlement':'Not yet funded';
   document.getElementById('bal-dot').style.background=TERM.has(s)?'var(--subtle)':job.amount>0?'var(--ok)':'var(--subtle)';
+  document.getElementById('escrowOrbit').classList.toggle('funded',job.amount>0&&!TERM.has(s));
   document.getElementById('bal-addr').textContent=short(addresses?.escrow);
   document.getElementById('bal-fee').textContent=(job.fee_bps/100)+'%';
 
@@ -1342,8 +1569,8 @@ function renderManage(job, result) {
     el.querySelector('.step-dot').textContent=(TERM.has(s)||n<i)?'✓':n+1;
   }
   if(TERM.has(s)){
-    const c={ACCEPTED:{icon:'🎉',title:'Payment Released',msg:`Score ${result?.score}/100 ≥ min (${job.min_score}). Full payment released.`},PARTIAL:{icon:'⚠️',title:'Partial Payment',msg:`Score ${result?.score}/100 between floor (${job.partial_floor}) and min. Proportional payment made.`},REFUNDED:{icon:'↩️',title:'Funds Refunded',msg:`Score ${result?.score}/100 below floor (${job.partial_floor}). Refunded to client.`}}[s];
-    document.getElementById('actCard').innerHTML=`<div class="t-hero"><div class="t-icon">${c.icon}</div><div class="t-title t-${s}">${c.title}</div><div class="t-sub" style="margin-top:8px">${c.msg}</div></div>`;
+    const c={ACCEPTED:{icon:'✓',title:'Payment released',msg:`Score ${result?.score}/100 met the ${job.min_score}-point threshold. The contract released full payment to the freelancer.`,color:'var(--ok)'},PARTIAL:{icon:'↗',title:'Payment split',msg:`Score ${result?.score}/100 landed between the ${job.partial_floor}-point floor and full-pay threshold. The contract settled proportionally.`,color:'var(--yellow)'},REFUNDED:{icon:'↩',title:'Funds refunded',msg:`Score ${result?.score}/100 fell below the ${job.partial_floor}-point floor. The contract returned funds to the client.`,color:'var(--red)'}}[s];
+    document.getElementById('actCard').innerHTML=`<div class="settlement-receipt"><div class="receipt-mark" style="color:${c.color};background:color-mix(in srgb,${c.color} 10%,transparent)">${c.icon}</div><div class="step-tag">On-chain settlement receipt</div><div class="receipt-title" style="color:${c.color}">${c.title}</div><div class="receipt-copy">${c.msg}</div><div class="receipt-grid"><div class="receipt-cell"><span>Final score</span><b>${result?.score}/100</b></div><div class="receipt-cell"><span>Consensus</span><b>5 / 5 validators</b></div><div class="receipt-cell"><span>Network</span><b>Bradbury testnet</b></div></div><div class="receipt-actions"><button class="btn bg" onclick="go('evaluate')">View evaluation →</button><button class="btn bh" onclick="nav('browse')">Browse marketplace</button><button class="btn bh" onclick="nav('post')">Create similar job</button></div></div>`;
     document.getElementById('specCard').style.display='none';return;
   }
   if(job.spec){document.getElementById('specTxt').textContent=job.spec;document.getElementById('specCard').style.display='';}
@@ -1356,7 +1583,7 @@ function renderManage(job, result) {
     {tag:'Step 5 of 5',title:'Finalize Payout',desc:'Release funds based on the AI score. The contract automatically calculates the split.',form:`${sh}<div class="btn-row"><button class="btn bg btn-full" onclick="finalize()">Release Funds</button>${!job.appeal_used?`<button class="btn bh" onclick="appeal()">Appeal</button>`:''}</div>`},
   ];
   const st=steps[Math.min(i,4)];
-  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="step-tag">${st.tag}</div><div class="act-title">${st.title}</div><div class="act-desc">${st.desc}</div>${st.form}</div>`;
+  document.getElementById('actCard').innerHTML=`<div class="card-body"><div class="action-visual"><div class="action-num">${Math.min(i+1,5)}</div><div><div class="action-overline">${st.tag} · current action</div><div class="act-title" style="margin-bottom:0">${st.title}</div></div></div><div class="act-desc">${st.desc}</div>${st.form}</div>`;
 }
 
 // ── EVALUATION THEATRE ───────────────────────────────────────────────────────
@@ -1402,6 +1629,8 @@ function renderEvaluateStatic(job, result) {
   document.getElementById('evEmpty').style.display = sc==null ? '' : 'none';
   document.getElementById('evContent').style.display = sc!=null ? '' : 'none';
   if (sc==null) { document.getElementById('evEmpty').innerHTML=`<div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div>`;document.getElementById('verdictCard').style.display='none'; return; }
+  document.getElementById('evalDeliverable').textContent='Pinned public web snapshot';
+  document.getElementById('evalThreshold').textContent=job.min_score+'/100 for full payment';
   renderPipeline(5);
   document.getElementById('theatreBody').innerHTML = staticValidatorsHTML(job, sc) + theatreNoteHTML() + staticConsensusHTML(job, sc);
   requestAnimationFrame(()=>requestAnimationFrame(()=>{const f=document.querySelector('.consensus-fill[data-score]');if(f)f.style.width=f.dataset.score+'%'}));
@@ -1411,7 +1640,7 @@ function renderEvaluateStatic(job, result) {
 function staticValidatorsHTML(job, sc) {
   const outcome = outcomeOf(job, sc);
   const cards = FAKE_VALIDATORS.map((v,idx)=>{
-    const vs = Math.max(0, Math.min(100, sc + jitter()));
+    const vs = Math.max(0, Math.min(100, sc + validatorOffset(idx)));
     const vOutcome = outcomeOf(job, vs);
     const vc = outcomeColor(vOutcome), vb = outcomeBg(vOutcome);
     const label = vOutcome==='accept'?'ACCEPT':vOutcome==='partial'?'PARTIAL':'REJECT';
@@ -1426,7 +1655,7 @@ function staticConsensusHTML(job, sc) {
   const outcome = outcomeOf(job, sc), c = outcomeColor(outcome);
   return `<div class="consensus-wrap"><div class="consensus-num"><div class="consensus-lbl">CONSENSUS</div><div class="consensus-val">5<span style="color:var(--subtle);font-size:13px">/5</span></div></div><div class="consensus-bar-wrap"><div class="consensus-bar-meta"><span>weighted score</span><span style="color:${c}">${sc}%</span></div><div class="consensus-track"><div class="consensus-fill" data-score="${sc}" style="width:0;background:${c};color:${c}"></div></div></div></div>`;
 }
-function jitter(){ return Math.round((Math.random()*2-1)*6); }
+function validatorOffset(index){ return [-3,1,2,0,4][index]||0; }
 
 function renderVerdictCard(job, result) {
   const sc = result.score, s = result.status;
@@ -1538,36 +1767,66 @@ async function runEvalTheatre() {
 // ── CONTRACTS ──────────────────────────────────────────────────────────────
 function renderContracts(addresses) {
   if(!addresses) return;
-  const cCard=(title,addr,exUrl)=>`<div class="card"><div class="card-head"><span><span class="ch-icon">📄</span> ${title}</span><span class="verified">✓ verified on-chain</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono" title="${addr}">${short(addr)}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div></div></div>${exUrl?`<a class="exp-link" href="${exUrl}" target="_blank" rel="noopener">View on Explorer ↗</a>`:''}</div></div>`;
+  const cCard=(title,type,role,addr,exUrl)=>`<div class="card contract-card"><div class="card-head"><span>${title}</span><span class="verified">✓ verified</span></div><div class="card-body"><div class="contract-type">${type}</div><div class="contract-role">${role}</div><div class="addr-block"><span class="addr-mono" title="${addr}">${short(addr)}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div><div class="contract-actions">${exUrl?`<a class="btn bh" href="${exUrl}" target="_blank" rel="noopener">Open explorer ↗</a>`:''}<span class="network-health">active</span></div></div></div>`;
   document.getElementById('ctsContent').innerHTML=
-    cCard('FreelanceEscrow',addresses.escrow,addresses.explorer_escrow)+
-    cCard('EvaluateSubmission',addresses.evaluator,addresses.explorer_evaluator)+
-    `<div class="card"><div class="card-head"><span><span class="ch-icon">👤</span> Demo Transaction Account</span><span class="verified">✓ active</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Server-signed address</span><div class="addr-block"><span class="addr-mono" title="${addresses.deployer}">${short(addresses.deployer)}</span><button class="copy-btn" onclick="cp('${addresses.deployer}',this)">Copy</button></div></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div></div></div></div>`+
-    `<div class="card"><div class="card-head"><span><span class="ch-icon">ℹ️</span> About</span></div><div class="card-body"><div class="kv-list"><div class="kv"><span class="kv-k">Platform</span><span class="kv-v">GenLayer</span></div><div class="kv"><span class="kv-k">Evaluation</span><span class="kv-v">AI-Arbitrated</span></div><div class="kv"><span class="kv-k">Language</span><span class="kv-v">Python (Intelligent Contract)</span></div></div></div></div>`;
+    cCard('Freelance Escrow','Job contract','Holds job terms and GEN, controls lifecycle state, and executes the final payment or refund.',addresses.escrow,addresses.explorer_escrow)+
+    cCard('Evaluation Engine','Intelligent contract','Fetches the submitted page, applies the acceptance rubric and records the validator-agreed score.',addresses.evaluator,addresses.explorer_evaluator)+
+    cCard('Transaction Account','Server signer','Competition demo account used to submit testnet transactions on behalf of the interface.',addresses.deployer,'https://explorer-bradbury.genlayer.com/address/'+addresses.deployer)+
+    `<div class="card contract-card"><div class="card-head"><span>Protocol profile</span><span class="verified">open source</span></div><div class="card-body"><div class="contract-type">GenLayer</div><div class="contract-role">Python Intelligent Contracts with AI-mediated consensus and inspectable settlement outcomes.</div><div class="kv-list"><div class="kv"><span class="kv-k">Settlement</span><span class="kv-v">Non-custodial</span></div><div class="kv"><span class="kv-k">Validator model</span><span class="kv-v">5-way consensus</span></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">Bradbury testnet</span></div></div></div></div>`;
 }
 
 async function cp(addr,btn){try{await navigator.clipboard.writeText(addr);const o=btn.textContent;btn.textContent='✓ Copied!';btn.style.color='var(--ok)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1600)}catch(e){toast('Copy failed','err','Select the address and copy it manually.')}}
 
 // ── MARKETPLACE ──────────────────────────────────────────────────────────────
 async function loadBrowse() {
-  const grid = document.getElementById('jobsGrid');
   const body = document.getElementById('browseBody');
-  body.innerHTML = `<div class="jobs-grid" id="jobsGrid"><div class="skel" style="height:200px;border-radius:14px"></div><div class="skel" style="height:200px;border-radius:14px"></div><div class="skel" style="height:200px;border-radius:14px"></div></div>`;
+  body.innerHTML = `<div class="jobs-grid" id="jobsGrid"><div class="skel" style="height:248px;border-radius:16px"></div><div class="skel" style="height:248px;border-radius:16px"></div></div>`;
+  document.getElementById('marketCount').textContent='syncing registry…';
   const slow=delayedNote(body,'Still loading — the free-tier API may be waking up…');
   try {
     const r = await fetch(API_BASE+'/api/jobs');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    const jobs = d.jobs || [];
-    if (!jobs.length) {
-      body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">🗂️</div><div class="empty-title">No jobs yet</div><div class="empty-desc">Be the first — post a job with an acceptance spec and the AI will grade whatever gets submitted against it.</div><button class="btn bg" onclick="nav('post')">+ Post the first job</button></div></div>`;
-      return;
-    }
-    const ghosts = jobs.length < 3 ? ghostCards(3 - jobs.length) : '';
-    body.innerHTML = `<div class="jobs-grid">${jobs.map(jobCardHTML).join('')}${ghosts}</div>`;
+    browseJobs = d.jobs || [];
+    updateMarketplaceSummary(browseJobs);
+    filterBrowse();
   } catch(e) {
+    browseJobs=[];
+    document.getElementById('marketCount').textContent='registry unavailable';
     body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn't load jobs</div><div class="empty-desc">${humanError(e)}</div><button class="btn bh" onclick="loadBrowse()">Retry</button></div></div>`;
   } finally {clearTimeout(slow)}
+}
+
+function updateMarketplaceSummary(jobs){
+  const open=jobs.filter(j=>['UNFUNDED','OPEN'].includes(j.status||'UNFUNDED')).length;
+  const settled=jobs.filter(j=>TERM.has(j.status)).length;
+  const gen=jobs.filter(j=>!TERM.has(j.status)).reduce((sum,j)=>sum+(Number(j.amount)||0),0);
+  document.getElementById('mkOpen').textContent=open;
+  document.getElementById('mkSettled').textContent=settled;
+  document.getElementById('mkGen').textContent=gen>0?toGEN(gen):'0';
+  const recent=[...jobs].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)).slice(0,4);
+  const activity=recent.length?recent.map(j=>`<div class="activity-item"><b>${esc(j.title||'Escrow job')}</b> is ${(j.status||'UNFUNDED').toLowerCase()}<span class="activity-time">${j.created_at?relativeTime(j.created_at):jobCode(j.address)}</span></div>`).join(''):`<div class="activity-item"><b>Registry connected</b><span class="activity-time">waiting for the first escrow</span></div>`;
+  document.getElementById('marketActivity').innerHTML=activity;
+}
+
+function filterBrowse(){
+  const body=document.getElementById('browseBody'); if(!body)return;
+  const q=(document.getElementById('jobSearch')?.value||'').trim().toLowerCase();
+  const filter=document.getElementById('jobStatusFilter')?.value||'ALL';
+  const jobs=browseJobs.filter(j=>{
+    const status=j.status||'UNFUNDED';
+    const matchesText=!q||`${j.title||''} ${j.spec||''} ${jobCode(j.address)}`.toLowerCase().includes(q);
+    const matchesStatus=filter==='ALL'||(filter==='OPEN'&&['UNFUNDED','OPEN'].includes(status))||(filter==='ACTIVE'&&['AGREED','SUBMITTED','EVALUATED'].includes(status))||(filter==='SETTLED'&&TERM.has(status));
+    return matchesText&&matchesStatus;
+  });
+  document.getElementById('marketCount').textContent=`${jobs.length} of ${browseJobs.length} job${browseJobs.length===1?'':'s'}`;
+  if(!jobs.length){
+    const title=browseJobs.length?'No matching jobs':'The marketplace is ready';
+    const desc=browseJobs.length?'Try a different search or status filter.':'Deploy the first intelligent escrow and turn a clear specification into protected, verifiable work.';
+    body.innerHTML=`<div class="jobs-grid"><div class="market-empty"><div class="market-empty-orbit">◇</div><div class="empty-title">${title}</div><div class="empty-desc">${desc}</div><button class="btn bg" onclick="${browseJobs.length?"document.getElementById('jobSearch').value='';document.getElementById('jobStatusFilter').value='ALL';filterBrowse()":"nav('post')"}">${browseJobs.length?'Clear filters':'Post the first job →'}</button></div></div>`;
+    return;
+  }
+  body.innerHTML=`<div class="jobs-grid">${jobs.map(jobCardHTML).join('')}</div>`;
 }
 
 // ── LIVE HERO BADGE (real registry aggregates) ──────────────────────────────
@@ -1617,7 +1876,7 @@ async function renderHeroTerminal() {
     }).join('');
     const first = jobCode(jobs[0].address);
     body.innerHTML = scan +
-      `<div class="tl-out"><span class="tl-ok">✓</span> found ${jobs.length} open job${jobs.length===1?'':'s'} · sorted by created_at</div>` +
+      `<div class="tl-out"><span class="tl-ok">✓</span> found ${jobs.length} registered job${jobs.length===1?'':'s'} · sorted by created_at</div>` +
       rows +
       `<div class="tl-cmd"><span class="tl-p">$</span>contract watch --job ${first}</div>` +
       `<div class="tl-out"><span class="tl-ok">✓</span> pinned — polling testnet_bradbury for evaluate() call<span class="term-cursor"></span></div>` +
@@ -1648,18 +1907,24 @@ function jobCardHTML(j) {
     ? `<span class="jc-score-wrap">${scoreRing(j.score)}<span class="jc-score">AI score</span></span>`
     : `<span class="jc-score">not evaluated</span>`;
   const when=j.created_at?`<span title="${new Date(j.created_at).toLocaleString()}">${relativeTime(j.created_at)}</span>`:'';
+  const category=jobCategory(j.title||'',j.spec||'');
+  const stateNote=TERM.has(status)?'settled on-chain':status==='UNFUNDED'?'awaiting funding':status==='OPEN'?'accepting worker':'work in progress';
   return `<div class="job-card acc-${acc}" onclick="openJob('${j.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openJob('${j.id}')} ">
     <div class="jc-top"><span class="jc-code">${jobCode(j.address)}</span><span class="pill p-${status}">${status}</span></div>
+    <div class="jc-category">${category}</div>
     <div class="jc-title">${esc(j.title||'Untitled job')}</div>
     <div class="jc-spec">${esc(j.spec||'')}</div>
+    <div class="jc-meta"><span class="jc-chip">5 validators</span><span class="jc-chip">${stateNote}</span><span class="jc-chip">public deliverable</span></div>
     <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b>${when?` · ${when}`:''}</span>${scoreLine}</div>
   </div>`;
 }
-// ghost "your next job could be here" cards so a sparse grid never looks dead
-function ghostCards(n){
-  let out='';
-  for(let i=0;i<n;i++) out += `<div class="job-card ghost" style="align-items:center;justify-content:center;text-align:center;min-height:210px"><div style="font-size:28px;color:var(--accent-bright);margin-bottom:10px">＋</div><div class="jc-ghost-title">Your next job could be here</div><div class="ghost-foot">Post a job to deploy a new escrow</div></div>`;
-  return out;
+function jobCategory(title,spec){
+  const text=`${title} ${spec}`.toLowerCase();
+  if(/design|landing|website|frontend|ui|ux/.test(text))return 'Design & web';
+  if(/contract|solidity|blockchain|web3/.test(text))return 'Smart contracts';
+  if(/write|content|article|copy/.test(text))return 'Content';
+  if(/data|research|analysis/.test(text))return 'Research';
+  return 'Digital deliverable';
 }
 
 async function openJob(id) {
