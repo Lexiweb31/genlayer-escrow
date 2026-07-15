@@ -751,6 +751,16 @@
     #pg-landing .hero-live{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;max-width:1180px;width:100%;margin:0 auto;padding:14px;border:1px solid var(--border);border-radius:26px;background:rgba(15,18,29,.72);box-shadow:0 30px 90px -48px rgba(0,0,0,.95)}
     #pg-landing .escrow-demo{min-height:390px;border-radius:17px}
     #pg-landing .hero-live .terminal{margin:0;min-height:390px;border-radius:17px}
+    .escrow-story{position:relative;max-width:1180px;margin:0 auto 72px;padding:28px;border:1px solid var(--border);border-radius:24px;background:linear-gradient(145deg,rgba(27,33,48,.96),rgba(12,15,25,.98));overflow:hidden;box-shadow:var(--shadow-card)}
+    .escrow-story::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 74% 20%,var(--accent-glow),transparent 32%);pointer-events:none}
+    .story-head{position:relative;display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:28px}.story-kicker{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent-bright);margin-bottom:7px}.story-title{font-size:25px;letter-spacing:-.035em}.story-head p{font-size:12px;color:var(--muted);max-width:370px}
+    .story-stage{position:relative;min-height:255px;padding:26px;border:1px solid var(--border-sub);border-radius:17px;background:#0D111C;overflow:hidden}.story-stage::before{content:'';position:absolute;inset:0;background:radial-gradient(rgba(143,160,255,.09) 1px,transparent 1px) 0 0/22px 22px;mask-image:linear-gradient(90deg,#000,transparent)}
+    .story-route{position:absolute;top:50%;left:13%;right:13%;height:2px;background:linear-gradient(90deg,var(--accent),var(--ok));opacity:.5}.story-route::after{content:'';position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 16px var(--accent);animation:storyTravel 5.5s linear infinite}@keyframes storyTravel{from{left:0}to{left:100%}}
+    .story-nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;height:202px;align-items:center}.story-node{position:relative;padding:17px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(20,25,39,.92);min-height:130px;transition:transform .35s var(--spring),border-color .35s,box-shadow .35s,opacity .35s;opacity:.46}.story-node.active{opacity:1;transform:translateY(-8px);border-color:var(--accent-bright);box-shadow:0 15px 34px -19px var(--accent)}.story-node.done{opacity:.78;border-color:rgba(39,182,122,.55)}.story-icon{width:31px;height:31px;display:grid;place-items:center;border-radius:9px;background:var(--accent-bg);color:var(--accent-bright);font-size:15px;margin-bottom:14px}.story-node.done .story-icon{background:var(--ok-bg);color:var(--ok)}.story-node b{display:block;font-size:13px;margin-bottom:4px}.story-node span{font-size:10.5px;line-height:1.45;color:var(--muted)}
+    .story-controls{position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:20px}.story-caption{font-size:13px;color:var(--muted)}.story-caption b{color:var(--text)}.story-replay{border:1px solid var(--border);border-radius:9px;background:var(--card2);color:var(--text);font:500 11px 'Manrope';padding:9px 12px;cursor:pointer;transition:border-color .2s,background .2s}.story-replay:hover{border-color:var(--accent);background:var(--accent-bg)}
+    html[data-theme="light"] .escrow-story{background:linear-gradient(145deg,#fff,#F4F6FF)}html[data-theme="light"] .story-stage{background:#111827}html[data-theme="light"] .story-node{background:rgba(28,34,50,.94)}
+    @media(max-width:760px){.escrow-story{padding:18px;margin-bottom:45px}.story-head{align-items:start;flex-direction:column}.story-stage{padding:14px;min-height:570px}.story-nodes{grid-template-columns:1fr 1fr;height:auto;gap:10px}.story-node{min-height:132px}.story-route{display:none}.story-controls{align-items:start;flex-direction:column}.story-replay{width:100%}}
+    @media(prefers-reduced-motion:reduce){.story-route::after{animation:none}.story-node{transition:none}}
     #pg-landing .statement{margin-top:36px;padding:80px 0 56px;border-top:1px solid var(--border-sub)}
     #pg-landing .statement-a,#pg-landing .statement-b{font-size:clamp(38px,5vw,68px);line-height:1.02;letter-spacing:-.06em}
     html[data-theme="light"] #pg-landing .hero::before{background:radial-gradient(ellipse at 50% 20%,rgba(56,80,200,.12),transparent 58%)}
@@ -1148,6 +1158,20 @@
             </div>
           </div>
         </div>
+
+        <section class="escrow-story" aria-labelledby="storyTitle">
+          <div class="story-head"><div><div class="story-kicker">A 30-second escrow story</div><h2 class="story-title" id="storyTitle">See exactly where the money goes.</h2></div><p>Merit turns a simple agreement into a visible path from work request to settlement.</p></div>
+          <div class="story-stage">
+            <div class="story-route" aria-hidden="true"></div>
+            <div class="story-nodes">
+              <article class="story-node active" data-story-step="0"><div class="story-icon">◇</div><b>1. Client funds</b><span>GEN enters a dedicated escrow—not Merit’s wallet.</span></article>
+              <article class="story-node" data-story-step="1"><div class="story-icon">↗</div><b>2. Worker submits</b><span>A public deliverable URL is attached to the signed agreement.</span></article>
+              <article class="story-node" data-story-step="2"><div class="story-icon">✦</div><b>3. Validators inspect</b><span>Independent validators score the visible work against the brief.</span></article>
+              <article class="story-node" data-story-step="3"><div class="story-icon">✓</div><b>4. Contract settles</b><span>The agreed score releases, splits, or refunds the escrow automatically.</span></article>
+            </div>
+          </div>
+          <div class="story-controls"><p class="story-caption" id="storyCaption"><b>Client funds the job.</b> The contract locks GEN until a verdict is reached.</p><button class="story-replay" type="button" onclick="playEscrowStory(true)">▶ Watch the flow</button></div>
+        </section>
 
         <div class="statement">
           <div class="statement-a">No human arbitrator.</div>
@@ -2463,6 +2487,26 @@ function useJobTemplate(kind){
   },t=templates[kind];if(!t)return;
   document.getElementById('post-title').value=t.title;document.getElementById('post-spec').value=t.spec;analyzeSpecification();renderTermsFingerprint();
   document.getElementById('post-title').dispatchEvent(new Event('input'));toast('Template applied','info','Edit the terms before deploying your escrow.');
+}
+
+let escrowStoryTimer;
+const ESCROW_STORY=[
+  ['Client funds the job.','The contract locks GEN until a verdict is reached.'],
+  ['The worker submits public work.','The deliverable URL is bound to the job and its acceptance terms.'],
+  ['Validators inspect the evidence.','They compare the visible result with the exact agreement—not a private opinion.'],
+  ['The contract settles automatically.','Consensus determines a payout, proportional split, or client refund.']
+];
+function setEscrowStory(step){
+  const nodes=[...document.querySelectorAll('[data-story-step]')],caption=document.getElementById('storyCaption');
+  nodes.forEach((node,index)=>node.classList.toggle('active',index===step));
+  nodes.forEach((node,index)=>node.classList.toggle('done',index<step));
+  if(caption)caption.innerHTML=`<b>${ESCROW_STORY[step][0]}</b> ${ESCROW_STORY[step][1]}`;
+}
+function playEscrowStory(restart=false){
+  clearTimeout(escrowStoryTimer);let step=restart?0:Number(document.querySelector('[data-story-step].active')?.dataset.storyStep||0);
+  setEscrowStory(step);
+  const next=()=>{step+=1;if(step>=ESCROW_STORY.length){setEscrowStory(3);return}setEscrowStory(step);escrowStoryTimer=setTimeout(next,1600)};
+  escrowStoryTimer=setTimeout(next,850);
 }
 
 initTheme();
