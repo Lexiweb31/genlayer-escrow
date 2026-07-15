@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).parents[1]
 load_dotenv(ROOT / ".env")
@@ -451,6 +451,29 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
     return settlement
 
 
+def _settlement_for_wire(settlement: dict[str, Any]) -> dict[str, Any]:
+    """Serialize wei values as decimal strings so JSON never loses precision."""
+    output = dict(settlement)
+    for field in ("transfers", "transfer_evidence"):
+        rows = output.get(field)
+        if not isinstance(rows, list):
+            continue
+        output[field] = [
+            {
+                **row,
+                **(
+                    {"amount": str(_wei_int(row.get("amount")))}
+                    if isinstance(row, dict) and "amount" in row
+                    else {}
+                ),
+            }
+            if isinstance(row, dict)
+            else row
+            for row in rows
+        ]
+    return output
+
+
 def _public_state(meta: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     chain_job = dict(state["job"])
     result = dict(state["result"])
@@ -459,15 +482,21 @@ def _public_state(meta: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
         chain_job["status"] = "LEGACY_UNSAFE"
         chain_job["legacy_contract"] = True
         chain_job["legacy_warning"] = "Legacy settlement contract — do not fund"
+        if "amount" in chain_job:
+            chain_job["amount"] = str(_wei_int(chain_job.get("amount")))
+        if isinstance(chain_job.get("settlement"), dict):
+            chain_job["settlement"] = _settlement_for_wire(chain_job["settlement"])
         result["status"] = "LEGACY_UNSAFE"
         return {"job": chain_job, "result": result}
     settlement = _refresh_settlement(meta, chain_job)
-    chain_job["settlement"] = settlement
     chain_job["legacy_contract"] = False
     chain_job["on_chain_status"] = chain_job.get("status")
     if settlement.get("transfer_status") == "FINALIZED" and settlement.get("outcome"):
         chain_job["status"] = settlement["outcome"]
         result["status"] = settlement["outcome"]
+    if "amount" in chain_job:
+        chain_job["amount"] = str(_wei_int(chain_job.get("amount")))
+    chain_job["settlement"] = _settlement_for_wire(settlement)
     return {"job": chain_job, "result": result}
 
 
@@ -508,42 +537,80 @@ def demo_mode():
     return _demo_public_config()
 
 
+MIN_DEMO_AMOUNT_WEI = 10**15  # 0.001 GEN
 _ACTIVE_STATUSES = {"UNFUNDED", "OPEN", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING"}
+_LOCKED_STATUSES = {"OPEN", "AGREED", "SUBMITTED", "EVALUATED"}
+_EVALUATED_STATUSES = {"EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED"}
+_FINAL_STATUSES = {"ACCEPTED", "PARTIAL", "REFUNDED"}
+
+
+def _wei_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _settlement_wei(entry: dict[str, Any]) -> int:
+    settlement = entry.get("settlement") or {}
+    total = sum(
+        _wei_int(transfer.get("amount"))
+        for transfer in settlement.get("transfers", [])
+        if isinstance(transfer, dict)
+    )
+    return total or _wei_int(entry.get("amount"))
+
+
+def _marketplace_stats(
+    jobs: list[dict[str, Any]],
+    *,
+    total_jobs: int,
+    degraded_jobs: int,
+    legacy_jobs: int,
+) -> dict[str, Any]:
+    locked_wei = sum(
+        _wei_int(job.get("amount"))
+        for job in jobs
+        if job.get("status") in _LOCKED_STATUSES
+    )
+    pending_jobs = [job for job in jobs if job.get("status") == "SETTLEMENT_PENDING"]
+    pending_wei = sum(_settlement_wei(job) for job in pending_jobs)
+    finalized_jobs = [job for job in jobs if job.get("status") in _FINAL_STATUSES]
+    finalized_wei = sum(_settlement_wei(job) for job in finalized_jobs)
+    protected_wei = locked_wei + pending_wei
+    return {
+        "network": "testnet_bradbury",
+        "total_jobs": total_jobs,
+        "active_jobs": sum(1 for job in jobs if job.get("status") in _ACTIVE_STATUSES),
+        "open_opportunities": sum(
+            1 for job in jobs if job.get("status") in {"UNFUNDED", "OPEN"}
+        ),
+        "locked_wei": str(locked_wei),
+        "pending_settlement_wei": str(pending_wei),
+        "protected_wei": str(protected_wei),
+        "settlement_pending": len(pending_jobs),
+        "finalized_settlements": len(finalized_jobs),
+        "finalized_settlement_wei": str(finalized_wei),
+        # Backward-compatible aliases for clients deployed before this release.
+        "escrow_wei": str(locked_wei),
+        "escrow_gen": locked_wei / 10**18,
+        "degraded_jobs": degraded_jobs,
+        "legacy_jobs": legacy_jobs,
+        "generated_at": utc_now(),
+    }
 
 
 @app.get("/api/stats")
 def stats():
-    jobs = store.list_jobs()
-    active = 0
-    escrow_wei = 0
-    degraded = 0
-    for meta in jobs:
-        if meta.get("legacy_contract"):
-            continue
-        try:
-            state = _public_state(meta, _job_state(meta["address"]))
-            status = state["job"].get("status")
-            if status in _ACTIVE_STATUSES:
-                active += 1
-            escrow_wei += int(state["job"].get("amount") or 0)
-        except Exception:
-            degraded += 1
-    return {
-        "network": "testnet_bradbury",
-        "total_jobs": len(jobs),
-        "active_jobs": active,
-        "escrow_wei": escrow_wei,
-        "escrow_gen": escrow_wei / 1e18,
-        "degraded_jobs": degraded,
-        "legacy_jobs": sum(1 for job in jobs if job.get("legacy_contract")),
-        "generated_at": utc_now(),
-    }
+    return list_jobs()["stats"]
 
 
 @app.get("/api/jobs")
 def list_jobs():
     output: list[dict[str, Any]] = []
-    for meta in store.list_jobs():
+    records = store.list_jobs()
+    degraded = 0
+    for meta in records:
         entry = dict(meta)
         if meta.get("legacy_contract"):
             entry.update({
@@ -555,14 +622,29 @@ def list_jobs():
                 public = _public_state(meta, _job_state(meta["address"]))
                 entry["status"] = public["job"].get("status")
                 entry["amount"] = public["job"].get("amount")
-                entry["score"] = public["result"].get("score")
+                entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
+                entry["score"] = (
+                    public["result"].get("score")
+                    if entry["evaluation_complete"]
+                    else None
+                )
                 entry["settlement"] = public["job"].get("settlement")
                 store.update_job(meta["address"], lifecycle_status=entry["status"])
             except Exception as exc:
                 entry["status"] = "UNKNOWN"
                 entry["error"] = str(exc)
+                degraded += 1
         output.append(entry)
-    return {"jobs": output, "demo": _demo_public_config()}
+    return {
+        "jobs": output,
+        "stats": _marketplace_stats(
+            output,
+            total_jobs=len(records),
+            degraded_jobs=degraded,
+            legacy_jobs=sum(1 for job in records if job.get("legacy_contract")),
+        ),
+        "demo": _demo_public_config(),
+    }
 
 
 @app.get("/api/jobs/{job_id}")
@@ -657,7 +739,19 @@ def create_job(req: CreateJobRequest):
 
 
 class FundRequest(BaseModel):
-    amount_wei: int = 1000000000000000
+    # JSON strings preserve the exact integer produced by the browser's BigInt
+    # conversion. Integer input remains accepted for older API clients.
+    amount_wei: str | int = str(MIN_DEMO_AMOUNT_WEI)
+
+    @field_validator("amount_wei")
+    @classmethod
+    def validate_amount_wei(cls, value: str | int) -> str:
+        if isinstance(value, bool):
+            raise ValueError("amount_wei must be a base-10 integer string")
+        text = str(value).strip()
+        if not text.isdigit():
+            raise ValueError("amount_wei must be a base-10 integer string")
+        return text
 
 
 class SubmitRequest(BaseModel):
@@ -686,9 +780,14 @@ def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = No
 
 @app.post("/api/jobs/{job_id}/fund")
 def fund(job_id: str, req: FundRequest):
-    if req.amount_wei <= 0:
-        raise HTTPException(status_code=422, detail={"code": "INVALID_AMOUNT", "message": "amount_wei must be positive"})
-    return _run_action(job_id, "fund", "client", value=req.amount_wei)
+    amount_wei = int(req.amount_wei)
+    if amount_wei < MIN_DEMO_AMOUNT_WEI:
+        raise HTTPException(status_code=422, detail={
+            "code": "BELOW_MINIMUM_DEMO_AMOUNT",
+            "message": "Minimum demo deposit is 0.001 GEN.",
+            "minimum_wei": str(MIN_DEMO_AMOUNT_WEI),
+        })
+    return _run_action(job_id, "fund", "client", value=amount_wei)
 
 
 @app.post("/api/jobs/{job_id}/accept_terms")

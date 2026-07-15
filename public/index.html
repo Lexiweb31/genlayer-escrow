@@ -585,13 +585,15 @@
     .market-hero h1{font-size:34px;line-height:1.08;letter-spacing:-.035em;margin-bottom:9px;max-width:650px}
     .market-hero p{color:var(--muted);font-size:13.5px;max-width:610px}
     .market-hero-actions{display:flex;gap:9px;flex-shrink:0}
-    .market-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .market-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px}
     .market-stat{position:relative;overflow:hidden;background:rgba(19,19,22,.78);border:1px solid var(--border);border-radius:14px;padding:15px 17px;min-height:82px}
     .market-stat::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);opacity:.5}
     .market-stat-label{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--subtle);margin-bottom:7px}
     .market-stat-val{font-size:23px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
     .market-stat-val.money{color:var(--gold)}
     .market-stat-note{font-size:10.5px;color:var(--subtle);margin-top:2px}
+    .jc-pending-proof{margin:11px 0 0;padding:10px;border:1px solid rgba(216,169,78,.3);border-radius:10px;background:var(--yellow-bg);font-size:10px;line-height:1.55;color:var(--muted)}
+    .jc-pending-proof b{display:block;color:var(--yellow);font-size:10.5px;margin-bottom:3px}.jc-pending-proof code{font-family:'DM Mono';font-size:9px;color:var(--text);overflow-wrap:anywhere}.jc-pending-proof a{color:var(--blue);text-decoration:none}.jc-pending-proof a:hover{text-decoration:underline}
     .market-toolbar{display:flex;align-items:center;gap:10px;padding:11px;background:rgba(19,19,22,.72);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;backdrop-filter:blur(12px)}
     .market-search{position:relative;flex:1;min-width:180px}
     .market-search::before{content:'⌕';position:absolute;left:13px;top:50%;transform:translateY(-51%);font-size:18px;color:var(--subtle);pointer-events:none}
@@ -1111,7 +1113,7 @@
   </aside>
 
   <div class="account-pop" id="accountPop" role="dialog" aria-label="Demo account details">
-    <div class="account-pop-head"><div><div class="account-pop-title">Bradbury demo accounts</div><div class="account-pop-note">Server-signed, testnet-only. No browser wallet is connected.</div></div><button class="icon-btn" onclick="closeAccount()" aria-label="Close account details">×</button></div>
+    <div class="account-pop-head"><div><div class="account-pop-title">Bradbury demo accounts</div><div class="account-pop-note">Server-signed, testnet-only.</div></div><button class="icon-btn" onclick="closeAccount()" aria-label="Close account details">×</button></div>
     <div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div>
     <div class="kv" style="display:block"><span class="kv-k">Client signer</span><div class="addr-block"><span class="addr-mono" id="accountClient">Not configured</span><button class="copy-btn" onclick="cp(document.getElementById('accountClient').textContent,this)">Copy</button></div></div>
     <div class="kv" style="display:block"><span class="kv-k">Worker signer</span><div class="addr-block"><span class="addr-mono" id="accountWorker">Not configured</span><button class="copy-btn" onclick="cp(document.getElementById('accountWorker').textContent,this)">Copy</button></div></div>
@@ -1320,9 +1322,10 @@
 
         <div class="market-stats" aria-label="Marketplace summary">
           <div class="market-stat"><div class="market-stat-label">Open opportunities</div><div class="market-stat-val" id="mkOpen">—</div><div class="market-stat-note">ready to accept</div></div>
-          <div class="market-stat"><div class="market-stat-label">GEN protected</div><div class="market-stat-val money" id="mkGen">—</div><div class="market-stat-note">held by contracts</div></div>
-          <div class="market-stat"><div class="market-stat-label">Settled jobs</div><div class="market-stat-val" id="mkSettled">—</div><div class="market-stat-note">validator-resolved</div></div>
-          <div class="market-stat"><div class="market-stat-label">Network</div><div class="market-stat-val" style="color:var(--ok)">Live</div><div class="market-stat-note">testnet_bradbury</div></div>
+          <div class="market-stat"><div class="market-stat-label">GEN locked</div><div class="market-stat-val money" id="mkGen">—</div><div class="market-stat-note">active escrow only</div></div>
+          <div class="market-stat"><div class="market-stat-label">Pending outbound</div><div class="market-stat-val money" id="mkPendingGen">—</div><div class="market-stat-note">GEN awaiting finalization</div></div>
+          <div class="market-stat"><div class="market-stat-label">Settlement pending</div><div class="market-stat-val" id="mkPendingCount">—</div><div class="market-stat-note">not counted as settled</div></div>
+          <div class="market-stat"><div class="market-stat-label">Finalized settlements</div><div class="market-stat-val" id="mkSettled">—</div><div class="market-stat-note">confirmed outbound transfer</div></div>
         </div>
 
         <div class="market-toolbar">
@@ -1473,7 +1476,8 @@
             <div class="step" id="st1"><div class="step-dot">2</div><div class="step-name">Accept</div></div>
             <div class="step" id="st2"><div class="step-dot">3</div><div class="step-name">Submit</div></div>
             <div class="step" id="st3"><div class="step-dot">4</div><div class="step-name">Evaluate</div></div>
-            <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Finalize</div></div>
+            <div class="step" id="st4"><div class="step-dot">5</div><div class="step-name">Settlement queued</div></div>
+            <div class="step" id="st5"><div class="step-dot">6</div><div class="step-name">Transfer finalized</div></div>
           </div>
         </div>
         <div class="mg-grid control-manage">
@@ -1586,6 +1590,7 @@ const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--
 let data = null, logOpen = false, logN = 0, curPage = 'landing', curJob = null;
 let theatreRunning = false, theatreTimers = [], actionBusy = false;
 let browseJobs = [];
+let browseStats = null;
 let demoMode = false;
 let liveActionsEnabled = false;
 let demoConfig = {mode:'simulated-walkthrough',live_actions_enabled:false,client_address:null,worker_address:null,notice:'Live actions are disabled.'};
@@ -1718,6 +1723,7 @@ function apiError(payload,status){
 function humanError(err){
   const raw=String(err?.message||err||'').replace(/^['"]|['"]$/g,'');
   if(err?.code==='INSUFFICIENT_DEMO_GEN')return 'Insufficient demo GEN: fund the configured Bradbury demo client account, then retry.';
+  if(err?.code==='BELOW_MINIMUM_DEMO_AMOUNT')return 'Minimum demo deposit is 0.001 GEN.';
   if(err?.code==='WRONG_ROLE')return 'Wrong demo role: this step must be signed by the distinct on-chain client or worker account shown for the job.';
   if(err?.code==='STALE_STATE')return 'Stale job state: refresh the contract and continue from its current on-chain step.';
   if(err?.code==='LEGACY_SETTLEMENT_CONTRACT')return 'Legacy settlement contract — do not fund. Create a new escrow after the safety patch.';
@@ -1791,10 +1797,32 @@ function log(msg,type=''){
 function toggleLog(){logOpen=!logOpen;document.getElementById('logLines').style.display=logOpen?'':'none';document.getElementById('logArr').textContent=logOpen?'▼':'▶'}
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
+const WEI_PER_GEN = 1000000000000000000n;
+const MIN_DEMO_AMOUNT_WEI = 1000000000000000n;
+const TINY_GEN_THRESHOLD_WEI = 100000000000000n;
 const short = a=>a?a.slice(0,6)+'...'+a.slice(-4):'—';
 const fmt = n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:4});
-const toGEN = w=>w===0?'0 GEN':fmt(w/1e18)+' GEN';
-const toGENNum = w=>w===0?'0':fmt(w/1e18);
+function weiBigInt(value){try{if(typeof value==='number'&&!Number.isSafeInteger(value))return 0n;return BigInt(value??0)}catch(e){return 0n}}
+function isPositiveWei(value){return weiBigInt(value)>0n}
+function decimalGENFromWei(value){
+  const wei=weiBigInt(value),negative=wei<0n,absolute=negative?-wei:wei;
+  const whole=absolute/WEI_PER_GEN,fraction=(absolute%WEI_PER_GEN).toString().padStart(18,'0').replace(/0+$/,'');
+  return (negative?'-':'')+whole.toString()+(fraction?'.'+fraction:'');
+}
+function toGEN(value){
+  const wei=weiBigInt(value),absolute=wei<0n?-wei:wei;
+  if(wei===0n)return '0 GEN';
+  if(absolute<TINY_GEN_THRESHOLD_WEI&&absolute!==1n)return `${wei.toString()} wei (less than 0.0001 GEN)`;
+  return decimalGENFromWei(wei)+' GEN';
+}
+const toGENNum = value=>decimalGENFromWei(value);
+function genToWeiExact(value){
+  const raw=String(value??'').trim();
+  if(!/^\d+(?:\.\d{1,18})?$/.test(raw))throw new Error('Enter a decimal GEN amount with no more than 18 decimal places.');
+  const [whole,fraction='']=raw.split('.');
+  return (BigInt(whole)*WEI_PER_GEN+BigInt((fraction+'0'.repeat(18)).slice(0,18))).toString();
+}
+const statusLabel = status=>status==='SETTLEMENT_PENDING'?'Settlement pending':status==='LEGACY_UNSAFE'?'Legacy · do not fund':status;
 const jobCode = addr => addr ? 'JOB-'+addr.slice(2,8).toUpperCase() : 'JOB-000000';
 const relativeTime = iso=>{const sec=Math.round((new Date(iso)-Date.now())/1000),abs=Math.abs(sec);const [v,u]=abs<60?[sec,'second']:abs<3600?[Math.round(sec/60),'minute']:abs<86400?[Math.round(sec/3600),'hour']:[Math.round(sec/86400),'day'];return new Intl.RelativeTimeFormat(undefined,{numeric:'auto'}).format(v,u)};
 
@@ -1814,7 +1842,7 @@ function renderAll() {
 }
 
 function renderPills(s) {
-  ['ovPill','mgPill','mobPill'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=s;e.className='pill p-'+s}});
+  ['ovPill','mgPill','mobPill'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=statusLabel(s);e.className='pill p-'+s}});
 }
 
 function renderProfile(addr) {
@@ -1846,19 +1874,20 @@ function renderOverview(job, result, addresses) {
   document.getElementById('ovCode').textContent=jobCode(addresses?.escrow);
   const t=document.getElementById('ovTitle'); if(t) t.textContent=data?.meta?.title || 'Escrow Job';
   document.getElementById('ovMeta').textContent='testnet_bradbury'+(job.terms_agreed?' · terms signed on-chain':'')+(legacy?' · LEGACY CONTRACT — DO NOT FUND':'');
-  const stage=Math.min(TERM.has(s)||pending?5:i,5);
-  const stageLabels=['Awaiting funding','Escrow funded','Terms accepted','Deliverable submitted','Validator score ready','Transfer finalized'];
+  const finalTransfer=TERM.has(s)&&settlement.transfer_status==='FINALIZED';
+  const stage=finalTransfer?6:pending?5:Math.min(i,4);
+  const stageLabels=['Awaiting funding','Escrow funded','Terms accepted','Submitted','Evaluated','Settlement queued','Transfer finalized'];
   document.getElementById('ovStageLabel').textContent=legacy?'Legacy contract · read only':pending?'Settlement transfer pending finalization':stageLabels[stage];
-  document.getElementById('ovStageCount').textContent=stage+'/5';
-  requestAnimationFrame(()=>{document.getElementById('ovStageFill').style.width=(stage/5*100)+'%'});
+  document.getElementById('ovStageCount').textContent=stage+'/6';
+  requestAnimationFrame(()=>{document.getElementById('ovStageFill').style.width=(stage/6*100)+'%'});
 
   document.getElementById('p-client').textContent=short(job.client);
   document.getElementById('p-worker').textContent=short(job.worker);
 
   document.getElementById('bal-val').textContent=toGENNum(job.amount);
-  document.getElementById('bal-hint').textContent=pending?'Outbound transfer pending finalization':TERM.has(s)?'Transfer finalized':job.amount>0?'Locked in contract until settlement':legacy?'Legacy contract · do not fund':'Not yet funded';
-  document.getElementById('bal-dot').style.background=pending?'var(--yellow)':TERM.has(s)?'var(--ok)':job.amount>0?'var(--ok)':'var(--subtle)';
-  document.getElementById('escrowOrbit').classList.toggle('funded',job.amount>0&&!TERM.has(s));
+  document.getElementById('bal-hint').textContent=pending?'Outbound transfer pending finalization':TERM.has(s)?'Transfer finalized':isPositiveWei(job.amount)?'Locked in contract until settlement':legacy?'Legacy contract · do not fund':'Not yet funded';
+  document.getElementById('bal-dot').style.background=pending?'var(--yellow)':TERM.has(s)?'var(--ok)':isPositiveWei(job.amount)?'var(--ok)':'var(--subtle)';
+  document.getElementById('escrowOrbit').classList.toggle('funded',isPositiveWei(job.amount)&&!TERM.has(s));
   document.getElementById('bal-addr').textContent=short(addresses?.escrow);
   document.getElementById('bal-fee').textContent=(job.fee_bps/100)+'%';
 
@@ -1868,15 +1897,18 @@ function renderOverview(job, result, addresses) {
   document.getElementById('specSigned').innerHTML = job.terms_agreed ? '✓ SIGNED' : '';
 
   // Timeline
+  const evaluated=result?.score!=null,settlementQueued=Boolean(settlement.parent_transaction)||pending||finalTransfer;
   const steps=[
-    {l:'Escrow Funded',     d:'Client deposited '+toGEN(job.amount)},
-    {l:'Terms Accepted',    d:'Worker agreed to the job specification'},
-    {l:'Work Submitted',    d:'Deliverable URL provided for evaluation'},
-    {l:'AI Evaluated',      d:result?.score!=null?`Scored ${result.score}/100`:'AI graded the submission'},
-    {l:'Transfer Finalized', d:pending?'Outcome fixed; EOA transfer record is still pending':{ACCEPTED:'Worker payout transfer finalized',PARTIAL:'Split transfers finalized',REFUNDED:'Client refund transfer finalized'}[s]||'Awaiting an inspectable outbound transfer record'},
+    {l:'Funded',d:'Client deposited '+toGEN(job.amount),done:isPositiveWei(job.amount)},
+    {l:'Accepted',d:'Worker agreed to the job specification',done:Boolean(job.terms_agreed)},
+    {l:'Submitted',d:'Deliverable URL provided for evaluation',done:Boolean(job.submission_url)},
+    {l:'Evaluated',d:evaluated?`Scored ${result.score}/100`:'Not evaluated yet',done:evaluated},
+    {l:'Settlement queued',d:settlementQueued?`Decision: ${settlement.outcome||'recorded'}; outbound transfer queued`:'Awaiting finalization transaction',done:settlementQueued},
+    {l:'Transfer finalized',d:finalTransfer?({ACCEPTED:'Worker payout transfer finalized',PARTIAL:'Split transfers finalized',REFUNDED:'Client refund transfer finalized'}[s]||'Outbound transfer finalized'):'Pending finalization',done:finalTransfer},
   ];
+  const activeIndex=Math.max(0,steps.findIndex(step=>!step.done));
   document.getElementById('tl').innerHTML=steps.map((st,n)=>{
-    const done=n<i||TERM.has(s), active=!TERM.has(s)&&n===i;
+    const done=st.done, active=!finalTransfer&&n===activeIndex;
     const cls=done?'td-done':active?'td-active':'td-pending';
     const icon=done?'✓':active?'→':n+1;
     return `<div class="tl-item" style="animation:pageIn .25s var(--spring) both;animation-delay:${n*90}ms"><div class="tl-dot ${cls}" style="${active?'box-shadow:0 0 18px var(--accent-glow)':''}">${icon}</div><div><div class="tl-title" style="color:${done?'var(--text)':active?'var(--blue)':'var(--muted)'}">${st.l}</div><div class="tl-desc">${done||active?st.d:'Pending'}</div></div></div>`;
@@ -1921,8 +1953,8 @@ function settlementReceiptHTML(job,result){
   const labels={ACCEPTED:'Full worker payout',PARTIAL:'Proportional split',REFUNDED:'Full client refund'};
   const finalLabels={ACCEPTED:'Payment released',PARTIAL:'Split settlement confirmed',REFUNDED:'Funds refunded'};
   const colors={ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'},color=colors[outcome]||'var(--yellow)';
-  const transfers=(settlement.transfers||[]).filter(t=>Number(t.amount)>0);
-  const transferRows=transfers.length?transfers.map(t=>`<div class="transfer-row"><span>${settlementRecipientRole(t)}</span><code title="${esc(t.recipient||'')}">${short(t.recipient)}</code><b>${toGEN(Number(t.amount)||0)}</b></div>`).join(''):`<div class="transfer-row"><span>Transfer recipient</span><code>Waiting for contract record</code><b>—</b></div>`;
+  const transfers=(settlement.transfers||[]).filter(t=>isPositiveWei(t.amount));
+  const transferRows=transfers.length?transfers.map(t=>`<div class="transfer-row"><span>${settlementRecipientRole(t)}</span><code title="${esc(t.recipient||'')}">${short(t.recipient)}</code><b>${toGEN(t.amount)}</b></div>`).join(''):`<div class="transfer-row"><span>Transfer recipient</span><code>Waiting for contract record</code><b>—</b></div>`;
   const title=simulated?'Simulated settlement example':final?(finalLabels[outcome]||'Settlement confirmed'):'Pending finalization';
   const copy=simulated?'Clearly labeled sample state for the walkthrough. No on-chain transaction or GEN transfer occurred.':final?'The outbound transfer is confirmed and its recipient, amount, and transaction reference are inspectable below.':`Intended outcome: ${labels[outcome]||outcome||'recorded'}. Merit will not call this paid or refunded until the outbound EOA transfer is confirmed.`;
   return `<div class="settlement-receipt"><div class="receipt-mark" style="color:${color};background:color-mix(in srgb,${color} 10%,transparent)">${simulated?'◇':final?'✓':'…'}</div><div class="step-tag">${simulated?'Simulated settlement example':final?'Settlement proof · confirmed':'Settlement proof · awaiting confirmation'}</div><div class="receipt-title" style="color:${color}">${esc(title)}</div><div class="receipt-copy">${esc(copy)}</div><div class="transfer-status ${final&&!simulated?'final':''}">${simulated?'◇ simulated · no transaction':final?'● outbound transfer confirmed':'◌ Pending finalization'}</div><div class="transfer-list">${transferRows}</div>${simulated?'':settlementReferenceHTML(settlement)}<div class="receipt-grid"><div class="receipt-cell"><span>Final score</span><b>${result?.score??'—'}/100</b></div><div class="receipt-cell"><span>${final?'Confirmed outcome':'Intended outcome'}</span><b>${esc(labels[outcome]||outcome||'—')}</b></div><div class="receipt-cell"><span>Transfer status</span><b>${final?'Confirmed':'Pending finalization'}</b></div></div><div class="receipt-actions"><button class="btn bh" onclick="${simulated?"nav('browse')":"reload()"}">${simulated?'Continue walkthrough':'Refresh status'}</button><button class="btn bh" onclick="go('evaluate')">View evaluation →</button></div></div>`;
@@ -1930,10 +1962,11 @@ function settlementReceiptHTML(job,result){
 
 function renderManage(job, result) {
   const s=job.status, i=S2I[s]??0;
-  for(let n=0;n<5;n++){
+  const settlement=job.settlement||{},manageProgress=TERM.has(s)&&settlement.transfer_status==='FINALIZED'?6:s==='SETTLEMENT_PENDING'?5:i;
+  for(let n=0;n<6;n++){
     const el=document.getElementById('st'+n);
-    el.className='step'+(TERM.has(s)||n<i?' done':n===i?' active':'');
-    el.querySelector('.step-dot').textContent=(TERM.has(s)||n<i)?'✓':n+1;
+    el.className='step'+(n<manageProgress?' done':n===manageProgress?' active':'');
+    el.querySelector('.step-dot').textContent=n<manageProgress?'✓':n+1;
   }
   if(s==='LEGACY_UNSAFE'||job.legacy_contract){
     document.getElementById('actCard').innerHTML=`<div class="settlement-receipt"><div class="receipt-mark" style="color:var(--red);background:var(--red-bg)">!</div><div class="step-tag">Safety lock</div><div class="receipt-title" style="color:var(--red)">Legacy settlement contract — do not fund</div><div class="receipt-copy">This immutable deployment predates the correct EOA external-message transfer pattern. All live actions are disabled.</div><div class="receipt-actions"><button class="btn bg" onclick="nav('post')">Create a safe escrow →</button></div></div>`;
@@ -1946,7 +1979,7 @@ function renderManage(job, result) {
   if(job.spec){document.getElementById('specTxt').textContent=job.spec;document.getElementById('specCard').style.display='';}
   const sc=result?.score, sh=sc!=null?`<div class="hint hb" style="margin-bottom:14px"><span>ℹ️</span><span>Score <strong>${sc}/100</strong> — ${sc>=job.min_score?`full pay (≥${job.min_score})`:sc>=job.partial_floor?`partial pay (above floor ${job.partial_floor})`:`refund (below floor ${job.partial_floor})`}</span></div>`:'';
   const steps=[
-    {tag:'Step 1 of 5 · demo client signer',title:'Fund the Escrow',desc:'The server-side Bradbury demo client deposits testnet GEN. No visitor wallet is connected.',form:`<div class="field"><label>Amount (wei)</label><input type="number" id="inp-a" value="1000000000000000"/><small>1,000,000,000,000,000 wei = 0.001 testnet GEN</small></div><button class="btn bg btn-full" onclick="fund()" ${liveActionsEnabled?'':'disabled'}>Fund with demo client</button>`},
+    {tag:'Step 1 of 5 · demo client signer',title:'Fund the Escrow',desc:'The server-side Bradbury demo client deposits testnet GEN. No visitor wallet is connected.',form:`<div class="field"><label>Amount (GEN)</label><input type="text" inputmode="decimal" id="inp-a" value="0.001" aria-describedby="inp-a-help"/><small id="inp-a-help">Minimum demo deposit: 0.001 GEN</small></div><button class="btn bg btn-full" onclick="fund()" ${liveActionsEnabled?'':'disabled'}>Fund with demo client</button>`},
     {tag:'Step 2 of 5 · demo worker signer',title:'Accept Terms',desc:'The distinct server-side Bradbury demo worker accepts the specification.',form:`<button class="btn bb btn-full" onclick="acceptTerms()" ${liveActionsEnabled?'':'disabled'}>Accept with demo worker</button>`},
     {tag:'Step 3 of 5 · demo worker signer',title:'Submit Your Deliverable',desc:'The demo worker attaches a public URL for validator inspection.',form:`<div class="field"><label>Deliverable URL</label><input type="url" id="inp-u" placeholder="https://your-work-url.com"/><small>Must be publicly accessible — validators fetch this URL directly</small></div><button class="btn bb btn-full" onclick="submitWork()" ${liveActionsEnabled?'':'disabled'}>Submit with demo worker</button>`},
     {tag:'Step 4 of 5 · demo client signer',title:'Request AI Evaluation',desc:'The demo client submits the evaluation transaction; validators independently score the public evidence.',form:`<div class="hint hy"><span>⏱</span><span>Takes <strong>30–60 seconds</strong> on testnet while validators inspect the page.</span></div><button class="btn bp btn-full" onclick="evaluate()" ${liveActionsEnabled?'':'disabled'}>Start server-signed evaluation</button>`},
@@ -2051,8 +2084,8 @@ function renderVerdictCard(job, result) {
   document.getElementById('rText').textContent=result.reasoning||'No reasoning provided.';
   renderEvidenceRoom(job,result);
 
-  const transfers=(settlement.transfers||[]).filter(t=>Number(t.amount)>0);
-  const rows=transfers.map(t=>`<div class="settle-row" style="background:${t.settlement_type==='CLIENT_REFUND'?'var(--red-bg)':'var(--ok-bg)'}"><span>${transferFinal?'✓ Confirmed':'◌ Pending finalization'} · ${settlementRecipientRole(t)} · <span title="${esc(t.recipient||'')}">${short(t.recipient)}</span></span><span class="settle-amt" style="color:${t.settlement_type==='CLIENT_REFUND'?'var(--red)':'var(--ok)'}">${toGEN(Number(t.amount)||0)}</span></div>`);
+  const transfers=(settlement.transfers||[]).filter(t=>isPositiveWei(t.amount));
+  const rows=transfers.map(t=>`<div class="settle-row" style="background:${t.settlement_type==='CLIENT_REFUND'?'var(--red-bg)':'var(--ok-bg)'}"><span>${transferFinal?'✓ Confirmed':'◌ Pending finalization'} · ${settlementRecipientRole(t)} · <span title="${esc(t.recipient||'')}">${short(t.recipient)}</span></span><span class="settle-amt" style="color:${t.settlement_type==='CLIENT_REFUND'?'var(--red)':'var(--ok)'}">${toGEN(t.amount)}</span></div>`);
   document.getElementById('settleRows').innerHTML = (rows.join('') || `<div class="settle-row" style="background:var(--border-sub)"><span>${s==='EVALUATED'?'Outcome ready · finalize() not submitted':'Pending finalization · waiting for transfer record'}</span><span class="settle-amt">—</span></div>`)+(settlementStarted?settlementReferenceHTML(settlement):'');
   // Appeals are valid only before settlement. Terminal jobs previously exposed
   // this button, causing the chain to reject the call with opaque error code 14.
@@ -2078,6 +2111,7 @@ function exportSettlementReport(){
 async function runEvalTheatre() {
   if(!liveActionsEnabled){toast('Simulated walkthrough only','info','Live evaluation is disabled; no on-chain transaction will be faked.');return}
   if(actionBusy||theatreRunning)return;actionBusy=true;
+  disableAct(true);
   theatreRunning = true;
   theatreClearTimers();
   document.getElementById('evEmpty').style.display='none';
@@ -2136,7 +2170,7 @@ async function runEvalTheatre() {
   if (!ok) {
     theatreRunning = false;
     document.getElementById('theatreBody').innerHTML = `<div class="theatre-row" style="border-color:var(--red)"><span style="color:var(--red)">✕</span><span>Evaluation failed: ${errMsg}</span></div><div class="btn-row" style="margin:14px 22px 0"><button class="btn bp" onclick="evaluate()">Retry evaluation</button></div>`;
-    toast('Evaluation failed','err',errMsg);actionBusy=false;
+    toast('Evaluation failed','err',errMsg);disableAct(false);actionBusy=false;
     return;
   }
 
@@ -2144,7 +2178,7 @@ async function runEvalTheatre() {
   await reload();
   renderPipeline(5);
   theatreRunning = false;
-  actionBusy=false;
+  disableAct(false);actionBusy=false;
   const sc = data?.result?.score;
   if (sc != null) renderEvaluateStatic(data.job, data.result);
 }
@@ -2166,7 +2200,7 @@ async function cp(addr,btn){try{await navigator.clipboard.writeText(addr);const 
 // ── MARKETPLACE ──────────────────────────────────────────────────────────────
 async function loadBrowse() {
   const body = document.getElementById('browseBody');
-  if(demoMode){browseJobs=DEMO_JOBS;updateMarketplaceSummary(browseJobs);filterBrowse();return}
+  if(demoMode){browseJobs=DEMO_JOBS;browseStats=null;updateMarketplaceSummary(browseJobs);filterBrowse();return}
   body.innerHTML = `<div class="jobs-grid"><div class="skel" style="height:248px;border-radius:16px"></div><div class="skel" style="height:248px;border-radius:16px"></div></div>`;
   document.getElementById('marketCount').textContent='syncing registry…';
   const slow=delayedNote(body,'Still loading — the free-tier API may be waking up…');
@@ -2176,7 +2210,8 @@ async function loadBrowse() {
     const d = await r.json();
     if(d.demo)applyDemoConfig(d.demo);
     browseJobs = d.jobs || [];
-    updateMarketplaceSummary(browseJobs);
+    browseStats = d.stats || null;
+    updateMarketplaceSummary(browseJobs,browseStats);
     filterBrowse();
   } catch(e) {
     browseJobs=[];
@@ -2185,13 +2220,17 @@ async function loadBrowse() {
   } finally {clearTimeout(slow)}
 }
 
-function updateMarketplaceSummary(jobs){
-  const open=jobs.filter(j=>['UNFUNDED','OPEN'].includes(j.status||'UNFUNDED')).length;
-  const settled=jobs.filter(j=>TERM.has(j.status)).length;
-  const gen=jobs.filter(j=>!TERM.has(j.status)).reduce((sum,j)=>sum+(Number(j.amount)||0),0);
+function updateMarketplaceSummary(jobs,stats=null){
+  const open=stats?.open_opportunities??jobs.filter(j=>['UNFUNDED','OPEN'].includes(j.status||'UNFUNDED')).length;
+  const settled=stats?.finalized_settlements??jobs.filter(j=>TERM.has(j.status)).length;
+  const pendingCount=stats?.settlement_pending??jobs.filter(j=>j.status==='SETTLEMENT_PENDING').length;
+  const lockedWei=stats?.locked_wei??jobs.filter(j=>['OPEN','AGREED','SUBMITTED','EVALUATED'].includes(j.status)).reduce((sum,j)=>sum+weiBigInt(j.amount),0n).toString();
+  const pendingWei=stats?.pending_settlement_wei??jobs.filter(j=>j.status==='SETTLEMENT_PENDING').reduce((sum,j)=>{const transfers=(j.settlement?.transfers||[]).filter(t=>isPositiveWei(t.amount));return sum+(transfers.length?transfers.reduce((total,t)=>total+weiBigInt(t.amount),0n):weiBigInt(j.amount))},0n).toString();
   document.getElementById('mkOpen').textContent=open;
   document.getElementById('mkSettled').textContent=settled;
-  document.getElementById('mkGen').textContent=gen>0?toGEN(gen):'0';
+  document.getElementById('mkPendingCount').textContent=pendingCount;
+  document.getElementById('mkGen').textContent=toGEN(lockedWei);
+  document.getElementById('mkPendingGen').textContent=toGEN(pendingWei);
   const recent=[...jobs].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)).slice(0,4);
   const activity=recent.length?recent.map(j=>`<div class="activity-item"><b>${esc(j.title||'Escrow job')}</b> is ${(j.status||'UNFUNDED').toLowerCase()}<span class="activity-time">${j.created_at?relativeTime(j.created_at):jobCode(j.address)}</span></div>`).join(''):`<div class="activity-item"><b>Registry connected</b><span class="activity-time">waiting for the first escrow</span></div>`;
   document.getElementById('marketActivity').innerHTML=activity;
@@ -2208,7 +2247,7 @@ function filterBrowse(){
     const matchesStatus=filter==='ALL'||(filter==='OPEN'&&['UNFUNDED','OPEN'].includes(status))||(filter==='ACTIVE'&&['AGREED','SUBMITTED','EVALUATED'].includes(status))||(filter==='SETTLED'&&TERM.has(status));
     return matchesText&&matchesStatus&&(!savedOnly||savedJobs.has(j.address||j.id));
   });
-  jobs.sort((a,b)=>sort==='VALUE'?(Number(b.amount)||0)-(Number(a.amount)||0):sort==='SCORE'?(Number(b.score)||-1)-(Number(a.score)||-1):sort==='TITLE'?String(a.title||'').localeCompare(String(b.title||'')):new Date(b.created_at||0)-new Date(a.created_at||0));
+  jobs.sort((a,b)=>sort==='VALUE'?(weiBigInt(b.amount)>weiBigInt(a.amount)?1:weiBigInt(b.amount)<weiBigInt(a.amount)?-1:0):sort==='SCORE'?(Number(b.score)||-1)-(Number(a.score)||-1):sort==='TITLE'?String(a.title||'').localeCompare(String(b.title||'')):new Date(b.created_at||0)-new Date(a.created_at||0));
   updateSavedUI();
   document.getElementById('marketCount').textContent=`${jobs.length} of ${browseJobs.length} job${browseJobs.length===1?'':'s'}`;
   if(!jobs.length){
@@ -2238,10 +2277,9 @@ async function loadStats() {
     const r = await fetch(API_BASE+'/api/stats');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    const active = d.active_jobs||0, total = d.total_jobs||0, gen = d.escrow_gen||0;
+    const active = d.active_jobs||0, total = d.total_jobs||0, protectedWei=d.protected_wei??d.escrow_wei??'0',pending=d.settlement_pending||0;
     if (total === 0) { setBadge(`${LIVE}<span class="sep"></span><span class="seg">be the first to post a job</span>`); return; }
-    const genTxt = gen>=1 ? gen.toFixed(2) : (gen>0 ? gen.toFixed(4) : '0');
-    setBadge(`${LIVE}<span class="sep"></span><span class="seg"><b>${active}</b> active job${active===1?'':'s'}</span><span class="sep"></span><span class="seg"><b class="gen">${genTxt}</b> GEN in escrow</span>`);
+    setBadge(`${LIVE}<span class="sep"></span><span class="seg"><b>${active}</b> active job${active===1?'':'s'}</span><span class="sep"></span><span class="seg"><b class="gen">${toGEN(protectedWei)}</b> protected</span>${pending?`<span class="sep"></span><span class="seg"><b>${pending}</b> settlement pending</span>`:''}`);
   } catch(e) {
     // Non-fatal — dim the badge, keep the hero fully usable.
     setBadge(`${LIVE.replace('Network live','Network · live stats unavailable')}`, true);
@@ -2299,21 +2337,25 @@ function scoreRing(score){
 function jobCardHTML(j) {
   const status = j.status || 'UNFUNDED';
   const acc = JC_ACCENT[status] || 'muted';
-  const amt = (j.amount!=null && j.amount>0) ? toGEN(j.amount) : '—';
+  const amt = isPositiveWei(j.amount) ? toGEN(j.amount) : '—';
   const scoreLine = j.score!=null
     ? `<span class="jc-score-wrap">${scoreRing(j.score)}<span class="jc-score">AI score</span></span>`
-    : `<span class="jc-score">not evaluated</span>`;
+    : `<span class="jc-score">Not evaluated yet</span>`;
   const when=j.created_at?`<span title="${new Date(j.created_at).toLocaleString()}">${relativeTime(j.created_at)}</span>`:'';
   const category=jobCategory(j.title||'',j.spec||'');
   const stateNote=status==='LEGACY_UNSAFE'?'do not fund · legacy contract':status==='SETTLEMENT_PENDING'?'transfer pending finalization':TERM.has(status)?'transfer finalized':status==='UNFUNDED'?'awaiting demo-client funding':status==='OPEN'?'awaiting demo worker':'work in progress';
   const id=j.id||j.address,key=j.address||j.id,isSaved=savedJobs.has(key);
+  const evaluationChip=status==='LEGACY_UNSAFE'?'⚠ legacy unsafe':j.score!=null?'5-validator result confirmed':'Not evaluated yet';
+  const settlement=j.settlement||{},parent=String(settlement.parent_transaction||''),parentUrl=settlement.parent_explorer||(parent?'https://explorer-bradbury.genlayer.com/tx/'+parent:'');
+  const pendingTransfers=(settlement.transfers||[]).filter(t=>isPositiveWei(t.amount));
+  const pendingProof=status==='SETTLEMENT_PENDING'?`<div class="jc-pending-proof"><b>Settlement transfer pending finalization</b>${pendingTransfers.length?pendingTransfers.map(t=>`${settlementRecipientRole(t)} · <code title="${esc(t.recipient||'')}">${short(t.recipient)}</code> · ${toGEN(t.amount)}`).join('<br>'):'Recipient and amount awaiting contract record'}${parent?`<br>Parent transaction · <code title="${esc(parent)}">${esc(parent)}</code>${parentUrl?` · <a href="${esc(parentUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Explorer ↗</a>`:''}`:''}</div>`:'';
   return `<div class="job-card acc-${acc}" onclick="openJob('${id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openJob('${id}')} ">
     <button class="save-job ${isSaved?'on':''}" onclick="toggleSaveJob(event,'${key}')" aria-label="${isSaved?'Remove from':'Save to'} watchlist" title="${isSaved?'Remove from':'Save to'} watchlist">${isSaved?'★':'☆'}</button>
-    <div class="jc-top"><span class="jc-code">${jobCode(j.address)}</span><span class="pill p-${status}">${status}</span></div>
+    <div class="jc-top"><span class="jc-code">${jobCode(j.address)}</span><span class="pill p-${status}">${statusLabel(status)}</span></div>
     <div class="jc-category">${category}</div>
     <div class="jc-title">${esc(j.title||'Untitled job')}</div>
     <div class="jc-spec">${esc(j.spec||'')}</div>
-    <div class="jc-meta"><span class="jc-chip">${status==='LEGACY_UNSAFE'?'⚠ legacy unsafe':'5 validators'}</span><span class="jc-chip">${stateNote}</span><span class="jc-chip">${status==='LEGACY_UNSAFE'?'read only':'public deliverable'}</span></div>
+    <div class="jc-meta"><span class="jc-chip">${evaluationChip}</span><span class="jc-chip">${stateNote}</span><span class="jc-chip">${status==='LEGACY_UNSAFE'?'read only':'public deliverable'}</span></div>${pendingProof}
     <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b>${when?` · ${when}`:''}</span>${scoreLine}</div>
   </div>`;
 }
@@ -2405,6 +2447,7 @@ async function copyTermsFingerprint(){const el=document.getElementById('termsFin
 
 async function createJob() {
   if(demoMode||!liveActionsEnabled){toast('Simulated walkthrough only','info','Configure two different Bradbury demo accounts to enable deployment. No on-chain transaction will be faked.');return}
+  if(actionBusy)return;
   const spec  = document.getElementById('post-spec').value.trim();
   const title = document.getElementById('post-title').value.trim();
   const feePct= parseFloat(document.getElementById('post-fee').value)||0;
@@ -2419,7 +2462,7 @@ async function createJob() {
   if (!Number.isInteger(min)||min<0||min>100){const m='Minimum score must be from 0 to 100.';setFieldError(document.getElementById('post-min'),m);note.style.color='var(--red)';note.textContent=m;return;}
   if (!Number.isInteger(floor)||floor<0||floor>100||floor > min){ const m='Partial floor must be from 0 to 100 and cannot exceed min score.';setFieldError(document.getElementById('post-floor'),m);note.style.color='var(--red)';note.textContent=m;return; }
 
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Deploying escrow to testnet…';
+  actionBusy=true;btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Deploying escrow to testnet…';
   note.style.color=''; note.textContent = 'Deploying a new contract — this can take 30–90 seconds. Keep this tab open.';
   beginTxTracker('Deploying intelligent escrow');
   log('→ POST /api/jobs (deploy escrow)'); if(!logOpen) toggleLog();
@@ -2442,6 +2485,7 @@ async function createJob() {
     failTxTracker(msg);
     toast('Deploy failed', 'err', msg);
   } finally {
+    actionBusy=false;
     btn.disabled=!liveActionsEnabled; btn.innerHTML=liveActionsEnabled?'Deploy with demo client →':'Live deployment disabled · use walkthrough';
   }
 }
@@ -2485,7 +2529,12 @@ async function call(action,body={}){
   }catch(e){const msg=humanError(e);failTxTracker(msg);log('✗ '+msg,'err');toast('Action failed','err',msg,()=>call(action,body))}finally{disableAct(false);actionBusy=false}
 }
 
-function fund(){clearFieldErrors();const input=document.getElementById('inp-a'),amount=Number(input?.value);if(!Number.isSafeInteger(amount)||amount<=0){setFieldError(input,'Enter a positive whole amount in wei.');return}call('fund',{amount_wei:amount})}
+function fund(){
+  clearFieldErrors();const input=document.getElementById('inp-a');let amountWei;
+  try{amountWei=genToWeiExact(input?.value)}catch(e){setFieldError(input,e.message);return}
+  if(weiBigInt(amountWei)<MIN_DEMO_AMOUNT_WEI){setFieldError(input,'Minimum demo deposit is 0.001 GEN.');return}
+  call('fund',{amount_wei:amountWei});
+}
 function acceptTerms(){call('accept_terms')}
 function evaluate(){ go('evaluate'); runEvalTheatre(); }
 function appeal(){call('appeal')}

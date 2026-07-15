@@ -102,6 +102,86 @@ def test_legacy_job_writes_are_rejected():
     assert exc.value.detail["code"] == "LEGACY_SETTLEMENT_CONTRACT"
 
 
+def test_fund_request_preserves_exact_decimal_wei_string():
+    amount = "1000000000000000001"
+    assert api.FundRequest(amount_wei=amount).amount_wei == amount
+
+
+def test_fund_rejects_below_demo_minimum_before_chain_call():
+    with pytest.raises(HTTPException) as exc:
+        api.fund("0xunused", api.FundRequest(amount_wei="999999999999999"))
+    assert exc.value.status_code == 422
+    assert exc.value.detail["code"] == "BELOW_MINIMUM_DEMO_AMOUNT"
+    assert exc.value.detail["minimum_wei"] == "1000000000000000"
+
+
+def test_marketplace_stats_separate_locked_pending_and_finalized():
+    jobs = [
+        {"status": "SUBMITTED", "amount": "1", "settlement": {}},
+        {
+            "status": "SETTLEMENT_PENDING",
+            "amount": "1000",
+            "settlement": {
+                "transfers": [
+                    {"amount": "700", "settlement_type": "WORKER_PAYOUT"},
+                    {"amount": "300", "settlement_type": "CLIENT_REFUND"},
+                ]
+            },
+        },
+        {
+            "status": "REFUNDED",
+            "amount": "0",
+            "settlement": {
+                "transfer_status": "FINALIZED",
+                "transfers": [{"amount": "2000", "settlement_type": "CLIENT_REFUND"}],
+            },
+        },
+    ]
+    summary = api._marketplace_stats(
+        jobs, total_jobs=4, degraded_jobs=0, legacy_jobs=1
+    )
+    assert summary["locked_wei"] == "1"
+    assert summary["pending_settlement_wei"] == "1000"
+    assert summary["protected_wei"] == "1001"
+    assert summary["settlement_pending"] == 1
+    assert summary["finalized_settlements"] == 1
+    assert summary["finalized_settlement_wei"] == "2000"
+
+
+def test_submitted_job_is_not_reported_as_evaluated(monkeypatch):
+    record = _record("0xsubmitted")
+    monkeypatch.setattr(api.store, "list_jobs", lambda: [record])
+    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        api,
+        "_job_state",
+        lambda _address: {
+            "job": {
+                "status": "SUBMITTED",
+                "amount": 1,
+                "settlement": {"transfer_status": "NOT_STARTED", "transfers": []},
+            },
+            # Some contract readers expose the default numeric score before an
+            # evaluation. The marketplace must not treat it as a real result.
+            "result": {"score": 0, "status": "SUBMITTED"},
+        },
+    )
+    response = api.list_jobs()
+    assert response["jobs"][0]["amount"] == "1"
+    assert response["jobs"][0]["evaluation_complete"] is False
+    assert response["jobs"][0]["score"] is None
+    assert response["stats"]["locked_wei"] == "1"
+
+
+def test_wire_settlement_amounts_are_exact_strings():
+    settlement = api._settlement_for_wire({
+        "transfers": [{"amount": 10**18 + 1, "recipient": "0xworker"}],
+        "transfer_evidence": [{"amount": 10**18 + 1, "reference": "0xtx"}],
+    })
+    assert settlement["transfers"][0]["amount"] == "1000000000000000001"
+    assert settlement["transfer_evidence"][0]["amount"] == "1000000000000000001"
+
+
 @pytest.mark.parametrize(
     ("message", "code"),
     [
