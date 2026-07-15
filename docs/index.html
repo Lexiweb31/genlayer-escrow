@@ -60,6 +60,32 @@
     html[data-theme="light"] .market-hero,html[data-theme="light"] .job-hero,html[data-theme="light"] .eval-hero,html[data-theme="light"] .post-hero,html[data-theme="light"] .contracts-hero{background:linear-gradient(125deg,rgba(81,91,200,.12),rgba(255,255,255,.96) 52%,rgba(255,255,255,.78))}
     html[data-theme="light"] .escrow-demo{background:radial-gradient(circle at 50% 45%,rgba(81,91,200,.16),transparent 35%),linear-gradient(145deg,#fff,#f1f3f8)}
     html[data-theme="light"] .terminal{background:#11131A;color:#F7F8F8}
+    /* Light mode is a complete surface system, not the dark UI on a white canvas. */
+    html[data-theme="light"] .scroll{padding-left:clamp(30px,4vw,72px);padding-right:clamp(30px,4vw,72px)}
+    html[data-theme="light"] .market-stat,
+    html[data-theme="light"] .market-toolbar,
+    html[data-theme="light"] .market-panel,
+    html[data-theme="light"] .job-card,
+    html[data-theme="light"] .control-grid .card,
+    html[data-theme="light"] .next-action-card,
+    html[data-theme="light"] .stepper-wrap,
+    html[data-theme="light"] #actCard,
+    html[data-theme="light"] .eval-fact,
+    html[data-theme="light"] .theatre-card,
+    html[data-theme="light"] .v-card,
+    html[data-theme="light"] .post-card,
+    html[data-theme="light"] .post-side-card,
+    html[data-theme="light"] .contract-stat,
+    html[data-theme="light"] .contract-card{background:rgba(255,255,255,.92);box-shadow:0 12px 30px rgba(31,36,50,.07)}
+    html[data-theme="light"] .market-guide,
+    html[data-theme="light"] .market-empty,
+    html[data-theme="light"] .next-action-card{background:linear-gradient(135deg,rgba(81,91,200,.11),rgba(255,255,255,.96) 62%)}
+    html[data-theme="light"] .pipeline-strip{background:rgba(81,91,200,.07)}
+    html[data-theme="light"] .v-card{background:linear-gradient(150deg,#fff,#f4f5ff)}
+    html[data-theme="light"] .job-hero .ov-code{background:rgba(81,91,200,.08)}
+    html[data-theme="light"] .receipt-cell{background:#f8f9fc}
+    html[data-theme="light"] .demo-node{background:rgba(255,255,255,.92)}
+    html[data-theme="light"] .contract-card::after{border-color:rgba(81,91,200,.16);box-shadow:0 0 0 26px rgba(81,91,200,.025)}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%}
     body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.005em}
@@ -625,7 +651,7 @@
     .market-empty-orbit{width:58px;height:58px;margin:0 auto 16px;border:1px solid var(--accent);border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 8px var(--accent-bg),0 0 30px var(--accent-glow);color:var(--accent-bright);font-size:24px}
 
     /* ===== JOB CONTROL ROOM ===== */
-    #pg-overview,#pg-manage,#pg-evaluate{max-width:1320px}
+    #pg-overview,#pg-manage,#pg-evaluate{max-width:1440px}
     .job-hero{position:relative;overflow:hidden;align-items:flex-end;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(125deg,rgba(94,106,210,.15),rgba(19,19,22,.94) 48%,rgba(19,19,22,.76));box-shadow:var(--shadow-card)}
     .job-hero::after{content:'';position:absolute;right:-80px;top:-130px;width:360px;height:360px;border:1px solid rgba(123,133,232,.16);border-radius:50%;box-shadow:0 0 0 42px rgba(123,133,232,.025),0 0 0 84px rgba(123,133,232,.015);pointer-events:none}
     .job-hero .ov-code{display:inline-flex;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:rgba(10,10,12,.4);margin-bottom:10px;color:var(--accent-bright)}
@@ -712,7 +738,7 @@
     .hero-live .terminal{max-width:none;margin-top:12px}
 
     /* Guided job creation */
-    #pg-post{max-width:1180px;margin:0 auto}
+    #pg-post{max-width:1400px;margin:0 auto}
     .post-wrap{max-width:none}
     .post-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.15),rgba(19,19,22,.92));box-shadow:var(--shadow-card)}
     .post-hero .pg-title{font-size:28px;margin-bottom:5px}.post-hero p{font-size:13px;color:var(--muted);max-width:600px}
@@ -723,14 +749,14 @@
     .post-aside{display:flex;flex-direction:column;gap:12px}.post-side-card{padding:18px;border:1px solid var(--border);border-radius:16px;background:rgba(19,19,22,.78);box-shadow:var(--shadow-card)}.post-side-card h3{font-size:14px;margin-bottom:7px}.post-side-card p{font-size:11.5px;color:var(--muted);line-height:1.55}.trust-row{display:flex;gap:9px;padding:11px 0;border-bottom:1px solid var(--border-sub);font-size:11px;color:var(--muted)}.trust-row:last-child{border-bottom:0;padding-bottom:0}.trust-check{color:var(--ok)}
 
     /* Contract infrastructure */
-    #pg-contracts{max-width:1320px}
+    #pg-contracts{max-width:1440px}
     .contracts-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:24px 26px;margin-bottom:14px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(120deg,rgba(94,106,210,.15),rgba(19,19,22,.92));box-shadow:var(--shadow-card)}
     .contracts-hero .pg-title{font-size:28px;margin-bottom:5px}.network-health{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--ok)}.network-health::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px var(--ok)}
     .contract-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.contract-stat{padding:15px 17px;border:1px solid var(--border);border-radius:13px;background:rgba(19,19,22,.76)}.contract-stat span{display:block;font-size:9px;color:var(--subtle);letter-spacing:.09em;text-transform:uppercase;margin-bottom:5px}.contract-stat b{font-size:15px;font-weight:600}
     .cts-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.contract-card{position:relative;overflow:hidden;min-height:190px;background:linear-gradient(145deg,rgba(19,19,22,.98),rgba(11,11,14,.94))}.contract-card::after{content:'';position:absolute;right:-55px;bottom:-80px;width:180px;height:180px;border:1px solid rgba(123,133,232,.12);border-radius:50%;box-shadow:0 0 0 26px rgba(123,133,232,.02)}.contract-role{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:15px}.contract-actions{display:flex;gap:8px;align-items:center;position:relative;z-index:1}.contract-type{display:inline-flex;padding:4px 7px;border-radius:6px;background:var(--accent-bg);color:var(--accent-bright);font-size:9px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.08em}
 
     /* ===== POST (create job) ===== */
-    .post-wrap{max-width:620px;margin:0 auto}
+    .post-wrap{max-width:none;margin:0 auto}
     .post-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 28px}
     textarea{width:100%;padding:11px 13px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;font-family:'Inter';outline:none;transition:border-color .15s;resize:vertical;min-height:120px;line-height:1.6}
     textarea:focus{border-color:#3A4A4E}
