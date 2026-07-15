@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Merit — The AI judges the work</title>
+  <meta name="description" content="AI-arbitrated freelance escrow on GenLayer: validators judge submitted work and contracts settle payouts on-chain.">
+  <meta property="og:title" content="Merit — AI-Arbitrated Freelance Escrow">
+  <meta property="og:description" content="Post work, lock GEN, and let GenLayer validators reach an on-chain verdict.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://lexiweb31.github.io/genlayer-escrow/">
+  <meta property="og:image" content="https://lexiweb31.github.io/genlayer-escrow/og-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235E6AD2'/%3E%3Cpath d='M20 20h24v8H28v16h-8z' fill='%230A0A0C'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -44,6 +52,8 @@
     body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;letter-spacing:-.005em}
     a{text-decoration:none;color:inherit}
     button{font-family:inherit}
+    button:disabled{cursor:not-allowed;opacity:.62}
+    :is(button,a,[onclick],[role="button"],input,textarea,summary):focus-visible{outline:2px solid var(--accent-bright);outline-offset:3px}
     code,.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
@@ -99,9 +109,14 @@
     .sb-status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0}
     .sb-profile{margin:0 12px 16px;padding:11px 12px;border-radius:11px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;gap:9px;cursor:pointer;transition:border-color .15s}
     .sb-profile:hover{border-color:#2C3A3E}
+    .sb-profile:focus-visible{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-glow)}
     .prof-av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-dark));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--bg);flex-shrink:0}
     .prof-addr{font-family:'Inter';font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .prof-net{font-family:'Inter';font-size:10px;color:var(--subtle);margin-top:2px}
+    .account-pop{position:fixed;left:12px;bottom:82px;width:300px;z-index:80;background:var(--card);border:1px solid var(--border-strong);border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 0 28px var(--accent-glow);display:none}
+    .account-pop.on{display:block;animation:pageIn .24s var(--spring)}
+    .account-pop-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.account-pop-title{font-weight:700}.account-pop-note{font-size:11px;color:var(--muted);margin-top:2px}
+    .account-pop .addr-block{margin:8px 0 12px}.account-pop-actions{display:flex;gap:8px;flex-wrap:wrap}
 
     /* MAIN */
     .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative;z-index:1}
@@ -109,6 +124,9 @@
     .burger{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;line-height:1}
     .mob-title{font-size:15px;font-weight:700;flex:1}
     .scroll{flex:1;overflow-y:auto;padding:30px 48px 40px}
+    #pg-overview,#pg-manage,#pg-evaluate,#pg-contracts{max-width:1120px;margin:0 auto}
+    .page-enter{animation:pageIn .26s var(--spring)}
+    @keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     /* landing sections share one wide wrapper so everything spans the same
        full-width column with matching left/right margins */
     #pg-landing{max-width:var(--content);margin:0 auto}
@@ -255,7 +273,10 @@
     .validators-wrap{margin:12px 22px 0}
     .validators-label{font-family:'Inter';font-size:10px;letter-spacing:.1em;color:var(--subtle);margin-bottom:10px}
     .validators-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
-    .v-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .v-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 8px;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .2s var(--spring),border-color .2s,box-shadow .2s;opacity:0;animation:validatorIn .28s var(--spring) forwards;animation-delay:var(--delay,0ms)}
+    .v-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 8px 24px var(--accent-glow)}
+    .v-card.outlier{border-color:rgba(216,169,78,.45);box-shadow:0 0 18px rgba(216,169,78,.12)}
+    @keyframes validatorIn{to{opacity:1;transform:translateY(0)}from{opacity:0;transform:translateY(8px)}}
     .v-addr{font-family:'Inter';font-size:8.5px;color:var(--subtle)}
     .v-score{font-size:22px;font-weight:700;margin:6px 0 6px}
     .v-vote{font-family:'Inter';font-size:8.5px;letter-spacing:.06em;padding:2px 6px;border-radius:5px}
@@ -269,10 +290,11 @@
     .consensus-bar-wrap{flex:1}
     .consensus-bar-meta{display:flex;justify-content:space-between;font-family:'Inter';font-size:10px;color:var(--subtle);margin-bottom:7px}
     .consensus-track{height:8px;background:var(--border-sub);border-radius:5px;overflow:hidden}
-    .consensus-fill{height:100%;border-radius:5px;width:0%;transition:width .8s cubic-bezier(.4,0,.2,1)}
+    .consensus-fill{height:100%;border-radius:5px;width:0%;transition:width .9s var(--ease);box-shadow:0 0 14px currentColor}
 
     /* VERDICT */
-    .verdict-card{margin-top:18px;padding:22px}
+    .verdict-card{margin-top:18px;padding:22px}.verdict-card.enter{animation:verdictIn .34s var(--spring)}
+    @keyframes verdictIn{from{opacity:0;transform:scale(.975)}to{opacity:1;transform:scale(1)}}
     .verdict-top{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-radius:12px;margin-bottom:20px}
     .verdict-left{display:flex;align-items:center;gap:14px}
     .verdict-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
@@ -293,7 +315,9 @@
 
     /* CONTRACTS */
     .cts-stack{display:flex;flex-direction:column;gap:14px}
-    .addr-block{background:var(--bg);border:1px solid var(--border-sub);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:8px;margin-top:10px}
+    .addr-block{background:var(--bg);border:1px solid var(--border-sub);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:8px;margin-top:10px;transition:border-color .2s,box-shadow .2s}
+    .addr-block:hover{border-color:var(--accent);box-shadow:0 0 20px var(--accent-glow)}
+    .verified{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--ok);background:var(--ok-bg);border:1px solid rgba(111,191,142,.22);padding:3px 7px;border-radius:999px;box-shadow:0 0 12px rgba(111,191,142,.08)}
     .addr-mono{font-family:'Inter';font-size:12px;flex:1;word-break:break-all;color:var(--text)}
     .copy-btn{background:var(--border-sub);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500;transition:all .15s;flex-shrink:0;font-family:inherit}
     .copy-btn:hover{background:var(--border);color:var(--text)}
@@ -310,6 +334,8 @@
     .empty-icon{font-size:44px;margin-bottom:16px}
     .empty-title{font-size:17px;font-weight:600;margin-bottom:8px}
     .empty-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:24px;max-width:340px;margin-left:auto;margin-right:auto}
+    .field.invalid input,.field.invalid textarea{border-color:var(--red);box-shadow:0 0 0 3px var(--red-bg)}.field-error{display:block;color:var(--red)!important;margin-top:6px}
+    .load-note{font-size:12px;color:var(--muted);text-align:center;margin-top:14px}
 
     /* LOG */
     .log-wrap{border-top:1px solid var(--border-sub);flex-shrink:0}
@@ -636,6 +662,8 @@
     .exp-link,.faq-a a,.landing-foot a,.faq-a code{color:var(--accent-bright)}
     .ni.on,.bn.on{color:var(--accent-bright)}
     .ni.on{background:var(--accent-bg)}
+    .ni.on{box-shadow:0 0 20px var(--accent-glow)}
+    .theatre-card{box-shadow:var(--shadow-card),0 0 34px var(--accent-glow)}
     /* neutralise residual teal-tinted hover surfaces */
     .icon-btn:hover,.ni:hover{border-color:var(--border-strong);background:var(--card);color:var(--text)}
     .sb-profile:hover,.copy-btn:hover,.job-card.acc-muted:hover,.faq-item:hover,.faq-item[open],.flow-step:hover{border-color:var(--border-strong)}
@@ -681,6 +709,8 @@
       .btn,.job-card,.flow-step,.why-item,.faq-a,.toast{transition:none;animation:none}
       #pg-landing::before{display:none}
     }
+    @media(max-width:600px){
+      .scroll{padding:20px 14px 92px}.pg-hdr,.ov-top{flex-direction:column}.pg-right{width:100%;flex-wrap:wrap}.ctx-grid,.ov-grid,.mg-grid{grid-template-columns:1fr!important}.validators-grid{grid-template-columns:repeat(2,1fr)}.consensus-wrap{align-items:stretch;flex-direction:column}.consensus-num{border-right:0;border-bottom:1px solid var(--border-sub);padding:0 0 12px}.verdict-top{align-items:flex-start;gap:12px}.account-pop{left:12px;right:12px;bottom:76px;width:auto}.addr-mono{font-size:10px}.step-name{font-size:8px}}
   </style>
 </head>
 <body>
@@ -732,12 +762,18 @@
       </div>
     </nav>
     <div class="sb-status"><span class="sb-status-dot"></span>GenLayer · testnet</div>
-    <div class="sb-profile">
+    <div class="sb-profile" id="accountWidget" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAccount(event)" onkeydown="accountKey(event)">
       <div class="prof-av" id="profAv">?</div>
       <div style="overflow:hidden">
         <div class="prof-addr" id="profAddr">Loading…</div>
         <div class="prof-net">testnet_bradbury</div>
       </div>
+    </div>
+    <div class="account-pop" id="accountPop" role="dialog" aria-label="Demo account details">
+      <div class="account-pop-head"><div><div class="account-pop-title">Demo transaction account</div><div class="account-pop-note">Server-signed for this competition build</div></div><button class="icon-btn" onclick="closeAccount()" aria-label="Close account details">×</button></div>
+      <div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div>
+      <div class="kv" style="display:block"><span class="kv-k">Full address</span><div class="addr-block"><span class="addr-mono" id="accountFull">—</span><button class="copy-btn" onclick="cp(document.getElementById('accountFull').textContent,this)">Copy</button></div></div>
+      <div class="account-pop-actions"><a class="btn bh" id="accountExplorer" target="_blank" rel="noopener">View on Explorer ↗</a></div>
     </div>
   </aside>
 
@@ -999,7 +1035,7 @@
           <div class="card theatre-card">
             <div class="theatre-head">
               <div class="theatre-mark"></div>
-              <div><div class="theatre-title">AI evaluation</div><div class="theatre-sub">on-chain judgment · validator consensus</div></div>
+              <div><div class="theatre-title">AI evaluation</div><div class="theatre-sub">on-chain judgment · validator consensus <button class="icon-btn" style="display:inline-flex;width:19px;height:19px;margin-left:5px" title="GenLayer validators independently evaluate the same deliverable. The on-chain result is accepted only when they agree within the contract's score tolerance." aria-label="How validator consensus works">?</button></div></div>
             </div>
 
             <div class="pipeline-strip">
@@ -1069,7 +1105,7 @@ const S2I = {UNFUNDED:0,OPEN:1,AGREED:2,SUBMITTED:3,EVALUATED:4,ACCEPTED:5,PARTI
 const TERM = new Set(['ACCEPTED','PARTIAL','REFUNDED']);
 const STATUS_COLOR = {UNFUNDED:'var(--subtle)',OPEN:'var(--blue)',AGREED:'var(--blue)',SUBMITTED:'var(--purple)',EVALUATED:'var(--yellow)',ACCEPTED:'var(--ok)',PARTIAL:'var(--yellow)',REFUNDED:'var(--red)'};
 let data = null, logOpen = false, logN = 0, curPage = 'landing', curJob = null;
-let theatreRunning = false, theatreTimers = [];
+let theatreRunning = false, theatreTimers = [], actionBusy = false;
 
 // ── SPLASH ─────────────────────────────────────────────────────────────────
 const SPLASH_STAGES = [
@@ -1082,12 +1118,13 @@ const SPLASH_STAGES = [
 
 // ── TOAST ────────────────────────────────────────────────────────────────
 // Spring-in confirmation, top-right. type: 'ok' | 'err' | 'info'.
-function toast(msg, type='ok', sub=''){
+function toast(msg, type='ok', sub='', retry=null){
   const wrap = document.getElementById('toastWrap'); if(!wrap) return;
   const el = document.createElement('div');
   el.className = 'toast '+type;
   const ic = type==='err' ? '✕' : type==='info' ? 'i' : '✓';
-  el.innerHTML = `<span class="toast-ic">${ic}</span><span class="toast-msg">${msg}${sub?`<span class="toast-sub">${sub}</span>`:''}</span>`;
+  el.innerHTML = `<span class="toast-ic">${ic}</span><span class="toast-msg">${msg}${sub?`<span class="toast-sub">${sub}</span>`:''}</span>${retry?'<button class="copy-btn">Retry</button>':''}`;
+  if(retry)el.querySelector('button').onclick=()=>{el.remove();retry()};
   wrap.appendChild(el);
   // next frame → add .in so the spring transition runs from the offscreen state
   requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));
@@ -1139,10 +1176,21 @@ async function fetchWithTimeout(url, ms) {
   catch(e) { if (e.name==='AbortError') throw new Error('Timed out after '+Math.round(ms/1000)+'s'); throw e; }
   finally { clearTimeout(t); }
 }
+function humanError(err){
+  const raw=String(err?.message||err||'').replace(/^['"]|['"]$/g,'');
+  if(/failed to fetch|networkerror|load failed|timed out/i.test(raw))return "Couldn't reach the server — check your connection and try again.";
+  if(/^\d+$/.test(raw))return 'The testnet rejected this transaction. Refresh the job state and retry the current available action.';
+  if(/status.*(ACCEPTED|PARTIAL|REFUNDED)|already funded|not open|nothing to evaluate|not yet evaluated/i.test(raw))return 'This action is no longer available for the job’s current on-chain state. Refresh and continue from the highlighted step.';
+  return raw||'Something went wrong. Please try again.';
+}
+function delayedNote(el,text){return setTimeout(()=>{if(el&&!el.querySelector('.load-note'))el.insertAdjacentHTML('beforeend',`<div class="load-note">${text}</div>`)},3000)}
+function setFieldError(input,msg){const field=input?.closest('.field');if(!field)return;field.classList.add('invalid');let e=field.querySelector('.field-error');if(!e){e=document.createElement('small');e.className='field-error';field.appendChild(e)}e.textContent=msg;input.focus()}
+function clearFieldErrors(){document.querySelectorAll('.field.invalid').forEach(e=>e.classList.remove('invalid'));document.querySelectorAll('.field-error').forEach(e=>e.remove())}
 
 // ── NAV ────────────────────────────────────────────────────────────────────
 function showSection(page){
-  ALL_PAGES.forEach(p=>{const s=document.getElementById('pg-'+p); if(s) s.style.display=p===page?'':'none';});
+  ALL_PAGES.forEach(p=>{const s=document.getElementById('pg-'+p); if(s){s.style.display=p===page?'':'none';s.classList.remove('page-enter')}});
+  const active=document.getElementById('pg-'+page);if(active){void active.offsetWidth;active.classList.add('page-enter')}
 }
 function setActive(page){
   ALL_PAGES.forEach(p=>{
@@ -1157,16 +1205,23 @@ function nav(page){
   if(page==='browse') loadBrowse();
   if(page==='post') renderPayoutPreview();
   if(page==='landing'){ renderHeroTerminal(); }
+  updateTitle();
   closeSb();
 }
 // Job-detail nav (overview / manage / evaluate / contracts) — needs an open job
 function go(page){
   if(!curJob){ nav('browse'); return; }
   curPage=page; showSection(page); setActive(page);
+  updateTitle();
   closeSb();
 }
 function toggleSb(){document.getElementById('sb').classList.toggle('open');document.getElementById('ov').classList.toggle('on')}
 function closeSb(){document.getElementById('sb').classList.remove('open');document.getElementById('ov').classList.remove('on')}
+function updateTitle(){const names={landing:'Merit — The AI judges the work',browse:'Browse jobs · Merit',post:'Post a job · Merit',overview:(data?.meta?.title||'Escrow job')+' · Merit',manage:'Manage job · Merit',evaluate:'AI evaluation · Merit',contracts:'Contracts · Merit'};document.title=names[curPage]||'Merit'}
+function toggleAccount(e){e?.stopPropagation();const p=document.getElementById('accountPop'),w=document.getElementById('accountWidget');const on=!p.classList.contains('on');p.classList.toggle('on',on);w.setAttribute('aria-expanded',String(on))}
+function closeAccount(){document.getElementById('accountPop')?.classList.remove('on');document.getElementById('accountWidget')?.setAttribute('aria-expanded','false')}
+function accountKey(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleAccount(e)}if(e.key==='Escape')closeAccount()}
+document.addEventListener('click',e=>{if(!e.target.closest('#accountPop')&&!e.target.closest('#accountWidget'))closeAccount()});
 
 // ── LOG ────────────────────────────────────────────────────────────────────
 function log(msg,type=''){
@@ -1178,10 +1233,12 @@ function log(msg,type=''){
 function toggleLog(){logOpen=!logOpen;document.getElementById('logLines').style.display=logOpen?'':'none';document.getElementById('logArr').textContent=logOpen?'▼':'▶'}
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
-const short = a=>a?a.slice(0,6)+'…'+a.slice(-4):'—';
-const toGEN = w=>w===0?'0 GEN':(w/1e18).toFixed(4)+' GEN';
-const toGENNum = w=>w===0?'0':(w/1e18).toFixed(4);
+const short = a=>a?a.slice(0,6)+'...'+a.slice(-4):'—';
+const fmt = n=>Number(n).toLocaleString(undefined,{maximumFractionDigits:4});
+const toGEN = w=>w===0?'0 GEN':fmt(w/1e18)+' GEN';
+const toGENNum = w=>w===0?'0':fmt(w/1e18);
 const jobCode = addr => addr ? 'JOB-'+addr.slice(2,8).toUpperCase() : 'JOB-000000';
+const relativeTime = iso=>{const sec=Math.round((new Date(iso)-Date.now())/1000),abs=Math.abs(sec);const [v,u]=abs<60?[sec,'second']:abs<3600?[Math.round(sec/60),'minute']:abs<86400?[Math.round(sec/3600),'hour']:[Math.round(sec/86400),'day'];return new Intl.RelativeTimeFormat(undefined,{numeric:'auto'}).format(v,u)};
 
 // ── RENDER ALL ─────────────────────────────────────────────────────────────
 function renderAll() {
@@ -1204,6 +1261,8 @@ function renderProfile(addr) {
   const a=addr?.deployer||'';
   document.getElementById('profAddr').textContent=short(a);
   document.getElementById('profAv').textContent=a?a.slice(2,4).toUpperCase():'?';
+  document.getElementById('accountFull').textContent=a||'—';
+  const ex=document.getElementById('accountExplorer');if(ex)ex.href=a?'https://explorer-bradbury.genlayer.com/address/'+a:'#';
 }
 
 function renderNavDots(job,result) {
@@ -1248,7 +1307,7 @@ function renderOverview(job, result, addresses) {
     const done=n<i||TERM.has(s), active=!TERM.has(s)&&n===i;
     const cls=done?'td-done':active?'td-active':'td-pending';
     const icon=done?'✓':active?'→':n+1;
-    return `<div class="tl-item"><div class="tl-dot ${cls}">${icon}</div><div><div class="tl-title" style="color:${done?'var(--text)':active?'var(--blue)':'var(--muted)'}">${st.l}</div><div class="tl-desc">${done||active?st.d:'Pending'}</div></div></div>`;
+    return `<div class="tl-item" style="animation:pageIn .25s var(--spring) both;animation-delay:${n*90}ms"><div class="tl-dot ${cls}" style="${active?'box-shadow:0 0 18px var(--accent-glow)':''}">${icon}</div><div><div class="tl-title" style="color:${done?'var(--text)':active?'var(--blue)':'var(--muted)'}">${st.l}</div><div class="tl-desc">${done||active?st.d:'Pending'}</div></div></div>`;
   }).join('');
 
   // Quick action
@@ -1335,20 +1394,21 @@ function renderEvaluateStatic(job, result) {
   const sc = result?.score;
   document.getElementById('evEmpty').style.display = sc==null ? '' : 'none';
   document.getElementById('evContent').style.display = sc!=null ? '' : 'none';
-  if (sc==null) { document.getElementById('verdictCard').style.display='none'; return; }
+  if (sc==null) { document.getElementById('evEmpty').innerHTML=`<div class="empty"><div class="empty-icon">🤖</div><div class="empty-title">No evaluation yet</div><div class="empty-desc">Complete Fund → Accept → Submit first, then trigger an AI evaluation from the Manage Job page.</div><button class="btn bb" onclick="go('manage')">Go to Manage Job →</button></div>`;document.getElementById('verdictCard').style.display='none'; return; }
   renderPipeline(5);
   document.getElementById('theatreBody').innerHTML = staticValidatorsHTML(job, sc) + theatreNoteHTML() + staticConsensusHTML(job, sc);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{const f=document.querySelector('.consensus-fill[data-score]');if(f)f.style.width=f.dataset.score+'%'}));
   renderVerdictCard(job, result);
 }
 
 function staticValidatorsHTML(job, sc) {
   const outcome = outcomeOf(job, sc);
-  const cards = FAKE_VALIDATORS.map(v=>{
+  const cards = FAKE_VALIDATORS.map((v,idx)=>{
     const vs = Math.max(0, Math.min(100, sc + jitter()));
     const vOutcome = outcomeOf(job, vs);
     const vc = outcomeColor(vOutcome), vb = outcomeBg(vOutcome);
     const label = vOutcome==='accept'?'ACCEPT':vOutcome==='partial'?'PARTIAL':'REJECT';
-    return `<div class="v-card"><div class="v-addr">${v.addr}</div><div class="v-score" style="color:${vc}">${vs}</div><div class="v-vote" style="color:${vc};background:${vb}">${label}</div><div class="v-stake">stake ${v.stake}</div></div>`;
+    return `<div class="v-card ${Math.abs(vs-sc)>4?'outlier':''}" style="--delay:${idx*125}ms"><div class="v-addr">${v.addr}</div><div class="v-score" style="color:${vc}">${vs}</div><div class="v-vote" style="color:${vc};background:${vb}">${label}</div><div class="v-stake">stake ${v.stake}</div></div>`;
   }).join('');
   return `<div class="validators-wrap"><div class="validators-label">VALIDATOR EVALUATION</div><div class="validators-grid">${cards}</div></div>`;
 }
@@ -1357,7 +1417,7 @@ function theatreNoteHTML() {
 }
 function staticConsensusHTML(job, sc) {
   const outcome = outcomeOf(job, sc), c = outcomeColor(outcome);
-  return `<div class="consensus-wrap"><div class="consensus-num"><div class="consensus-lbl">CONSENSUS</div><div class="consensus-val">5<span style="color:var(--subtle);font-size:13px">/5</span></div></div><div class="consensus-bar-wrap"><div class="consensus-bar-meta"><span>weighted score</span><span style="color:${c}">${sc}%</span></div><div class="consensus-track"><div class="consensus-fill" style="width:${sc}%;background:${c}"></div></div></div></div>`;
+  return `<div class="consensus-wrap"><div class="consensus-num"><div class="consensus-lbl">CONSENSUS</div><div class="consensus-val">5<span style="color:var(--subtle);font-size:13px">/5</span></div></div><div class="consensus-bar-wrap"><div class="consensus-bar-meta"><span>weighted score</span><span style="color:${c}">${sc}%</span></div><div class="consensus-track"><div class="consensus-fill" data-score="${sc}" style="width:0;background:${c};color:${c}"></div></div></div></div>`;
 }
 function jitter(){ return Math.round((Math.random()*2-1)*6); }
 
@@ -1367,7 +1427,8 @@ function renderVerdictCard(job, result) {
   const c = outcomeColor(outcome), bg = outcomeBg(outcome);
   const iconMap = {accept:'✓', partial:'—', reject:'✕'};
   const labelMap = {ACCEPTED:'✓ Accepted',PARTIAL:'⚠ Partial Pay',REFUNDED:'↩ Refunded'};
-  document.getElementById('verdictCard').style.display='';
+  const verdict=document.getElementById('verdictCard');verdict.style.display='';verdict.classList.remove('enter');void verdict.offsetWidth;verdict.classList.add('enter');
+  verdict.style.boxShadow=`var(--shadow-card),0 0 34px ${outcome==='accept'?'rgba(111,191,142,.16)':outcome==='partial'?'rgba(216,169,78,.14)':'rgba(217,112,102,.16)'}`;
   document.getElementById('verdictTop').style.background=bg;
   document.getElementById('verdictTop').style.border='1px solid '+c+'44';
   document.getElementById('verdictIcon').style.background=c;
@@ -1389,10 +1450,13 @@ function renderVerdictCard(job, result) {
   if (release>0) rows.push(`<div class="settle-row" style="background:var(--ok-bg)"><span>→ Released to worker</span><span class="settle-amt" style="color:var(--ok)">${toGEN(release)}</span></div>`);
   if (refund>0) rows.push(`<div class="settle-row" style="background:var(--red-bg)"><span>↺ Refunded to client</span><span class="settle-amt" style="color:var(--red)">${toGEN(refund)}</span></div>`);
   document.getElementById('settleRows').innerHTML = rows.join('') || `<div class="settle-row" style="background:var(--border-sub)"><span>Awaiting finalize()</span><span class="settle-amt">—</span></div>`;
-  document.getElementById('appealBtn').style.display = job.appeal_used ? 'none' : '';
+  // Appeals are valid only before settlement. Terminal jobs previously exposed
+  // this button, causing the chain to reject the call with opaque error code 14.
+  document.getElementById('appealBtn').style.display = (!job.appeal_used && s==='EVALUATED') ? '' : 'none';
 }
 
 async function runEvalTheatre() {
+  if(actionBusy||theatreRunning)return;actionBusy=true;
   theatreRunning = true;
   theatreClearTimers();
   document.getElementById('evEmpty').style.display='none';
@@ -1402,6 +1466,7 @@ async function runEvalTheatre() {
   document.getElementById('theatreBody').innerHTML = `
     <div class="theatre-row"><span class="theatre-spin"></span><span>Fetching &amp; pinning deliverable snapshot…</span></div>
   `;
+  const slowEval=setTimeout(()=>{const b=document.getElementById('theatreBody');if(b)b.insertAdjacentHTML('beforeend','<div class="load-note">Still processing — validators are fetching and judging the deliverable on testnet. Keep this tab open.</div>')},3000);
 
   theatreTimers.push(setTimeout(()=>{
     renderPipeline(2);
@@ -1440,15 +1505,17 @@ async function runEvalTheatre() {
     if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
     log('✓ '+(d.status||'done'),'ok');
   } catch(e) {
-    ok = false; errMsg = e.message;
-    log('✗ '+e.message,'err');
+    ok = false; errMsg = humanError(e);
+    log('✗ '+errMsg,'err');
   }
 
+  clearTimeout(slowEval);
   theatreClearTimers();
 
   if (!ok) {
     theatreRunning = false;
     document.getElementById('theatreBody').innerHTML = `<div class="theatre-row" style="border-color:var(--red)"><span style="color:var(--red)">✕</span><span>Evaluation failed: ${errMsg}</span></div><div class="btn-row" style="margin:14px 22px 0"><button class="btn bp" onclick="evaluate()">Retry evaluation</button></div>`;
+    toast('Evaluation failed','err',errMsg);actionBusy=false;
     return;
   }
 
@@ -1456,6 +1523,7 @@ async function runEvalTheatre() {
   await reload();
   renderPipeline(5);
   theatreRunning = false;
+  actionBusy=false;
   const sc = data?.result?.score;
   if (sc != null) renderEvaluateStatic(data.job, data.result);
 }
@@ -1463,21 +1531,22 @@ async function runEvalTheatre() {
 // ── CONTRACTS ──────────────────────────────────────────────────────────────
 function renderContracts(addresses) {
   if(!addresses) return;
-  const cCard=(title,addr,exUrl)=>`<div class="card"><div class="card-head"><span><span class="ch-icon">📄</span> ${title}</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addr}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div></div></div>${exUrl?`<a class="exp-link" href="${exUrl}" target="_blank">View on Explorer ↗</a>`:''}</div></div>`;
+  const cCard=(title,addr,exUrl)=>`<div class="card"><div class="card-head"><span><span class="ch-icon">📄</span> ${title}</span><span class="verified">✓ verified on-chain</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono" title="${addr}">${short(addr)}</span><button class="copy-btn" onclick="cp('${addr}',this)">Copy</button></div></div></div>${exUrl?`<a class="exp-link" href="${exUrl}" target="_blank" rel="noopener">View on Explorer ↗</a>`:''}</div></div>`;
   document.getElementById('ctsContent').innerHTML=
     cCard('FreelanceEscrow',addresses.escrow,addresses.explorer_escrow)+
     cCard('EvaluateSubmission',addresses.evaluator,addresses.explorer_evaluator)+
-    `<div class="card"><div class="card-head"><span><span class="ch-icon">👤</span> Deployer Wallet</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Address</span><div class="addr-block"><span class="addr-mono">${addresses.deployer}</span><button class="copy-btn" onclick="cp('${addresses.deployer}',this)">Copy</button></div></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div></div></div></div>`+
+    `<div class="card"><div class="card-head"><span><span class="ch-icon">👤</span> Demo Transaction Account</span><span class="verified">✓ active</span></div><div class="card-body"><div class="kv-list"><div class="kv" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="kv-k">Server-signed address</span><div class="addr-block"><span class="addr-mono" title="${addresses.deployer}">${short(addresses.deployer)}</span><button class="copy-btn" onclick="cp('${addresses.deployer}',this)">Copy</button></div></div><div class="kv"><span class="kv-k">Network</span><span class="kv-v">testnet_bradbury</span></div></div></div></div>`+
     `<div class="card"><div class="card-head"><span><span class="ch-icon">ℹ️</span> About</span></div><div class="card-body"><div class="kv-list"><div class="kv"><span class="kv-k">Platform</span><span class="kv-v">GenLayer</span></div><div class="kv"><span class="kv-k">Evaluation</span><span class="kv-v">AI-Arbitrated</span></div><div class="kv"><span class="kv-k">Language</span><span class="kv-v">Python (Intelligent Contract)</span></div></div></div></div>`;
 }
 
-function cp(addr,btn){navigator.clipboard.writeText(addr).then(()=>{const o=btn.textContent;btn.textContent='Copied!';btn.style.color='var(--ok)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1500)})}
+async function cp(addr,btn){try{await navigator.clipboard.writeText(addr);const o=btn.textContent;btn.textContent='✓ Copied!';btn.style.color='var(--ok)';setTimeout(()=>{btn.textContent=o;btn.style.color=''},1600)}catch(e){toast('Copy failed','err','Select the address and copy it manually.')}}
 
 // ── MARKETPLACE ──────────────────────────────────────────────────────────────
 async function loadBrowse() {
   const grid = document.getElementById('jobsGrid');
   const body = document.getElementById('browseBody');
   body.innerHTML = `<div class="jobs-grid" id="jobsGrid"><div class="skel" style="height:200px;border-radius:14px"></div><div class="skel" style="height:200px;border-radius:14px"></div><div class="skel" style="height:200px;border-radius:14px"></div></div>`;
+  const slow=delayedNote(body,'Still loading — the free-tier API may be waking up…');
   try {
     const r = await fetch(API_BASE+'/api/jobs');
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -1490,8 +1559,8 @@ async function loadBrowse() {
     const ghosts = jobs.length < 3 ? ghostCards(3 - jobs.length) : '';
     body.innerHTML = `<div class="jobs-grid">${jobs.map(jobCardHTML).join('')}${ghosts}</div>`;
   } catch(e) {
-    body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn't load jobs</div><div class="empty-desc">${e.message}. The API may still be waking up.</div><button class="btn bh" onclick="loadBrowse()">Retry</button></div></div>`;
-  }
+    body.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn't load jobs</div><div class="empty-desc">${humanError(e)}</div><button class="btn bh" onclick="loadBrowse()">Retry</button></div></div>`;
+  } finally {clearTimeout(slow)}
 }
 
 // ── LIVE HERO BADGE (real registry aggregates) ──────────────────────────────
@@ -1571,17 +1640,18 @@ function jobCardHTML(j) {
   const scoreLine = j.score!=null
     ? `<span class="jc-score-wrap">${scoreRing(j.score)}<span class="jc-score">AI score</span></span>`
     : `<span class="jc-score">not evaluated</span>`;
-  return `<div class="job-card acc-${acc}" onclick="openJob('${j.id}')">
+  const when=j.created_at?`<span title="${new Date(j.created_at).toLocaleString()}">${relativeTime(j.created_at)}</span>`:'';
+  return `<div class="job-card acc-${acc}" onclick="openJob('${j.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openJob('${j.id}')} ">
     <div class="jc-top"><span class="jc-code">${jobCode(j.address)}</span><span class="pill p-${status}">${status}</span></div>
     <div class="jc-title">${esc(j.title||'Untitled job')}</div>
     <div class="jc-spec">${esc(j.spec||'')}</div>
-    <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b></span>${scoreLine}</div>
+    <div class="jc-foot"><span class="jc-amt">escrow <b class="gen">${amt}</b>${when?` · ${when}`:''}</span>${scoreLine}</div>
   </div>`;
 }
 // ghost "your next job could be here" cards so a sparse grid never looks dead
 function ghostCards(n){
   let out='';
-  for(let i=0;i<n;i++) out += `<div class="job-card ghost"><div class="jc-top"><span class="jc-code">JOB-······</span></div><div class="jc-ghost-title">your next job could be here</div><div class="jc-ghost-line"></div><div class="jc-ghost-line short"></div><div class="jc-foot ghost-foot"><span>escrow —</span><span>+ post a job</span></div></div>`;
+  for(let i=0;i<n;i++) out += `<div class="job-card ghost" style="align-items:center;justify-content:center;text-align:center;min-height:210px"><div style="font-size:28px;color:var(--accent-bright);margin-bottom:10px">＋</div><div class="jc-ghost-title">Your next job could be here</div><div class="ghost-foot">Post a job to deploy a new escrow</div></div>`;
   return out;
 }
 
@@ -1591,6 +1661,10 @@ async function openJob(id) {
   go('overview');
   // show skeletons while the job loads
   document.getElementById('actCard').innerHTML = `<div class="card-body"><div class="skel" style="width:40%;height:10px"></div><div class="skel" style="height:20px;margin:8px 0 14px"></div><div class="skel"></div></div>`;
+  document.getElementById('tl').innerHTML = `<div class="skel" style="margin-top:18px"></div><div class="skel"></div><div class="skel"></div>`;
+  document.getElementById('qa').innerHTML = `<div class="skel" style="width:45%"></div><div class="skel"></div><div class="skel" style="height:36px;margin-top:18px"></div>`;
+  document.getElementById('evContent').style.display='none';document.getElementById('evEmpty').style.display='';document.getElementById('evEmpty').innerHTML=`<div class="card-body"><div class="skel" style="height:20px;width:35%"></div><div class="skel" style="height:110px"></div></div>`;
+  document.getElementById('ctsContent').innerHTML=`<div class="skel" style="height:110px;border-radius:12px"></div><div class="skel" style="height:110px;border-radius:12px"></div>`;
   await reload();
 }
 
@@ -1635,8 +1709,11 @@ async function createJob() {
   const note  = document.getElementById('postNote');
   const btn   = document.getElementById('postBtn');
 
-  if (spec.length < 20){ note.style.color='var(--red)'; note.textContent='Spec must be at least 20 characters — describe what a complete deliverable contains.'; return; }
-  if (floor > min){ note.style.color='var(--red)'; note.textContent='Partial floor cannot exceed min score.'; return; }
+  clearFieldErrors();
+  if (spec.length < 20){ const m='Spec must be at least 20 characters — describe what a complete deliverable contains.';setFieldError(document.getElementById('post-spec'),m);note.style.color='var(--red)';note.textContent=m;return; }
+  if (!Number.isFinite(feePct)||feePct<0||feePct>10){const m='Fee must be between 0% and 10%.';setFieldError(document.getElementById('post-fee'),m);note.style.color='var(--red)';note.textContent=m;return;}
+  if (!Number.isInteger(min)||min<0||min>100){const m='Minimum score must be from 0 to 100.';setFieldError(document.getElementById('post-min'),m);note.style.color='var(--red)';note.textContent=m;return;}
+  if (!Number.isInteger(floor)||floor<0||floor>100||floor > min){ const m='Partial floor must be from 0 to 100 and cannot exceed min score.';setFieldError(document.getElementById('post-floor'),m);note.style.color='var(--red)';note.textContent=m;return; }
 
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Deploying escrow to testnet…';
   note.style.color=''; note.textContent = 'Deploying a new contract — this can take 30–90 seconds. Keep this tab open.';
@@ -1655,8 +1732,8 @@ async function createJob() {
     openJob(d.job.id);
   } catch(e) {
     log('✗ '+e.message,'err');
-    note.style.color='var(--red)'; note.textContent = 'Deploy failed: '+e.message;
-    toast('Deploy failed', 'err', e.message);
+    const msg=humanError(e);note.style.color='var(--red)'; note.innerHTML = `Deploy failed: ${esc(msg)} <button class="copy-btn" onclick="createJob()">Retry</button>`;
+    toast('Deploy failed', 'err', msg);
   } finally {
     btn.disabled=false; btn.innerHTML='Deploy escrow &amp; post job';
   }
@@ -1665,15 +1742,16 @@ async function createJob() {
 // ── API (per-job) ────────────────────────────────────────────────────────────
 async function reload() {
   if(!curJob) return;
+  const targets=['actCard','ctsContent'];const slow=setTimeout(()=>targets.forEach(id=>{const e=document.getElementById(id);if(e&&e.querySelector('.skel'))e.insertAdjacentHTML('beforeend','<div class="load-note">Still loading — reading the job from testnet…</div>')}),3000);
   try{
     const r=await fetch(API_BASE+'/api/jobs/'+curJob);
     if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||'HTTP '+r.status)}
-    data=await r.json();renderAll();log('Job refreshed','ok');
-  }catch(e){log('Refresh failed: '+e.message,'err');if(!logOpen)toggleLog()}
+    data=await r.json();renderAll();updateTitle();log('Job refreshed','ok');
+  }catch(e){const msg=humanError(e);log('Refresh failed: '+msg,'err');toast('Couldn’t refresh job','err',msg);document.getElementById('actCard').innerHTML=`<div class="empty"><div class="empty-title">Couldn’t load this job</div><div class="empty-desc">${esc(msg)}</div><button class="btn bh" onclick="reload()">Retry</button></div>`;document.getElementById('ctsContent').innerHTML=`<div class="card"><div class="empty"><div class="empty-title">Contracts unavailable</div><div class="empty-desc">${esc(msg)}</div><button class="btn bh" onclick="reload()">Retry</button></div></div>`;if(!logOpen)toggleLog()}finally{clearTimeout(slow)}
 }
 
 function disableAct(on){
-  document.querySelectorAll('#actCard button, #qa button').forEach(b=>{
+  document.querySelectorAll('#actCard button, #qa button, #verdictCard button').forEach(b=>{
     b.disabled=on;
     if(on&&!b.dataset.o){b.dataset.o=b.innerHTML;b.innerHTML='<span class="spinner"></span> Working…'}
     else if(!on&&b.dataset.o){b.innerHTML=b.dataset.o;delete b.dataset.o}
@@ -1681,25 +1759,25 @@ function disableAct(on){
 }
 
 async function call(action,body={}){
-  if(!curJob){log('No job selected','err');return;}
+  if(actionBusy)return;if(!curJob){log('No job selected','err');return;}actionBusy=true;
   const path='/api/jobs/'+curJob+'/'+action;
   log('→ '+path); if(!logOpen)toggleLog(); disableAct(true);
   try{
     const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json(); if(!r.ok)throw new Error(d.detail||JSON.stringify(d));
+    const d=await r.json().catch(()=>({})); if(!r.ok)throw new Error(d.detail||('HTTP '+r.status));
     log('✓ '+(d.status||'done'),'ok');
     const labels={fund:'Escrow funded',submit:'Work submitted',evaluate:'Evaluation complete',settle:'Settled on-chain',refund:'Refund issued'};
     toast(labels[action]||'Done', 'ok', d.status?('Status: '+d.status):'');
     await reload(); loadStats();
-  }catch(e){log('✗ '+e.message,'err');toast('Action failed','err',e.message);disableAct(false)}
+  }catch(e){const msg=humanError(e);log('✗ '+msg,'err');toast('Action failed','err',msg,()=>call(action,body))}finally{disableAct(false);actionBusy=false}
 }
 
-function fund(){call('fund',{amount_wei:parseInt(document.getElementById('inp-a')?.value)||1e15})}
+function fund(){clearFieldErrors();const input=document.getElementById('inp-a'),amount=Number(input?.value);if(!Number.isSafeInteger(amount)||amount<=0){setFieldError(input,'Enter a positive whole amount in wei.');return}call('fund',{amount_wei:amount})}
 function acceptTerms(){call('accept_terms')}
 function evaluate(){ go('evaluate'); runEvalTheatre(); }
 function appeal(){call('appeal')}
 function finalize(){call('finalize')}
-function submitWork(){const u=document.getElementById('inp-u')?.value?.trim();if(!u?.startsWith('http')){log('Enter a valid https:// URL','err');if(!logOpen)toggleLog();return}call('submit',{url:u})}
+function submitWork(){clearFieldErrors();const input=document.getElementById('inp-u'),u=input?.value?.trim();if(!/^https?:\/\//i.test(u||'')){setFieldError(input,'Enter a complete public URL beginning with https://');return}call('submit',{url:u})}
 
 const esc = s => (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
