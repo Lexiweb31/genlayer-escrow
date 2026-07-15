@@ -251,6 +251,27 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
+def _external_value_messages(messages: list[Any]) -> list[dict[str, Any]]:
+    """Normalize finalized external-message recipients and GEN values."""
+    records = []
+    for message in messages:
+        if isinstance(message, dict):
+            recipient = message.get("recipient")
+            amount = message.get("value")
+        elif isinstance(message, list) and len(message) >= 3:
+            recipient = message[1]
+            amount = message[2]
+        else:
+            continue
+        try:
+            amount = int(amount or 0)
+        except (TypeError, ValueError):
+            continue
+        if recipient and amount > 0:
+            records.append({"recipient": str(recipient), "amount": amount})
+    return records
+
+
 def _addresses(escrow_addr: str) -> dict[str, Any]:
     return {
         "escrow": escrow_addr,
@@ -349,14 +370,74 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
             triggered = _json_safe(network_client.get_triggered_transaction_ids(parent_tx))
         except Exception:
             triggered = []
+        triggered = [str(reference) for reference in triggered if reference]
+        nonzero_transfers = [
+            transfer for transfer in settlement.get("transfers", [])
+            if int(transfer.get("amount") or 0) > 0
+        ]
+        external_messages = _external_value_messages(messages)
+        confirmed_external = bool(nonzero_transfers) and all(
+            any(
+                str(message["recipient"]).lower() == str(transfer.get("recipient") or "").lower()
+                and message["amount"] == int(transfer.get("amount") or 0)
+                for message in external_messages
+            )
+            for transfer in nonzero_transfers
+        )
+        transfer_evidence = []
+        for index, reference in enumerate(triggered):
+            transfer = nonzero_transfers[index] if index < len(nonzero_transfers) else {}
+            settlement_type = str(transfer.get("settlement_type") or "TRANSFER")
+            recipient_role = {
+                "WORKER_PAYOUT": "worker",
+                "CLIENT_REFUND": "client",
+                "PLATFORM_FEE": "platform",
+            }.get(settlement_type, "recipient")
+            transfer_evidence.append({
+                "reference": reference,
+                "status": "CONFIRMED" if parent_status == "FINALIZED" else "PENDING",
+                "explorer": EXPLORER_TX + reference,
+                "recipient_role": recipient_role,
+                "recipient": transfer.get("recipient"),
+                "amount": int(transfer.get("amount") or 0),
+                "settlement_type": settlement_type,
+            })
+        if not triggered and parent_status == "FINALIZED" and confirmed_external:
+            for transfer in nonzero_transfers:
+                settlement_type = str(transfer.get("settlement_type") or "TRANSFER")
+                transfer_evidence.append({
+                    "reference": parent_tx,
+                    "status": "CONFIRMED",
+                    "explorer": EXPLORER_TX + parent_tx,
+                    "recipient_role": {
+                        "WORKER_PAYOUT": "worker",
+                        "CLIENT_REFUND": "client",
+                        "PLATFORM_FEE": "platform",
+                    }.get(settlement_type, "recipient"),
+                    "recipient": transfer.get("recipient"),
+                    "amount": int(transfer.get("amount") or 0),
+                    "settlement_type": settlement_type,
+                })
+        primary_reference = triggered[0] if triggered else parent_tx
         settlement.update({
             "parent_status": parent_status,
             "messages": messages,
             "triggered_transaction_ids": triggered,
             "transfer_reference": triggered or [parent_tx],
-            "explorer": EXPLORER_TX + parent_tx,
+            "transfer_evidence": transfer_evidence,
+            "confirmation_basis": (
+                "TRIGGERED_TRANSACTION" if triggered
+                else "FINALIZED_EXTERNAL_MESSAGE" if confirmed_external
+                else None
+            ),
+            "parent_explorer": EXPLORER_TX + parent_tx,
+            "explorer": EXPLORER_TX + primary_reference,
         })
-        if parent_status == "FINALIZED" and (messages or triggered):
+        # External EOA messages execute during parent finalization and therefore
+        # do not always produce a child GenLayer transaction ID. Confirm only
+        # when every contract-recorded transfer matches a finalized message, or
+        # when the network exposes an inspectable triggered transaction.
+        if parent_status == "FINALIZED" and (triggered or confirmed_external):
             settlement["transfer_status"] = "FINALIZED"
             settlement["finalized_at"] = settlement.get("finalized_at") or utc_now()
         elif parent_status == "FINALIZED":

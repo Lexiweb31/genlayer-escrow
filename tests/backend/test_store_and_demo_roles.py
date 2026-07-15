@@ -119,3 +119,64 @@ def test_action_errors_keep_real_failure_category(message, code):
 def test_status_name_handles_sdk_enum_values():
     assert api._status_name({"status": TransactionStatus.FINALIZED}) == "FINALIZED"
     assert api._status_name({"status_name": TransactionStatus.ACCEPTED}) == "ACCEPTED"
+
+
+@pytest.mark.parametrize(
+    ("parent_status", "messages", "triggered", "expected"),
+    [
+        ("ACCEPTED", [[0, "0xclient", 1000, "0x", False, 0]], [], "PENDING_FINALIZATION"),
+        ("FINALIZED", [], [], "PENDING_TRANSFER_RECORD"),
+        ("FINALIZED", [[0, "0xother", 1000, "0x", False, 0]], [], "PENDING_TRANSFER_RECORD"),
+        ("FINALIZED", [[0, "0xclient", 1000, "0x", False, 0]], [], "FINALIZED"),
+        ("FINALIZED", [], ["0xchild"], "FINALIZED"),
+    ],
+)
+def test_settlement_requires_inspectable_transfer_record(
+    monkeypatch, parent_status, messages, triggered, expected
+):
+    class FakeClient:
+        def get_transaction(self, _transaction):
+            return {"status": parent_status, "messages": messages}
+
+        def get_triggered_transaction_ids(self, _transaction):
+            return triggered
+
+    monkeypatch.setattr(api, "network_client", FakeClient())
+    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: None)
+    settlement = api._refresh_settlement(
+        {
+            "address": "0xescrow",
+            "settlement": {"parent_transaction": "0xparent"},
+        },
+        {
+            "settlement": {
+                "transfers": [
+                    {
+                        "recipient": "0xclient",
+                        "amount": 1000,
+                        "settlement_type": "CLIENT_REFUND",
+                    }
+                ]
+            }
+        },
+    )
+    assert settlement["transfer_status"] == expected
+    if triggered:
+        assert settlement["transfer_reference"] == ["0xchild"]
+        assert settlement["explorer"].endswith("/tx/0xchild")
+        assert settlement["transfer_evidence"] == [
+            {
+                "reference": "0xchild",
+                "status": "CONFIRMED",
+                "explorer": "https://explorer-bradbury.genlayer.com/tx/0xchild",
+                "recipient_role": "client",
+                "recipient": "0xclient",
+                "amount": 1000,
+                "settlement_type": "CLIENT_REFUND",
+            }
+        ]
+    elif expected == "FINALIZED":
+        assert settlement["confirmation_basis"] == "FINALIZED_EXTERNAL_MESSAGE"
+        assert settlement["transfer_reference"] == ["0xparent"]
+        assert settlement["transfer_evidence"][0]["recipient"] == "0xclient"
+        assert settlement["transfer_evidence"][0]["amount"] == 1000
