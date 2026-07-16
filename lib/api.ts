@@ -55,6 +55,11 @@ export const meritApi = {
     request<CreateJobResponse>("/api/jobs", { method: "POST", body: JSON.stringify(input) }),
   registerWalletJob: (input: RegisterWalletJobInput) =>
     request<CreateJobResponse>("/api/jobs/register", { method: "POST", body: JSON.stringify(input) }),
+  registerWalletSettlement: (id: string, transactionHash: string) =>
+    request<TransactionResponse>(`/api/jobs/${encodeURIComponent(id)}/register_settlement`, {
+      method: "POST",
+      body: JSON.stringify({ transaction_hash: transactionHash }),
+    }),
   fund: (id: string, amountWei: string) =>
     action(id, "fund", { amount_wei: amountWei }),
   acceptTerms: (id: string) => action(id, "accept_terms"),

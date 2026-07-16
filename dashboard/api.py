@@ -743,6 +743,10 @@ class RegisterWalletJobRequest(CreateJobRequest):
     deployment_tx: str
 
 
+class RegisterWalletSettlementRequest(BaseModel):
+    transaction_hash: str
+
+
 @app.post("/api/jobs/register")
 def register_wallet_job(req: RegisterWalletJobRequest):
     if not ADDRESS_PATTERN.fullmatch(req.address):
@@ -983,3 +987,69 @@ def finalize(job_id: str):
         }
     except Exception as exc:
         raise _action_error(exc)
+
+
+@app.post("/api/jobs/{job_id}/register_settlement")
+def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest):
+    """Attach a wallet-signed finalize transaction to its verified escrow.
+
+    Wallet Mode signs in the browser, so the backend cannot infer the parent
+    transaction hash from contract storage. Persisting the verified hash lets
+    later requests finish settlement checks without keeping the browser open.
+    """
+    job = _find_job(job_id)
+    _require_safe_job(job)
+    tx_hash = req.transaction_hash.strip()
+    if not TX_PATTERN.fullmatch(tx_hash):
+        raise HTTPException(status_code=422, detail={
+            "code": "INVALID_SETTLEMENT_TX",
+            "message": "Invalid settlement transaction hash.",
+        })
+    try:
+        transaction = dict(network_client.get_transaction(tx_hash))
+    except Exception:
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_TX_NOT_FOUND",
+            "message": "The settlement transaction could not be verified on Bradbury.",
+        })
+    status = _status_name(transaction)
+    execution = str(transaction.get("tx_execution_result_name") or "")
+    recipient = str(transaction.get("recipient") or "")
+    if status not in {"ACCEPTED", "FINALIZED"} or "ERROR" in execution.upper():
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_TX_REJECTED",
+            "message": "The settlement transaction has not completed successfully on Bradbury.",
+        })
+    if recipient.lower() != str(job["address"]).lower():
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_CONTRACT_MISMATCH",
+            "message": "This transaction does not belong to the selected escrow.",
+        })
+    state = _job_state(job["address"])
+    chain_job = state["job"]
+    contract_settlement = chain_job.get("settlement") or {}
+    if str(chain_job.get("status") or "") not in {"SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED"}:
+        raise HTTPException(status_code=409, detail={
+            "code": "SETTLEMENT_STATE_MISMATCH",
+            "message": "The escrow is not awaiting settlement verification.",
+        })
+    settlement = {
+        **contract_settlement,
+        **(job.get("settlement") or {}),
+        "parent_transaction": tx_hash,
+        "parent_status": status,
+        "transfer_status": "PENDING_FINALIZATION",
+        "transfer_reference": [tx_hash],
+        "explorer": EXPLORER_TX + tx_hash,
+        "submitted_at": (job.get("settlement") or {}).get("submitted_at") or utc_now(),
+    }
+    store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
+    settlement = _refresh_settlement({**job, "settlement": settlement}, chain_job)
+    return {
+        "tx": tx_hash,
+        "status": settlement.get("transfer_status") or "PENDING_FINALIZATION",
+        "settlement": _settlement_for_wire(settlement),
+        "transaction_type": "wallet-signed transaction",
+        "signer_role": "connected Bradbury client wallet",
+        "network": "testnet_bradbury",
+    }
