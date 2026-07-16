@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowIcon, CheckIcon, ShieldIcon } from "@/components/icons";
-import { useDemoMode } from "@/components/providers";
+import { useDemoMode, useWalletMode } from "@/components/providers";
 import { PageHeader, StatusPill } from "@/components/ui";
 import { friendlyApiError, meritApi } from "@/lib/api";
 
@@ -16,6 +16,7 @@ const templates = [
 export default function PostJobPage() {
   const router = useRouter();
   const { demo } = useDemoMode();
+  const wallet = useWalletMode();
   const [title, setTitle] = useState("");
   const [spec, setSpec] = useState("");
   const [fee, setFee] = useState("2");
@@ -25,7 +26,7 @@ export default function PostJobPage() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [step, setStep] = useState(1);
-  const live = Boolean(demo?.live_actions_enabled);
+  const live = Boolean(demo?.live_actions_enabled) && wallet.mode === "demo";
   const specQuality = useMemo(() => {
     const words = spec.trim().split(/\s+/).filter(Boolean).length;
     const testable = /\b(at least|exactly|must|include|working|responsive|public|https|\d+)\b/i.test(spec);
@@ -48,6 +49,7 @@ export default function PostJobPage() {
     if (!Number.isFinite(feeNumber) || feeNumber < 0 || feeNumber > 10) return setError("The Merit fee must be between 0% and 10%.");
     if (!Number.isInteger(minNumber) || minNumber < 0 || minNumber > 100) return setError("Full payment must start at a whole-number score from 0 to 100.");
     if (!Number.isInteger(floorNumber) || floorNumber < 0 || floorNumber > minNumber) return setError("Refund below must be a whole-number score from 0 up to the full-payment score.");
+    if (wallet.mode === "wallet") return setError("Wallet Mode is connected, but user-signed contract deployment is not enabled yet. Switch to Demo Mode to publish with test accounts.");
     if (!live) return setError("Live deployment is disabled until Render has two different Bradbury demo signers. No transaction was submitted.");
     setBusy(true);
     setStatus("Deploying the intelligent escrow with the Bradbury demo client. This can take up to 90 seconds…");
@@ -83,7 +85,7 @@ export default function PostJobPage() {
         {step === 2 && <div className="form-section builder-stage"><div className="form-section-head"><span>02</span><div><h2>Decide how payment works</h2><p>Choose the score ranges that control refunds, split payments, and full payment.</p></div></div><div className="field-grid"><label><span>Merit fee (%)</span><small>The percentage deducted when payment goes to the worker.</small><input type="number" inputMode="decimal" min="0" max="10" step="0.1" value={fee} onChange={(event) => setFee(event.target.value)}/></label><label><span>Full payment starts at</span><small>The minimum evaluation score required for the worker to receive full payment.</small><input type="number" inputMode="numeric" min="0" max="100" value={minScore} onChange={(event) => setMinScore(event.target.value)}/></label><label><span>Refund below</span><small>Scores below this number return the payment to the client.</small><input type="number" inputMode="numeric" min="0" max="100" value={partialFloor} onChange={(event) => setPartialFloor(event.target.value)}/></label></div><div className="payment-preview" aria-live="polite"><p className="card-kicker">Live payment preview</p><div className="threshold-preview"><span><i className="refund"/><b>Score 0–{paymentBands.refundEnd}:</b> Client receives a refund</span><span><i className="split"/><b>Score {paymentBands.refund}–{paymentBands.splitEnd}:</b> Payment is split based on the score</span><span><i className="pay"/><b>Score {paymentBands.full}–100:</b> Worker receives full payment</span></div><strong>{fee || "0"}% is deducted from the worker’s payment</strong></div><details className="score-help"><summary>Learn how scoring works</summary><p>AI validators compare the submitted work with your requirements. Their consensus produces an evaluation score. The payment thresholds choose a full payment, partial payout, or refund; the result is complete only after on-chain finalization.</p></details><div className="funding-handoff"><b>Funding follows publishing</b><p>After the job is created, Manage Job accepts a precision-safe GEN amount. The default and minimum are 0.001 GEN.</p></div></div>}
         {step === 3 && <div className="form-section builder-stage review-stage"><div className="form-section-head"><span>03</span><div><h2>Review and publish</h2><p>Check the requirements and payment rules before the demo client publishes the job.</p></div></div><div className="review-grid"><div><span>Job title</span><strong>{title.trim() || "Untitled protected job"}</strong></div><div className="review-spec"><span>Job requirements</span><p>{spec}</p></div><div><span>Full payment starts at</span><strong>{minScore}/100</strong></div><div><span>Payment is split</span><strong>{partialFloor}–{paymentBands.splitEnd}/100</strong></div><div><span>Refund below</span><strong>{partialFloor}/100</strong></div><div><span>Merit fee</span><strong>{fee}%</strong></div></div><div className="inline-alert info"><b>Demo mode</b><span>Two test accounts show the client and worker flow. No personal wallet or visitor funds are used.</span></div></div>}
         {error && <div className="form-error" role="alert">{error}</div>}{status && <div className="form-status" aria-live="polite"><span className="loader"/>{status}</div>}
-        <div className="form-submit"><div>{step > 1 && <button type="button" className="button secondary" onClick={() => setStep((current) => current - 1)} disabled={busy}>Back</button>}<StatusPill tone={live ? "success" : "warning"}>{live ? "Separate demo roles ready" : "Live actions disabled"}</StatusPill><small>Server-signed Bradbury testnet transaction</small></div>{step < 3 ? <button type="button" className="button primary large" onClick={continueBuilder}>Continue <ArrowIcon/></button> : <button className="button primary large" disabled={busy || !live}>{busy ? "Deploying…" : "Confirm and deploy"}<ArrowIcon/></button>}</div>
+        <div className="form-submit"><div>{step > 1 && <button type="button" className="button secondary" onClick={() => setStep((current) => current - 1)} disabled={busy}>Back</button>}<StatusPill tone={live ? "success" : "warning"}>{live ? "Separate demo roles ready" : wallet.mode === "wallet" ? "Wallet writes coming next" : "Live actions disabled"}</StatusPill><small>{wallet.mode === "wallet" ? "Connected wallet · transaction signing locked" : "Server-signed Bradbury testnet transaction"}</small></div>{step < 3 ? <button type="button" className="button primary large" onClick={continueBuilder}>Continue <ArrowIcon/></button> : <button className="button primary large" disabled={busy || !live}>{busy ? "Deploying…" : wallet.mode === "wallet" ? "Wallet deployment coming next" : "Confirm and deploy"}<ArrowIcon/></button>}</div>
       </form>
       <aside className="post-aside"><section className="panel"><span className="feature-icon"><ShieldIcon/></span><h3>Demo mode protects the boundary</h3><p>Two separate test accounts act as client and worker. No personal wallet is connected.</p><details className="score-help"><summary>Technical details</summary><p>The Render-held demo client signs deployment. A separate Render-held demo worker accepts and submits. Registry records persist on the backend.</p></details></section><section className="panel"><p className="card-kicker">Live requirement coaching</p><h3>{specQuality >= 75 ? "Ready to be checked." : specQuality >= 45 ? "Add measurable details." : "Make the requirements clear."}</h3><p>Strong requirements name the deliverable, list required parts, define observable behavior, and require a public URL.</p><div className="quality-score"><span>Requirement quality</span><strong>{specQuality}<small>/100</small></strong></div></section></aside>
     </div>

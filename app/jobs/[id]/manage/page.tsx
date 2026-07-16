@@ -7,7 +7,7 @@ import { ArrowIcon, CheckIcon, ClockIcon, LockIcon, RefreshIcon, UserIcon } from
 import { JobNavigation } from "@/components/job-navigation";
 import { Lifecycle } from "@/components/lifecycle";
 import { SettlementProof } from "@/components/settlement-proof";
-import { useDemoMode } from "@/components/providers";
+import { useDemoMode, useWalletMode } from "@/components/providers";
 import { ErrorState, LoadingState, PageHeader, StatusPill } from "@/components/ui";
 import { friendlyApiError, meritApi } from "@/lib/api";
 import { genToWei, MIN_DEMO_AMOUNT_WEI } from "@/lib/amount";
@@ -19,6 +19,7 @@ export default function ManageJobPage() {
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(params.id);
   const { demo } = useDemoMode();
+  const wallet = useWalletMode();
   const { data, error, loading, refresh } = useJob(id);
   const [amount, setAmount] = useState("0.001");
   const [submissionUrl, setSubmissionUrl] = useState("");
@@ -29,12 +30,12 @@ export default function ManageJobPage() {
   if (!data) return null;
   const job: JobRecord = { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status };
   const view = settlementPresentation(job, data.result);
-  const live = Boolean(demo?.live_actions_enabled) && !job.legacy_contract;
+  const live = Boolean(demo?.live_actions_enabled) && wallet.mode === "demo" && !job.legacy_contract;
   const actionOutcomeClass = view.isPending ? "outcome-pending" : view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "workflow-active";
 
   const runAction = async (label: string, action: () => Promise<unknown>) => {
     if (busy) return;
-    if (!live) return setMessage({ tone: "error", text: job.legacy_contract ? "Legacy settlement contract — read only and unsafe to fund." : "Live multi-role actions are disabled. No on-chain transaction was submitted." });
+    if (!live) return setMessage({ tone: "error", text: job.legacy_contract ? "Legacy settlement contract — read only and unsafe to fund." : wallet.mode === "wallet" ? "Wallet Mode is connected, but user-signed job actions are not enabled yet. Switch to Demo Mode to continue with test accounts." : "Live multi-role actions are disabled. No on-chain transaction was submitted." });
     setBusy(true); setMessage({ tone: "info", text: `${label} with the correct Bradbury demo role…` });
     try { await action(); setMessage({ tone: "success", text: `${label} accepted by Bradbury. Refreshing shared state…` }); await refresh(); }
     catch (nextError) { setMessage({ tone: "error", text: friendlyApiError(nextError) }); }

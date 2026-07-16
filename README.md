@@ -8,7 +8,7 @@ Merit combines a Next.js product interface, a trusted Render demo API, durable m
 
 ## Trust model
 
-The current competition experience is a **server-signed, testnet-only demo**. It does not connect a visitor’s browser wallet, and visitors do not personally control deposited GEN.
+The current transaction experience is a **server-signed, testnet-only demo**. The frontend can connect an injected browser wallet for Bradbury account and balance verification, but user-signed escrow writes remain locked until the complete GenLayer transaction flow is verified. Visitors do not control funds used by Demo Mode.
 
 - Render owns `DEMO_CLIENT_PRIVATE_KEY` and `DEMO_WORKER_PRIVATE_KEY`.
 - The two keys must derive to different addresses.
@@ -124,9 +124,10 @@ On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, c
 The interface explicitly distinguishes two architectures:
 
 - **Demo mode:** available now; separate server-held Bradbury accounts sign transactions; testnet-only; not visitor custody.
-- **Wallet mode:** disabled and labelled **Coming soon — connect a Bradbury wallet**.
+- **Wallet mode connection:** available; connects an injected wallet, requests Bradbury chain ID `4221`, and displays the connected address and native GEN balance.
+- **Wallet mode transactions:** intentionally locked; the application never falls back to a demo signer while Wallet Mode is selected.
 
-Wallet mode must remain disabled until browser wallet support, contract-side caller/role behavior, chain/network checks, transaction status recovery, and end-to-end custody tests are implemented. Enabling a connect button alone is not sufficient.
+Before wallet transactions are enabled, Merit still needs GenLayerJS-backed deploy/write calls, contract-side caller and role verification, transaction execution-result checks, accepted/finalized recovery, account-change handling across in-flight jobs, and end-to-end custody tests. A successful wallet connection alone is not presented as transaction support.
 
 ## Backend and contract verification
 

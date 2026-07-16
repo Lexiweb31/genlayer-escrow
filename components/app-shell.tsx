@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CloseIcon, ContractIcon, HomeIcon, JobsIcon, MenuIcon, MoonIcon, PlusIcon, ShieldIcon, SparkIcon, SunIcon, WalletIcon } from "@/components/icons";
 import { DemoModeNotice } from "@/components/demo-mode-notice";
+import { useWalletMode } from "@/components/providers";
+import { shortAddress } from "@/lib/utils";
 
 const navigation = [
   { href: "/", label: "Home", icon: HomeIcon, exact: true },
@@ -18,6 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [marketingMenuOpen, setMarketingMenuOpen] = useState(false);
+  const wallet = useWalletMode();
 
   useEffect(() => {
     const saved = localStorage.getItem("merit-theme");
@@ -70,13 +73,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
       <div className="sidebar-spacer"/>
       <button className="judge-button" onClick={() => setJudgeOpen(true)}><SparkIcon/><span><b>Judge mode</b><small>Presentation overview</small></span><kbd>⌘J</kbd></button>
-      <div className="account-card"><ShieldIcon/><div><b>Demo account</b><span>Bradbury testnet</span></div><i/></div>
+      <div className={`account-card ${wallet.mode === "wallet" ? "wallet-account" : ""}`}>{wallet.mode === "wallet" ? <WalletIcon/> : <ShieldIcon/>}<div><b>{wallet.mode === "wallet" ? shortAddress(wallet.address) : "Demo account"}</b><span>{wallet.mode === "wallet" ? (wallet.onBradbury ? wallet.balance || "Bradbury connected" : "Wrong network") : "Bradbury testnet"}</span></div><i/></div>
     </aside>
 
     <div className="app-column">
       <header className="topbar">
         <Link className="mobile-brand" href="/"><span className="brand-mark"><span/></span>merit</Link>
-        <div className="mode-switch" aria-label="Account mode"><span className="active"><ShieldIcon size={13}/> Demo mode</span><button disabled title="Coming soon — connect a Bradbury wallet"><WalletIcon size={13}/> Wallet mode</button></div>
+        <div className="mode-switch" aria-label="Account mode"><button className={wallet.mode === "demo" ? "active" : ""} onClick={wallet.useDemoMode}><ShieldIcon size={13}/> Demo mode</button><button className={wallet.mode === "wallet" ? "active" : ""} onClick={() => void wallet.connectWallet()} disabled={wallet.status === "connecting" || wallet.status === "switching"} title={wallet.providerAvailable ? "Connect a Bradbury wallet" : "Install a browser wallet to connect"}><WalletIcon size={13}/> {wallet.status === "connecting" ? "Connecting…" : "Wallet mode"}</button></div>
         <div className="network-chip"><i/><span>Bradbury</span></div>
         <button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>
           {theme === "light" ? <MoonIcon/> : <SunIcon/>}

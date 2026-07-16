@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { ArrowIcon, CheckIcon, ExternalIcon, RefreshIcon } from "@/components/icons";
 import { EscrowCoreMark, ValidatorQuorum } from "@/components/escrow-core";
 import { JobNavigation } from "@/components/job-navigation";
-import { useDemoMode } from "@/components/providers";
+import { useDemoMode, useWalletMode } from "@/components/providers";
 import { ErrorState, LoadingState, PageHeader, StatusPill } from "@/components/ui";
 import { friendlyApiError, meritApi } from "@/lib/api";
 import { useJob } from "@/lib/hooks";
@@ -17,6 +17,7 @@ export default function EvaluationPage() {
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(params.id);
   const { demo } = useDemoMode();
+  const wallet = useWalletMode();
   const { data, error, loading, refresh } = useJob(id);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -25,12 +26,12 @@ export default function EvaluationPage() {
   if (!data) return null;
   const job: JobRecord = { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status };
   const evaluated = hasConfirmedEvaluation(job, data.result);
-  const live = Boolean(demo?.live_actions_enabled) && !job.legacy_contract;
+  const live = Boolean(demo?.live_actions_enabled) && wallet.mode === "demo" && !job.legacy_contract;
   const score = data.result?.score ?? job.score ?? 0;
   const evaluationOutcomeClass = score >= (job.min_score ?? 70) ? "outcome-success" : score >= (job.partial_floor ?? 40) ? "outcome-pending" : "outcome-refund";
   const runEvaluation = async () => {
     if (busy) return;
-    if (!live) return setMessage("Live evaluation is disabled. No on-chain result was simulated.");
+    if (!live) return setMessage(wallet.mode === "wallet" ? "Wallet Mode is connected, but user-signed evaluation is not enabled yet. Switch to Demo Mode to continue with test accounts." : "Live evaluation is disabled. No on-chain result was simulated.");
     setBusy(true); setMessage("Submitting a server-signed demo evaluation transaction to Bradbury…");
     try { await meritApi.evaluate(id); setMessage("Evaluation transaction accepted. Reading the confirmed result…"); await refresh(); }
     catch (nextError) { setMessage(friendlyApiError(nextError)); }
