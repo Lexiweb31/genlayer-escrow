@@ -139,7 +139,6 @@ export interface ApiErrorDetail {
   code?: string;
   message?: string;
   action?: string;
-  testnet_detail?: string;
   minimum_wei?: string;
 }
 

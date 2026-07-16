@@ -1,4 +1,4 @@
-import { config } from "@/lib/config";
+import { explorerRedirectPath } from "@/lib/explorer";
 
 export function shortAddress(value?: string | null, leading = 6, trailing = 4): string {
   if (!value) return "Not available";
@@ -7,11 +7,11 @@ export function shortAddress(value?: string | null, leading = 6, trailing = 4): 
 }
 
 export function txUrl(hash?: string | null): string | null {
-  return hash ? `${config.explorerBaseUrl}/tx/${hash}` : null;
+  return explorerRedirectPath("tx", hash);
 }
 
 export function addressUrl(address?: string | null): string | null {
-  return address ? `${config.explorerBaseUrl}/address/${address}` : null;
+  return explorerRedirectPath("address", address);
 }
 
 export function relativeTime(value?: string): string {

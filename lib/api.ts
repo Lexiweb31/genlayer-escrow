@@ -1,4 +1,3 @@
-import { config } from "@/lib/config";
 import type {
   ApiErrorDetail,
   CreateJobInput,
@@ -24,9 +23,13 @@ export class MeritApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${config.apiBaseUrl}${path}`, {
+  if (!path.startsWith("/api/")) {
+    throw new Error("Merit browser requests must use a same-origin /api route.");
+  }
+  const response = await fetch(path, {
     ...init,
     cache: "no-store",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       ...init?.headers,

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ContractIcon, HomeIcon, JobsIcon, MoonIcon, PlusIcon, ShieldIcon, SparkIcon, SunIcon } from "@/components/icons";
 import { DemoModeNotice } from "@/components/demo-mode-notice";
-import { config } from "@/lib/config";
 
 const navigation = [
   { href: "/", label: "Home", icon: HomeIcon, exact: true },
@@ -59,13 +58,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
       <div className="sidebar-spacer"/>
       <button className="judge-button" onClick={() => setJudgeOpen(true)}><SparkIcon/><span><b>Judge mode</b><small>Presentation overview</small></span><kbd>⌘J</kbd></button>
-      <div className="account-card"><ShieldIcon/><div><b>Demo account</b><span>{config.network}</span></div><i/></div>
+      <div className="account-card"><ShieldIcon/><div><b>Demo account</b><span>Bradbury testnet</span></div><i/></div>
     </aside>
 
     <div className="app-column">
       <header className="topbar">
         <Link className="mobile-brand" href="/"><span className="brand-mark"><span/></span>merit</Link>
-        <div className="network-chip"><i/><span>{config.network.replace("testnet_", "")}</span></div>
+        <div className="network-chip"><i/><span>Bradbury</span></div>
         <button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>
           {theme === "light" ? <MoonIcon/> : <SunIcon/>}
         </button>

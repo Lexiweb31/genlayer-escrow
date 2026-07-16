@@ -17,7 +17,7 @@ The current competition experience is a **server-signed, testnet-only demo**. It
 - If both roles are not configured safely, live actions are disabled. The frontend never invents an on-chain transaction.
 - Contracts deployed before the safe EOA transfer patch remain visibly read-only: **legacy settlement contract — do not fund**.
 
-The browser receives public role addresses and transaction evidence only. Private keys, database paths, and server signer configuration must never use a `NEXT_PUBLIC_` name.
+The browser receives public role addresses and transaction evidence only. Private keys, environment values, database paths, and server signer configuration are never bundled into browser code or returned by the Next.js API layer.
 
 ## Frontend architecture
 
@@ -33,7 +33,7 @@ Real routes:
 - `/jobs/[id]/evaluation` — confirmed evaluation evidence;
 - `/contracts` and `/jobs/[id]/contracts` — infrastructure and deployed addresses.
 
-Reusable components live in `components/`. Typed Render API calls live in `lib/api.ts`. Exact GEN/wei conversion and finality-aware settlement mapping live in `lib/amount.ts` and `lib/settlement.ts`.
+Reusable components live in `components/`. The browser-side typed client in `lib/api.ts` calls only same-origin `/api/...` routes. Those allowlisted Next.js Route Handlers call Render from the server, remove private diagnostic/configuration fields, verify the configured network, and rewrite explorer references to same-origin redirects. Exact GEN/wei conversion and finality-aware settlement mapping live in `lib/amount.ts` and `lib/settlement.ts`.
 
 ## Safe settlement language
 
@@ -55,15 +55,15 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Configure these browser-safe values in `.env.local`:
+Configure the Next.js server connection in `.env.local`:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-NEXT_PUBLIC_GENLAYER_NETWORK=testnet_bradbury
-NEXT_PUBLIC_EXPLORER_BASE_URL=https://explorer-bradbury.genlayer.com
+RENDER_API_BASE_URL=http://127.0.0.1:8000
+GENLAYER_NETWORK=testnet_bradbury
+GENLAYER_EXPLORER_BASE_URL=https://explorer-bradbury.genlayer.com
 ```
 
-Open `http://localhost:3000`. Never place private keys or Render secrets in `.env.local` or any `NEXT_PUBLIC_` variable.
+Open `http://localhost:3000`. These values are read only by Next.js server routes. Never place signer keys, database credentials, or other Render secrets in the frontend project’s `.env.local`.
 
 ## Local Render API setup
 
@@ -73,23 +73,30 @@ The Python API remains the trusted signer and persistence owner:
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-export DEMO_CLIENT_PRIVATE_KEY=your_local_testnet_demo_client_key
-export DEMO_WORKER_PRIVATE_KEY=your_different_local_testnet_demo_worker_key
 export PERSIST_DATA_DIR=.data
 uvicorn dashboard.api:app --reload
 ```
 
-Use testnet-only keys and never commit them. When the keys are absent, the API starts with live multi-role actions disabled.
+Do not copy production signer keys into the frontend or local environment. Without the Render-owned demo keys, the local API starts with live multi-role actions disabled and the interface remains an honest simulated walkthrough.
 
 ## Vercel deployment
 
-Create or link a Vercel project from this repository and configure these public environment variable names for Production and Preview:
+Create or link a Vercel project from this repository and configure these **server-only** environment variable names for Production and Preview:
 
-- `NEXT_PUBLIC_API_BASE_URL`
-- `NEXT_PUBLIC_GENLAYER_NETWORK`
-- `NEXT_PUBLIC_EXPLORER_BASE_URL`
+- `RENDER_API_BASE_URL`
+- `GENLAYER_NETWORK`
+- `GENLAYER_EXPLORER_BASE_URL`
 
-Set `NEXT_PUBLIC_API_BASE_URL` to the Render service origin, without a trailing slash. Vercel automatically detects Next.js; `vercel.json` declares the framework and does not define a static output directory.
+Set `RENDER_API_BASE_URL` to the Render service origin, without a trailing slash. The browser never receives this value and never calls Render directly. `GENLAYER_NETWORK` is used server-side to reject an unexpected backend network. Explorer links first open a same-origin validation route, which redirects to the server-configured explorer. Vercel automatically detects Next.js; `vercel.json` declares the framework and does not define a static output directory.
+
+The Next.js API boundary deliberately:
+
+- allows only the Merit job/demo endpoints and methods used by the interface;
+- accepts JSON-only same-origin mutations with bounded request sizes;
+- forwards no browser cookies, authorization headers, or arbitrary headers to Render;
+- returns no raw backend exception details or private configuration fields;
+- disables caching and bounds upstream response sizes;
+- never acts as a user-selectable or open proxy.
 
 Before deployment:
 
@@ -107,6 +114,8 @@ Only Render receives server secrets and durable-storage configuration:
 - `DEMO_CLIENT_PRIVATE_KEY`
 - `DEMO_WORKER_PRIVATE_KEY`
 - `PERSIST_DATA_DIR`
+
+Signer keys and any future database credentials remain solely in Render environment variables. They must not be added to Vercel, browser code, API responses, or committed environment files.
 
 On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, currently `/var/data/merit`. Jobs are stored in SQLite so all browsers see the same registry and redeploys do not discard jobs when the disk is configured.
 
