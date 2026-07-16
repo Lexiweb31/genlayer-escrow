@@ -22,6 +22,23 @@ describe("settlement lifecycle mapping", () => {
     expect(view.label).toBe("Payment processing");
     expect(view.decision).toBe("ACCEPTED");
     expect(view.canClaimCompletion).toBe(false);
+    expect(view.hasTransactionReference).toBe(true);
+  });
+
+  it("never claims confirmation for a pending settlement without a transaction reference", () => {
+    const view = settlementPresentation({
+      ...baseJob,
+      status: "SETTLEMENT_PENDING",
+      settlement: {
+        outcome: "REFUNDED",
+        transfer_status: "PENDING_FINALIZATION",
+      },
+    });
+    expect(view.isPending).toBe(true);
+    expect(view.isFinalized).toBe(false);
+    expect(view.hasTransactionReference).toBe(false);
+    expect(view.label).toBe("Refund transaction not verified");
+    expect(view.canClaimCompletion).toBe(false);
   });
 
   it("uses completion language only after the outbound transfer finalizes", () => {

@@ -6,6 +6,7 @@ export interface SettlementPresentation {
   status: JobStatus;
   label: string;
   decision?: string;
+  hasTransactionReference: boolean;
   isPending: boolean;
   isFinalized: boolean;
   canClaimCompletion: boolean;
@@ -19,6 +20,7 @@ export function settlementPresentation(
     return {
       status: "LEGACY_UNSAFE",
       label: "Legacy · do not fund",
+      hasTransactionReference: false,
       isPending: false,
       isFinalized: false,
       canClaimCompletion: false,
@@ -28,11 +30,22 @@ export function settlementPresentation(
   const decision = settlement.outcome || result?.settlement_outcome;
   const hasQueuedTransfer = Boolean(settlement.parent_transaction);
   const isFinalized = settlement.transfer_status === "FINALIZED" && Boolean(decision);
-  if (hasQueuedTransfer && !isFinalized) {
+  const isSettlementPending = !isFinalized && (
+    hasQueuedTransfer
+    || job.status === "SETTLEMENT_PENDING"
+    || settlement.transfer_status === "PENDING_FINALIZATION"
+    || settlement.transfer_status === "PENDING_TRANSFER_RECORD"
+  );
+  if (isSettlementPending) {
     return {
       status: "SETTLEMENT_PENDING",
-      label: "Payment processing",
+      label: hasQueuedTransfer
+        ? "Payment processing"
+        : decision === "REFUNDED"
+          ? "Refund transaction not verified"
+          : "Payment transaction not verified",
       decision,
+      hasTransactionReference: hasQueuedTransfer,
       isPending: true,
       isFinalized: false,
       canClaimCompletion: false,
@@ -43,6 +56,7 @@ export function settlementPresentation(
       status: decision as JobStatus,
       label: decision === "ACCEPTED" ? "Payment sent to worker" : decision === "REFUNDED" ? "Refund sent to client" : "Payment split confirmed",
       decision,
+      hasTransactionReference: hasQueuedTransfer,
       isPending: false,
       isFinalized: true,
       canClaimCompletion: true,
@@ -52,6 +66,7 @@ export function settlementPresentation(
     status: job.status,
     label: statusLabel(job.status),
     decision,
+    hasTransactionReference: hasQueuedTransfer,
     isPending: false,
     isFinalized: false,
     canClaimCompletion: false,
