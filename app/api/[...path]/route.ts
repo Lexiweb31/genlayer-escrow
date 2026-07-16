@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -95,7 +95,7 @@ async function proxyRequest(request: Request, context: RouteContext): Promise<Re
         Accept: "application/json",
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
-      signal: AbortSignal.timeout(115_000),
+      signal: AbortSignal.timeout(295_000),
     });
 
     const declaredLength = Number(response.headers.get("content-length") || 0);

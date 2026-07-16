@@ -11,7 +11,8 @@
 # Render backend, contracts, tests, and local deployment tooling are not part
 # of the Next.js browser deployment.
 /artifacts/
-/contracts/
+/contracts/*
+!/contracts/freelance_escrow.py
 /dashboard/
 /docs/
 /scripts/

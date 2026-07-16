@@ -75,6 +75,16 @@ def test_demo_roles_require_both_keys(monkeypatch):
     assert "both" in error.lower()
 
 
+def test_platform_fee_address_must_be_explicit_public_address(monkeypatch):
+    monkeypatch.delenv("PLATFORM_FEE_ADDRESS", raising=False)
+    assert api._configured_platform_address() is None
+    monkeypatch.setenv("PLATFORM_FEE_ADDRESS", "0x" + "0" * 40)
+    assert api._configured_platform_address() is None
+    address = "0x" + "4" * 40
+    monkeypatch.setenv("PLATFORM_FEE_ADDRESS", address)
+    assert api._configured_platform_address() == address
+
+
 def test_demo_role_addresses_must_differ(monkeypatch):
     monkeypatch.setenv("DEMO_CLIENT_PRIVATE_KEY", "client-key")
     monkeypatch.setenv("DEMO_WORKER_PRIVATE_KEY", "worker-key")
@@ -199,6 +209,88 @@ def test_action_errors_keep_real_failure_category(message, code):
 def test_status_name_handles_sdk_enum_values():
     assert api._status_name({"status": TransactionStatus.FINALIZED}) == "FINALIZED"
     assert api._status_name({"status_name": TransactionStatus.ACCEPTED}) == "ACCEPTED"
+
+
+def _wallet_registration_request() -> api.RegisterWalletJobRequest:
+    return api.RegisterWalletJobRequest(
+        address="0x" + "1" * 40,
+        client_address="0x" + "2" * 40,
+        worker_address="0x" + "3" * 40,
+        deployment_tx="0x" + "5" * 64,
+        title="Verified wallet job",
+        spec="Deliver a public page with inspectable evidence.",
+        fee_bps=200,
+        min_score=70,
+        partial_floor=40,
+    )
+
+
+def _configure_valid_wallet_registration(monkeypatch):
+    request = _wallet_registration_request()
+    platform = "0x" + "4" * 40
+    monkeypatch.setenv("PLATFORM_FEE_ADDRESS", platform)
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(get_transaction=lambda _tx: {
+            "status_name": TransactionStatus.ACCEPTED,
+            "tx_execution_result_name": "SUCCESS",
+            "tx_data_decoded": {"contract_address": request.address},
+        }),
+    )
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "client": request.client_address,
+        "worker": request.worker_address,
+        "platform": platform,
+        "spec": request.spec,
+        "fee_bps": request.fee_bps,
+        "min_score": request.min_score,
+        "partial_floor": request.partial_floor,
+        "status": "UNFUNDED",
+    }})
+    return request, platform
+
+
+def test_wallet_registration_verifies_transaction_contract_and_platform(monkeypatch):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(api.store, "get_job", lambda _address: None)
+    saved = {}
+    monkeypatch.setattr(api.store, "add_job", lambda record: saved.update(record) or record)
+    response = api.register_wallet_job(request)
+    assert response["job"]["address"] == request.address
+    assert saved["client_address"] == request.client_address
+    assert saved["worker_address"] == request.worker_address
+    assert saved["deployment_tx"] == request.deployment_tx
+
+
+def test_wallet_registration_rejects_unverified_deployment_transaction(monkeypatch):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(get_transaction=lambda _tx: (_ for _ in ()).throw(RuntimeError("missing"))),
+    )
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_job(request)
+    assert exc.value.detail["code"] == "DEPLOYMENT_TX_NOT_FOUND"
+
+
+def test_wallet_registration_rejects_wrong_platform_recipient(monkeypatch):
+    request, platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "client": request.client_address,
+        "worker": request.worker_address,
+        "platform": "0x" + "6" * 40,
+        "spec": request.spec,
+        "fee_bps": request.fee_bps,
+        "min_score": request.min_score,
+        "partial_floor": request.partial_floor,
+        "status": "UNFUNDED",
+    }})
+    assert platform != "0x" + "6" * 40
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_job(request)
+    assert exc.value.detail["code"] == "CONTRACT_METADATA_MISMATCH"
 
 
 def test_wait_tolerates_unknown_bradbury_intermediate_status(monkeypatch):

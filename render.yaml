@@ -18,3 +18,5 @@ services:
         sync: false
       - key: PERSIST_DATA_DIR
         value: /var/data/merit
+      - key: PLATFORM_FEE_ADDRESS
+        sync: false
