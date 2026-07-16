@@ -39,6 +39,8 @@ from dashboard.store import JobStore, utc_now
 EXPLORER = "https://explorer-bradbury.genlayer.com"
 EXPLORER_ADDRESS = EXPLORER + "/address/"
 EXPLORER_TX = EXPLORER + "/tx/"
+ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
+TX_PATTERN = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 deployments_path = ROOT / "artifacts" / "deployments.json"
 deployments = json.loads(deployments_path.read_text()) if deployments_path.exists() else {}
@@ -88,17 +90,23 @@ def _read_sender() -> str:
     return str(deployments.get("deployer") or "0x0000000000000000000000000000000000000000")
 
 
+def _configured_platform_address() -> Optional[str]:
+    """Return the explicit public fee recipient, never a signer secret or fallback."""
+    address = os.getenv("PLATFORM_FEE_ADDRESS", "").strip()
+    if not ADDRESS_PATTERN.fullmatch(address) or int(address, 16) == 0:
+        return None
+    return address
+
+
 def _demo_public_config() -> dict[str, Any]:
-    platform_address = os.getenv("PLATFORM_FEE_ADDRESS", "").strip() or str(
-        deployments.get("platform") or deployments.get("deployer") or ""
-    )
+    platform_address = _configured_platform_address()
     return {
         "mode": "server-signed-demo" if DEMO_ROLES_READY else "simulated-walkthrough",
         "network": "testnet_bradbury",
         "live_actions_enabled": DEMO_ROLES_READY,
         "client_address": str(demo_client_account.address) if demo_client_account else None,
         "worker_address": str(demo_worker_account.address) if demo_worker_account else None,
-        "platform_address": platform_address or None,
+        "platform_address": platform_address,
         "notice": (
             "Transactions are signed by separate Bradbury demo accounts on the server. "
             "No browser wallet is connected and visitors do not control deposited GEN."
@@ -737,21 +745,47 @@ class RegisterWalletJobRequest(CreateJobRequest):
 
 @app.post("/api/jobs/register")
 def register_wallet_job(req: RegisterWalletJobRequest):
-    address_pattern = re.compile(r"^0x[0-9a-fA-F]{40}$")
-    tx_pattern = re.compile(r"^0x[0-9a-fA-F]{64}$")
-    if not address_pattern.fullmatch(req.address):
+    if not ADDRESS_PATTERN.fullmatch(req.address):
         raise HTTPException(status_code=422, detail={"code": "INVALID_CONTRACT_ADDRESS", "message": "Invalid escrow contract address."})
-    if not address_pattern.fullmatch(req.client_address) or not address_pattern.fullmatch(req.worker_address):
+    if not ADDRESS_PATTERN.fullmatch(req.client_address) or not ADDRESS_PATTERN.fullmatch(req.worker_address):
         raise HTTPException(status_code=422, detail={"code": "INVALID_ROLE_ADDRESS", "message": "Invalid client or worker address."})
     if req.client_address.lower() == req.worker_address.lower():
         raise HTTPException(status_code=422, detail={"code": "SAME_ROLE_ADDRESS", "message": "Client and worker must use different wallets."})
-    if not tx_pattern.fullmatch(req.deployment_tx):
+    if not TX_PATTERN.fullmatch(req.deployment_tx):
         raise HTTPException(status_code=422, detail={"code": "INVALID_DEPLOYMENT_TX", "message": "Invalid deployment transaction hash."})
     if req.partial_floor > req.min_score:
         raise HTTPException(status_code=422, detail={"code": "INVALID_THRESHOLDS", "message": "partial_floor cannot exceed min_score"})
     spec = req.spec.strip()
     if len(spec) < 20:
         raise HTTPException(status_code=422, detail={"code": "INVALID_SPEC", "message": "Spec must be at least 20 characters"})
+
+    platform_address = _configured_platform_address()
+    if platform_address is None:
+        raise HTTPException(status_code=503, detail={
+            "code": "PLATFORM_FEE_ADDRESS_UNAVAILABLE",
+            "message": "Wallet-created escrows are unavailable until a valid public Bradbury fee recipient is configured.",
+        })
+
+    try:
+        deployment = dict(network_client.get_transaction(req.deployment_tx))
+    except Exception:
+        raise HTTPException(status_code=422, detail={
+            "code": "DEPLOYMENT_TX_NOT_FOUND",
+            "message": "The deployment transaction could not be verified on Bradbury.",
+        })
+    deployment_status = _status_name(deployment)
+    deployment_execution = str(deployment.get("tx_execution_result_name") or "")
+    deployed_address = _get_address(deployment)
+    if deployment_status not in {"ACCEPTED", "FINALIZED"} or "ERROR" in deployment_execution.upper():
+        raise HTTPException(status_code=422, detail={
+            "code": "DEPLOYMENT_TX_REJECTED",
+            "message": "The deployment transaction has not completed successfully on Bradbury.",
+        })
+    if not deployed_address or str(deployed_address).lower() != req.address.lower():
+        raise HTTPException(status_code=422, detail={
+            "code": "DEPLOYMENT_ADDRESS_MISMATCH",
+            "message": "The deployment transaction did not create the submitted escrow address.",
+        })
 
     try:
         state = _job_state(req.address)["job"]
@@ -760,6 +794,7 @@ def register_wallet_job(req: RegisterWalletJobRequest):
     expected = {
         "client": req.client_address,
         "worker": req.worker_address,
+        "platform": platform_address,
         "spec": spec,
         "fee_bps": req.fee_bps,
         "min_score": req.min_score,
@@ -768,7 +803,7 @@ def register_wallet_job(req: RegisterWalletJobRequest):
     }
     for key, value in expected.items():
         actual = state.get(key)
-        if key in ("client", "worker"):
+        if key in ("client", "worker", "platform"):
             matches = str(actual).lower() == str(value).lower()
         else:
             matches = actual == value
