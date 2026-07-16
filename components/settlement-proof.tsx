@@ -13,7 +13,8 @@ export function SettlementProof({ job, result }: { job: JobRecord; result?: Eval
   if (!settlement.parent_transaction && !view.isFinalized) {
     return <section className="panel settlement-panel"><div className="panel-heading"><div><p className="card-kicker">Settlement evidence</p><h2>Not queued yet</h2></div><StatusPill>Waiting</StatusPill></div><p className="muted">A recipient, amount, and explorer reference will appear only after the contract queues an outbound transfer.</p></section>;
   }
-  return <section className="panel settlement-panel">
+  const outcomeClass = view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "outcome-pending";
+  return <section className={`panel settlement-panel ${outcomeClass}`}>
     <div className="panel-heading"><div><p className="card-kicker">Settlement evidence</p><h2>{view.label}</h2></div><StatusPill tone={view.isFinalized ? "success" : "warning"}>{view.isFinalized ? <><CheckIcon size={14}/> Finalized</> : <><ClockIcon size={14}/> Pending finalization</>}</StatusPill></div>
     {view.decision && <div className="decision-row"><span>Contract decision</span><strong>{view.decision}</strong><small>{view.isFinalized ? "Outbound transfer verified" : "Decision recorded; transfer is not complete"}</small></div>}
     <div className="transfer-list">{transfers.length ? transfers.map((transfer, index) => {

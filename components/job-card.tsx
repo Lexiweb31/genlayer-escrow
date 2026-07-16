@@ -13,7 +13,8 @@ export function JobCard({ job }: { job: JobRecord }) {
   const parent = job.settlement?.parent_transaction;
   const parentLink = job.settlement?.parent_explorer || job.settlement?.explorer || txUrl(parent);
   const tone = view.status === "LEGACY_UNSAFE" ? "danger" : view.isPending ? "warning" : view.isFinalized ? "success" : "info";
-  return <article className="job-card">
+  const outcomeClass = view.status === "LEGACY_UNSAFE" ? "outcome-danger" : view.isPending ? "outcome-pending" : view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "";
+  return <article className={`job-card ${outcomeClass}`.trim()}>
     <div className="job-card-top"><MonoValue>{shortAddress(job.address, 8, 4)}</MonoValue><StatusPill tone={tone}>{view.label}</StatusPill></div>
     <div><p className="card-kicker">Intelligent escrow</p><h2>{job.title || "Untitled escrow"}</h2><p className="job-spec">{job.spec || "Agreement specification unavailable."}</p></div>
     {view.status === "LEGACY_UNSAFE" && <div className="inline-alert danger"><b>Legacy settlement contract — do not fund.</b><span>This immutable contract predates the safe EOA transfer patch and is read-only.</span></div>}

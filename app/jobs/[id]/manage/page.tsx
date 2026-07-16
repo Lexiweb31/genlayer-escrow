@@ -30,6 +30,7 @@ export default function ManageJobPage() {
   const job: JobRecord = { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status };
   const view = settlementPresentation(job, data.result);
   const live = Boolean(demo?.live_actions_enabled) && !job.legacy_contract;
+  const actionOutcomeClass = view.isPending ? "outcome-pending" : view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "workflow-active";
 
   const runAction = async (label: string, action: () => Promise<unknown>) => {
     if (busy) return;
@@ -66,7 +67,7 @@ export default function ManageJobPage() {
 
   return <div className="page-container">
     <JobNavigation id={id}/><PageHeader eyebrow="Guided lifecycle" title="Manage job" description="Each action is role-gated, server-signed, and disabled while its Bradbury transaction is in progress."/>
-    <section className="manage-grid"><article className="panel action-panel">{actionPanel()}{message && <div className={`action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}</article><article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Accurate sequence</p><h2>Lifecycle state</h2></div></div><Lifecycle job={job} result={data.result}/></article></section>
+    <section className="manage-grid"><article className={`panel action-panel ${actionOutcomeClass}`}>{actionPanel()}{message && <div className={`action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}</article><article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Accurate sequence</p><h2>Lifecycle state</h2></div></div><Lifecycle job={job} result={data.result}/></article></section>
     {(view.isPending || view.isFinalized) && <SettlementProof job={job} result={data.result}/>}
   </div>;
 }
