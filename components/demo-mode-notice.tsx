@@ -10,9 +10,9 @@ export function DemoModeNotice({ compact = false }: { compact?: boolean }) {
   return <aside className={`demo-notice ${compact ? "compact" : ""}`} aria-label="Demo mode notice">
     <div className="demo-icon"><ShieldIcon/></div>
     <div className="demo-copy">
-      <div className="demo-heading"><strong>Demo mode</strong><span>Server-signed · Bradbury testnet</span></div>
-      {!compact && <p>{loading ? "Checking separate server-side demo roles…" : error ? "The Render demo configuration is temporarily unavailable." : ready ? "Separate Bradbury demo client and worker accounts sign on the server. Visitors do not control deposited GEN." : "Live transactions are disabled. The interface remains an explicitly simulated walkthrough and never fakes an on-chain transaction."}</p>}
-      {!compact && ready && <div className="role-pair"><span>Client {shortAddress(demo?.client_address)}</span><span>Worker {shortAddress(demo?.worker_address)}</span></div>}
+      <div className="demo-heading"><strong>Demo mode</strong><span>Bradbury testnet</span></div>
+      {!compact && <p>Demo mode uses two test accounts to show the complete client and worker flow. No personal wallet is connected.</p>}
+      {!compact && <details className="demo-technical"><summary>Technical details</summary><div>{loading ? "Checking the separate server-side demo roles…" : error ? "The Render demo configuration is temporarily unavailable." : ready ? "Transactions are signed by separate server-held Bradbury client and worker accounts." : "Live transactions are disabled. This walkthrough never fakes an on-chain transaction."}</div>{ready && <div className="role-pair"><span>Client {shortAddress(demo?.client_address)}</span><span>Worker {shortAddress(demo?.worker_address)}</span></div>}</details>}
     </div>
     <button className="wallet-soon" disabled title="Wallet signing is not implemented"><WalletIcon/><span>Wallet mode</span><small>Coming soon — connect a Bradbury wallet</small></button>
   </aside>;

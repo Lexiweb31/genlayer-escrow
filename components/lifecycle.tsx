@@ -17,6 +17,6 @@ const stageIndex: Partial<Record<JobStatus, number>> = {
 export function Lifecycle({ job, result }: { job: JobRecord; result?: EvaluationResult }) {
   const presentation = settlementPresentation(job, result);
   const current = presentation.isPending ? 5 : presentation.isFinalized ? 6 : stageIndex[job.status] ?? 0;
-  const stages = ["Created", "Funded", "Terms accepted", "Submitted", "Evaluated", "Settlement queued", "Transfer finalized"];
+  const stages = ["Job created", "Payment locked", "Requirements accepted", "Work submitted", "Evaluation completed", "Payment transaction submitted", "Payment confirmed"];
   return <ol className="lifecycle">{stages.map((label, index) => <li key={label} className={index < current ? "done" : index === current ? "current" : ""}><span>{index < current ? <CheckIcon size={14}/> : index === current ? <ClockIcon size={14}/> : index + 1}</span><div><b>{label}</b><small>{index < current ? "Confirmed" : index === current ? "Current state" : "Pending"}</small></div></li>)}</ol>;
 }

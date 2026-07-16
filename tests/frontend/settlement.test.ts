@@ -19,7 +19,7 @@ describe("settlement lifecycle mapping", () => {
       },
     });
     expect(view.status).toBe("SETTLEMENT_PENDING");
-    expect(view.label).toBe("Settlement pending");
+    expect(view.label).toBe("Payment processing");
     expect(view.decision).toBe("ACCEPTED");
     expect(view.canClaimCompletion).toBe(false);
   });
@@ -43,8 +43,8 @@ describe("settlement lifecycle mapping", () => {
         parent_transaction: "0xparent",
       },
     });
-    expect(accepted.label).toBe("Payment released");
-    expect(refunded.label).toBe("Funds refunded");
+    expect(accepted.label).toBe("Payment sent to worker");
+    expect(refunded.label).toBe("Refund sent to client");
     expect(accepted.canClaimCompletion).toBe(true);
   });
 

@@ -31,7 +31,7 @@ export function settlementPresentation(
   if (hasQueuedTransfer && !isFinalized) {
     return {
       status: "SETTLEMENT_PENDING",
-      label: "Settlement pending",
+      label: "Payment processing",
       decision,
       isPending: true,
       isFinalized: false,
@@ -41,7 +41,7 @@ export function settlementPresentation(
   if (isFinalized && decision && FINAL_DECISIONS.has(decision)) {
     return {
       status: decision as JobStatus,
-      label: decision === "ACCEPTED" ? "Payment released" : decision === "REFUNDED" ? "Funds refunded" : "Split finalized",
+      label: decision === "ACCEPTED" ? "Payment sent to worker" : decision === "REFUNDED" ? "Refund sent to client" : "Payment split confirmed",
       decision,
       isPending: false,
       isFinalized: true,
@@ -60,15 +60,15 @@ export function settlementPresentation(
 
 export function statusLabel(status: JobStatus): string {
   const labels: Partial<Record<JobStatus, string>> = {
-    UNFUNDED: "Awaiting funding",
-    OPEN: "Open escrow",
-    AGREED: "Terms accepted",
-    SUBMITTED: "Submitted",
-    EVALUATED: "Evaluated",
-    SETTLEMENT_PENDING: "Settlement pending",
-    ACCEPTED: "Payment released",
-    PARTIAL: "Split finalized",
-    REFUNDED: "Funds refunded",
+    UNFUNDED: "Waiting for payment",
+    OPEN: "Ready for a worker",
+    AGREED: "Requirements accepted",
+    SUBMITTED: "Work submitted",
+    EVALUATED: "Evaluation completed",
+    SETTLEMENT_PENDING: "Payment processing",
+    ACCEPTED: "Payment sent to worker",
+    PARTIAL: "Payment split confirmed",
+    REFUNDED: "Refund sent to client",
     LEGACY_UNSAFE: "Legacy · do not fund",
     UNKNOWN: "Testnet unavailable",
   };
@@ -77,9 +77,9 @@ export function statusLabel(status: JobStatus): string {
 
 export function recipientRole(transfer: SettlementTransfer): string {
   return {
-    WORKER_PAYOUT: "Worker recipient",
-    CLIENT_REFUND: "Client recipient",
-    PLATFORM_FEE: "Platform recipient",
+    WORKER_PAYOUT: "Worker",
+    CLIENT_REFUND: "Client",
+    PLATFORM_FEE: "Merit fee",
   }[transfer.settlement_type] || "Settlement recipient";
 }
 
