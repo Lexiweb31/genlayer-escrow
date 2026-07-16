@@ -103,6 +103,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [address]);
 
   const connectWallet = useCallback(async () => {
+    // Record the user's mode choice before touching the provider. A missing,
+    // disconnected, or rejected wallet must never fall back to demo signing.
+    setMode("wallet");
+    localStorage.setItem("merit-account-mode", "wallet");
     const provider = injectedProvider();
     if (!provider) {
       setProviderAvailable(false);
@@ -118,8 +122,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setAddress(nextAddress);
       const nextChain = String(await provider.request({ method: "eth_chainId" }));
       setChainId(nextChain);
-      setMode("wallet");
-      localStorage.setItem("merit-account-mode", "wallet");
       if (isBradburyChain(nextChain)) await refreshBalance(nextAddress, provider);
       setWalletStatus("connected");
     } catch (nextError) {
@@ -136,7 +138,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const provider = injectedProvider();
-    queueMicrotask(() => setProviderAvailable(Boolean(provider)));
+    const savedMode = localStorage.getItem("merit-account-mode");
+    queueMicrotask(() => {
+      setProviderAvailable(Boolean(provider));
+      if (savedMode === "wallet") setMode("wallet");
+    });
     if (!provider) return;
 
     const sync = async () => {
@@ -165,9 +171,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setAddress(nextAddress);
       setBalance(null);
       if (!nextAddress) {
-        setMode("demo");
         setWalletStatus("idle");
-        localStorage.setItem("merit-account-mode", "demo");
+        setWalletError("The wallet disconnected. Reconnect it or explicitly choose Demo Mode.");
       } else {
         setWalletStatus("connected");
         if (isBradburyChain(chainId)) void refreshBalance(nextAddress, provider);
