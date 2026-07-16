@@ -1,0 +1,22 @@
+.env
+.env.*
+.venv/
+.data/
+.agents/
+.agent/
+.claude/
+.pytest_cache/
+ritual-agent-deployment/
+
+# Render backend, contracts, tests, and local deployment tooling are not part
+# of the Next.js browser deployment.
+artifacts/
+contracts/
+dashboard/
+docs/
+scripts/
+tests/
+DEMO_SCRIPT.md
+gltest.config.yaml
+render.yaml
+requirements.txt
