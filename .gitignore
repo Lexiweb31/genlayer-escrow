@@ -30,5 +30,13 @@ artifacts/jobs.json
 
 # Node (for future frontend)
 node_modules/
+.next/
+coverage/
+.vercel/
+*.tsbuildinfo
+
+# Repository-local agent skills
+.agent/
+.agents/
 
 .pytest_cache/

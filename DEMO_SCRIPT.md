@@ -2,11 +2,11 @@
 
 ## Before presenting
 
-- Open the [live app](https://lexiweb31.github.io/genlayer-escrow/).
+- Open the [live Next.js app](https://genlayer-escrow.vercel.app/).
 - Confirm the Bradbury network badge loads.
 - Press `Cmd/Ctrl + J` and keep Judge Mode ready.
 - Keep the GitHub repository and Bradbury explorer in background tabs.
-- If services are slow for eight seconds, use **Enter resilient demo**. Say explicitly that it is labeled fallback data.
+- If Render is waking up, use the visible retry state and explain that the shared registry remains authoritative.
 - State up front that this is a **server-signed Bradbury testnet demo**. No visitor wallet is connected or controls the testnet GEN.
 - Confirm the Contracts page shows different demo client and worker addresses before attempting live actions. If either signer is missing, stay in the simulated walkthrough.
 
@@ -20,14 +20,14 @@ Show the animated escrow lifecycle and the “living protocol” telemetry.
 
 Open **Post a Job**. Apply the landing-page template.
 
-> The Bradbury demo client signer defines “done” before work begins. Merit checks whether the agreement is clear and testable, previews all settlement bands, and fingerprints the exact terms. Those terms become the validator rubric and settlement rules.
+> The Bradbury demo client signer defines “done” before work begins. Merit checks whether the agreement is clear and testable and previews every settlement band. Those terms become the validator rubric and settlement rules.
 
 Point out:
 
 - agreement-quality score;
 - full-payment and partial-payment thresholds;
-- payout preview;
-- SHA-256 terms fingerprint.
+- deterministic payout thresholds;
+- server-signed deployment status.
 
 ## 1:10–1:35 — show the marketplace
 
@@ -35,7 +35,7 @@ Open **Browse Jobs** and select a funded or completed listing.
 
 > Every live listing maps to a dedicated escrow contract. Separate server-controlled Bradbury accounts sign the client and worker steps; this is role-separated demo infrastructure, not browser-wallet custody.
 
-Briefly show search, status filtering, saved jobs, and the contract-backed job timeline.
+Briefly show search, status filtering, precise GEN values, and the contract-backed job timeline.
 
 ## 1:35–2:30 — reveal the technical core
 
@@ -45,9 +45,8 @@ Open **AI Evaluation**.
 
 Show:
 
-- fetch → sandbox → evaluate → consensus → settle pipeline;
-- validator score spread;
-- final rationale;
+- immutable agreement, public submission, and threshold evidence;
+- backend-confirmed score and rationale;
 - decision evidence room;
 - security checks;
 - deliverable provenance;
@@ -84,9 +83,9 @@ The fetched page is explicitly treated as untrusted evidence and isolated from e
 
 The result includes reasoning and supports an appeal before final settlement. The project demonstrates the appeal path without claiming a single model is infallible.
 
-### Is the fallback fake blockchain activity?
+### Does the interface fake blockchain activity when services are unavailable?
 
-No. Fallback state is visibly labeled, and all chain-mutating actions are blocked. It exists only to protect the presentation journey during network downtime.
+No. Failed reads show loading/error/retry states, and disabled live actions never manufacture a transaction or result.
 
 ### What is the business model?
 

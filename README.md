@@ -2,110 +2,133 @@
 
 **AI-arbitrated freelance escrow on GenLayer’s Bradbury testnet.**
 
-Merit turns a plain-English acceptance specification into settlement rules. GenLayer validators inspect a public deliverable and record a score; the escrow then queues a full worker payout, proportional split, or client refund.
+Merit combines a Next.js product interface, a trusted Render demo API, durable marketplace data, and GenLayer intelligent contracts. A plain-English acceptance specification becomes an inspectable evaluation and a full payout, proportional split, or refund path.
 
-[Live application](https://lexiweb31.github.io/genlayer-escrow/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Demo script](DEMO_SCRIPT.md)
+[Live Next.js application](https://genlayer-escrow.vercel.app/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Demo script](DEMO_SCRIPT.md)
 
-## Trust model — read before funding
+## Trust model
 
-The competition interface is a **server-signed, testnet-only demo**. It does not connect a visitor’s browser wallet, and visitors do not personally control deposited GEN.
+The current competition experience is a **server-signed, testnet-only demo**. It does not connect a visitor’s browser wallet, and visitors do not personally control deposited GEN.
 
-- `DEMO_CLIENT_PRIVATE_KEY` signs only deploy, fund, evaluate, appeal, and finalize calls.
-- `DEMO_WORKER_PRIVATE_KEY` signs only accept and submit calls.
-- Both keys must be configured and must derive to different addresses. Otherwise all live actions are disabled and the UI offers a clearly labeled simulated walkthrough that never submits a transaction.
-- Each newly created job rejects a client address that is also the worker address.
-- Contracts deployed before the safe EOA transfer patch are marked **“legacy settlement contract — do not fund”** and remain read-only. Immutable deployed contracts are not silently migrated or deleted.
+- Render owns `DEMO_CLIENT_PRIVATE_KEY` and `DEMO_WORKER_PRIVATE_KEY`.
+- The two keys must derive to different addresses.
+- The demo client signs deploy, fund, evaluate, appeal, and finalize actions.
+- The demo worker signs accept and submit actions.
+- If both roles are not configured safely, live actions are disabled. The frontend never invents an on-chain transaction.
+- Contracts deployed before the safe EOA transfer patch remain visibly read-only: **legacy settlement contract — do not fund**.
 
-The demo server controls both testnet keys, so this is role separation—not real user custody. Browser-wallet signing must be implemented before describing Merit as user-wallet custody.
+The browser receives public role addresses and transaction evidence only. Private keys, database paths, and server signer configuration must never use a `NEXT_PUBLIC_` name.
 
-## Safe settlement
+## Frontend architecture
 
-Native GEN payouts and refunds use GenLayer’s EOA external-message transfer pattern. The contract records the outcome and queued destinations before emitting transfers. Merit does not call a payout or refund complete merely because `finalize()` changed the parent contract state.
+The production frontend uses Next.js, TypeScript, and the App Router. It is a normal Vercel deployment—not a static export and not a GitHub Pages application.
 
-A settlement view exposes:
+Real routes:
 
-- outcome and settlement type;
-- every recipient and amount;
-- parent transaction and outbound transfer reference when available;
-- `PENDING_FINALIZATION` until the parent transaction finalizes and an inspectable outbound message/triggered transaction is visible.
+- `/` — homepage and animated escrow explainer;
+- `/jobs` — durable marketplace, filters, and distinct locked/pending/finalized totals;
+- `/jobs/new` — guided agreement creation;
+- `/jobs/[id]` — escrow overview;
+- `/jobs/[id]/manage` — role-gated lifecycle actions;
+- `/jobs/[id]/evaluation` — confirmed evaluation evidence;
+- `/contracts` and `/jobs/[id]/contracts` — infrastructure and deployed addresses.
 
-GenLayer executes external messages only when the parent transaction finalizes. See the official [value-transfer](https://docs.genlayer.com/developers/intelligent-contracts/features/value-transfers) and [message](https://docs.genlayer.com/developers/intelligent-contracts/features/messages) documentation.
+Reusable components live in `components/`. Typed Render API calls live in `lib/api.ts`. Exact GEN/wei conversion and finality-aware settlement mapping live in `lib/amount.ts` and `lib/settlement.ts`.
 
-## Settlement model
+## Safe settlement language
 
-| Validator score | Queued outcome |
-|---|---|
-| Score ≥ full-payment threshold | Worker payout, less declared fee |
-| Partial floor ≤ score < full-payment threshold | Proportional worker payout, client refund, and fee |
-| Score < partial floor | Full client refund |
+Merit separates the contract decision from transfer finality:
 
-The client, worker, and platform cannot change these thresholds after deployment.
-
-## Durable marketplace registry
-
-The API stores marketplace records in SQLite instead of relying on `artifacts/jobs.json`. The schema includes the job address, terms, client and worker, lifecycle state, deployment transaction, settlement details, and timestamps. Every browser reads the same API-backed registry.
-
-`PERSIST_DATA_DIR` selects the database directory:
-
-- Local development: unset it to use `.data/`, or set an absolute/relative development path.
-- Render production: upgrade the web service to a disk-compatible paid plan, attach a persistent disk in **Dashboard → Service → Disks**, use a mount such as `/var/data/merit`, and set `PERSIST_DATA_DIR=/var/data/merit`.
-
-Only writes beneath the disk mount survive a Render restart or redeploy. Do not set a production `PERSIST_DATA_DIR` outside the attached mount. Existing `artifacts/jobs.json` entries, when present, are imported once as read-only legacy warnings; the source file is not rewritten or deleted.
-
-## Required environment
-
-```bash
-DEMO_CLIENT_PRIVATE_KEY=0x...   # server secret; Bradbury testnet only
-DEMO_WORKER_PRIVATE_KEY=0x...   # different server secret/address
-PERSIST_DATA_DIR=/var/data/merit
+```text
+Submitted → Evaluated → Settlement queued → Transfer finalized
 ```
 
-Never expose either key to frontend code, logs, screenshots, commits, or browser environment variables. Fund only the demo client with the minimum Bradbury testnet GEN needed for the walkthrough.
+`ACCEPTED`, `PARTIAL`, and `REFUNDED` may be recorded decisions, but the UI continues to show **Settlement pending** until the backend verifies the outbound external-message transfer. Pending and finalized views expose recipients, exact GEN amounts, parent transaction references, and Bradbury explorer links.
 
-`DEPLOYER_PRIVATE_KEY` is retained only for older integration tooling. The dashboard API no longer uses it for marketplace actions.
+## Local frontend setup
 
-## Architecture
+Requirements: Node.js 20.9 or newer and npm.
 
-- `contracts/freelance_escrow.py` — role-gated lifecycle, intelligent evaluation, appeal, and EOA settlement messages.
-- `dashboard/api.py` — distinct demo signers, role/state checks, testnet transaction submission, and transfer-status recovery.
-- `dashboard/store.py` — shared SQLite marketplace and settlement registry.
-- `docs/index.html` and `public/index.html` — identical static frontends.
-- `tests/direct/` — contract behavior, including full payout, split, and refund cases.
-- `tests/backend/` — durable storage, legacy import, and demo-role configuration checks.
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
 
-## Run locally
+Configure these browser-safe values in `.env.local`:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_GENLAYER_NETWORK=testnet_bradbury
+NEXT_PUBLIC_EXPLORER_BASE_URL=https://explorer-bradbury.genlayer.com
+```
+
+Open `http://localhost:3000`. Never place private keys or Render secrets in `.env.local` or any `NEXT_PUBLIC_` variable.
+
+## Local Render API setup
+
+The Python API remains the trusted signer and persistence owner:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+export DEMO_CLIENT_PRIVATE_KEY=your_local_testnet_demo_client_key
+export DEMO_WORKER_PRIVATE_KEY=your_different_local_testnet_demo_worker_key
+export PERSIST_DATA_DIR=.data
 uvicorn dashboard.api:app --reload
 ```
 
-In a second terminal:
+Use testnet-only keys and never commit them. When the keys are absent, the API starts with live multi-role actions disabled.
+
+## Vercel deployment
+
+Create or link a Vercel project from this repository and configure these public environment variable names for Production and Preview:
+
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_GENLAYER_NETWORK`
+- `NEXT_PUBLIC_EXPLORER_BASE_URL`
+
+Set `NEXT_PUBLIC_API_BASE_URL` to the Render service origin, without a trailing slash. Vercel automatically detects Next.js; `vercel.json` declares the framework and does not define a static output directory.
+
+Before deployment:
 
 ```bash
-python3 -m http.server 8080 --directory docs
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-If the two demo keys are absent, the API starts safely with live actions disabled. Open `http://localhost:8080` to use the simulated walkthrough.
+## Render environment ownership
 
-## Verification
+Only Render receives server secrets and durable-storage configuration:
+
+- `DEMO_CLIENT_PRIVATE_KEY`
+- `DEMO_WORKER_PRIVATE_KEY`
+- `PERSIST_DATA_DIR`
+
+On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, currently `/var/data/merit`. Jobs are stored in SQLite so all browsers see the same registry and redeploys do not discard jobs when the disk is configured.
+
+## Wallet-mode roadmap
+
+The interface explicitly distinguishes two architectures:
+
+- **Demo mode:** available now; separate server-held Bradbury accounts sign transactions; testnet-only; not visitor custody.
+- **Wallet mode:** disabled and labelled **Coming soon — connect a Bradbury wallet**.
+
+Wallet mode must remain disabled until browser wallet support, contract-side caller/role behavior, chain/network checks, transaction status recovery, and end-to-end custody tests are implemented. Enabling a connect button alone is not sufficient.
+
+## Backend and contract verification
 
 ```bash
 python3 -m pytest tests/direct -q
 python3 -m pytest tests/backend -q
 python3 -m py_compile dashboard/api.py dashboard/store.py scripts/*.py
 genvm-lint contracts/freelance_escrow.py
-cmp -s docs/index.html public/index.html
 ```
 
-Integration tests require a configured Bradbury/local validator environment and funded test accounts. The fallback demo is visibly labeled and cannot submit simulated chain activity.
-
-## Competition UX
-
-Merit includes Judge Mode, light/dark themes, an animated escrow explainer, agreement-quality guidance, marketplace search and filters, AI evaluation evidence, an interactive settlement simulator, a settlement receipt, deep links, mobile account access, bottom navigation, horizontally scrollable validator cards, and reduced-motion support.
+GenLayer executes external messages only when their parent transaction finalizes. See the official [value-transfer](https://docs.genlayer.com/developers/intelligent-contracts/features/value-transfers) and [message](https://docs.genlayer.com/developers/intelligent-contracts/features/messages) documentation.
 
 ## License
 
