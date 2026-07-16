@@ -1,4 +1,5 @@
 import { CheckIcon, ClockIcon, ExternalIcon } from "@/components/icons";
+import { EscrowCoreMark } from "@/components/escrow-core-mark";
 import { MonoValue, StatusPill } from "@/components/ui";
 import { formatWei } from "@/lib/amount";
 import { recipientRole, settlementPresentation } from "@/lib/settlement";
@@ -15,7 +16,7 @@ export function SettlementProof({ job, result }: { job: JobRecord; result?: Eval
   }
   const outcomeClass = view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "outcome-pending";
   return <section className={`panel settlement-panel ${outcomeClass}`}>
-    <div className="panel-heading"><div><p className="card-kicker">Settlement evidence</p><h2>{view.label}</h2></div><StatusPill tone={view.isFinalized ? "success" : "warning"}>{view.isFinalized ? <><CheckIcon size={14}/> Finalized</> : <><ClockIcon size={14}/> Pending finalization</>}</StatusPill></div>
+    <div className="panel-heading settlement-heading"><EscrowCoreMark size="small" tone={view.isFinalized ? view.decision === "REFUNDED" ? "danger" : "success" : "pending"}/><div><p className="card-kicker">Settlement evidence</p><h2>{view.label}</h2></div><StatusPill tone={view.isFinalized ? "success" : "warning"}>{view.isFinalized ? <><CheckIcon size={14}/> Finalized</> : <><ClockIcon size={14}/> Pending finalization</>}</StatusPill></div>
     {view.decision && <div className="decision-row"><span>Contract decision</span><strong>{view.decision}</strong><small>{view.isFinalized ? "Outbound transfer verified" : "Decision recorded; transfer is not complete"}</small></div>}
     <div className="transfer-list">{transfers.length ? transfers.map((transfer, index) => {
       const evidence = settlement.transfer_evidence?.find((item) => item.recipient === transfer.recipient && item.settlement_type === transfer.settlement_type);

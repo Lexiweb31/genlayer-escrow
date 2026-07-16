@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ExternalIcon, RefreshIcon, ShieldIcon } from "@/components/icons";
+import { ArrowIcon, ClockIcon, ExternalIcon, FileIcon, RefreshIcon, ShieldIcon, UserIcon } from "@/components/icons";
 import { JobNavigation } from "@/components/job-navigation";
 import { Lifecycle } from "@/components/lifecycle";
 import { SettlementProof } from "@/components/settlement-proof";
@@ -10,7 +11,7 @@ import { formatWei } from "@/lib/amount";
 import { useJob } from "@/lib/hooks";
 import { hasConfirmedEvaluation, settlementPresentation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
-import { addressUrl, shortAddress, txUrl } from "@/lib/utils";
+import { addressUrl, relativeTime, shortAddress, txUrl } from "@/lib/utils";
 
 export default function JobOverviewPage() {
   const params = useParams<{ id: string }>();
@@ -32,7 +33,9 @@ export default function JobOverviewPage() {
       <article className="panel overview-summary"><div className="panel-heading"><div><p className="card-kicker">Current state</p><h2>{view.label}</h2></div><StatusPill tone={view.isPending ? "warning" : view.isFinalized ? "success" : job.legacy_contract ? "danger" : "info"}>{view.status}</StatusPill></div><div className="amount-display"><span>Contract balance</span><strong>{formatWei(job.amount)}</strong><small>{view.isPending ? "Outbound settlement is queued, not finalized" : view.isFinalized ? "Settlement transfer finalized" : "Locked according to the active lifecycle"}</small></div><div className="summary-grid"><div><span>AI evaluation</span><strong>{scoreConfirmed ? `${data.result.score ?? job.score}/100` : "Not evaluated yet"}</strong></div><div><span>Full-payment threshold</span><strong>{job.min_score ?? 70}/100</strong></div><div><span>Partial floor</span><strong>{job.partial_floor ?? 40}/100</strong></div><div><span>Declared fee</span><strong>{((job.fee_bps ?? 0) / 100).toFixed(2).replace(/\.00$/, "")}%</strong></div></div></article>
       <article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Lifecycle</p><h2>Agreement → finality</h2></div></div><Lifecycle job={job} result={data.result}/></article>
     </section>
+    <section className="role-action-strip" aria-label="Role-aware next actions"><article><span><UserIcon/></span><div><small>Demo client</small><b>{shortAddress(data.demo.client_address)}</b><p>{["UNFUNDED", "EVALUATED"].includes(job.status) ? "Action available in Manage Job" : "Waiting for the worker or contract state"}</p></div></article><article><span><UserIcon/></span><div><small>Demo worker</small><b>{shortAddress(data.demo.worker_address)}</b><p>{["OPEN", "AGREED"].includes(job.status) ? "Action available in Manage Job" : "Waiting for the client or contract state"}</p></div></article><Link className="button primary" href={job.status === "SUBMITTED" ? `/jobs/${encodeURIComponent(id)}/evaluation` : `/jobs/${encodeURIComponent(id)}/manage`}>{job.status === "SUBMITTED" ? "Open evaluation" : "Open next action"} <ArrowIcon/></Link></section>
     <SettlementProof job={job} result={data.result}/>
+    <section className="overview-detail-grid"><article className="panel parties-panel"><div className="panel-heading"><div><p className="card-kicker">Parties and evidence</p><h2>Role-separated record</h2></div></div><div className="party-list"><div><UserIcon/><span>Client</span><MonoValue>{job.client_address || job.client || data.demo.client_address || "Unavailable"}</MonoValue></div><div><UserIcon/><span>Worker</span><MonoValue>{job.worker_address || job.worker || data.demo.worker_address || "Unavailable"}</MonoValue></div><div><FileIcon/><span>Evidence</span>{job.submission_url ? <a href={job.submission_url} target="_blank" rel="noreferrer">Open public deliverable <ExternalIcon size={14}/></a> : <strong>Not submitted yet</strong>}</div></div></article><article className="panel activity-panel"><div className="panel-heading"><div><p className="card-kicker">Persistent activity</p><h2>Registry history</h2></div></div><ol><li><ClockIcon/><div><b>Contract registered</b><small>{relativeTime(job.created_at) || "Timestamp unavailable"}</small></div></li>{job.deployment_tx && <li><ShieldIcon/><div><b>Deployment transaction recorded</b><MonoValue>{shortAddress(job.deployment_tx, 10, 7)}</MonoValue></div></li>}{job.submission_url && <li><FileIcon/><div><b>Public evidence submitted</b><small>Available for inspection</small></div></li>}<li><ClockIcon/><div><b>Last registry update</b><small>{relativeTime(job.updated_at) || "Timestamp unavailable"}</small></div></li></ol></article></section>
     <section className="panel agreement-panel"><div className="panel-heading"><div><p className="card-kicker">Immutable agreement</p><h2>Acceptance specification</h2></div><StatusPill>Public evidence required</StatusPill></div><blockquote>{data.meta.spec || job.spec}</blockquote><div className="agreement-meta"><div><span>Escrow contract</span><MonoValue title={job.address}>{job.address}</MonoValue>{escrowLink && <a href={escrowLink} target="_blank" rel="noreferrer">Explorer <ExternalIcon size={14}/></a>}</div><div><span>Deployment transaction</span><MonoValue title={data.meta.deployment_tx}>{shortAddress(data.meta.deployment_tx, 12, 8)}</MonoValue>{deploymentLink && <a href={deploymentLink} target="_blank" rel="noreferrer">Explorer <ExternalIcon size={14}/></a>}</div></div></section>
   </div>;
 }

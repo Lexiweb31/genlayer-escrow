@@ -1,4 +1,5 @@
 import { RefreshIcon } from "@/components/icons";
+import { EscrowCoreMark } from "@/components/escrow-core-mark";
 
 export function PageHeader({ eyebrow, title, description, actions }: {
   eyebrow: string;
@@ -13,7 +14,7 @@ export function PageHeader({ eyebrow, title, description, actions }: {
 }
 
 export function LoadingState({ label = "Loading Merit data…" }: { label?: string }) {
-  return <div className="state-panel" aria-live="polite"><span className="loader"/><strong>{label}</strong><p>Reading the shared Render registry and Bradbury state.</p></div>;
+  return <div className="state-panel" aria-live="polite"><span className="loading-core"><EscrowCoreMark/></span><strong>{label}</strong><p>Reading the shared Render registry and Bradbury state.</p></div>;
 }
 
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {

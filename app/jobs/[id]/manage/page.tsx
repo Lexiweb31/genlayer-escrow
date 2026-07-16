@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowIcon, CheckIcon, ClockIcon, RefreshIcon } from "@/components/icons";
+import { ArrowIcon, CheckIcon, ClockIcon, LockIcon, RefreshIcon, UserIcon } from "@/components/icons";
 import { JobNavigation } from "@/components/job-navigation";
 import { Lifecycle } from "@/components/lifecycle";
 import { SettlementProof } from "@/components/settlement-proof";
@@ -67,6 +67,7 @@ export default function ManageJobPage() {
 
   return <div className="page-container">
     <JobNavigation id={id}/><PageHeader eyebrow="Guided lifecycle" title="Manage job" description="Each action is role-gated, server-signed, and disabled while its Bradbury transaction is in progress."/>
+    <section className="role-lanes" aria-label="Separated demo roles"><article className={["UNFUNDED", "EVALUATED"].includes(job.status) ? "active" : ""}><span><UserIcon/></span><div><small>Demo client lane</small><b>Deploy · fund · evaluate · finalize</b><p>{data.demo.client_address || "Client signer unavailable"}</p></div>{["UNFUNDED", "EVALUATED"].includes(job.status) ? <StatusPill tone="info">Current signer</StatusPill> : <StatusPill>Waiting</StatusPill>}</article><div className="role-divider"><LockIcon/><span>Contract-enforced separation</span></div><article className={["OPEN", "AGREED"].includes(job.status) ? "active" : ""}><span><UserIcon/></span><div><small>Demo worker lane</small><b>Accept · submit public work</b><p>{data.demo.worker_address || "Worker signer unavailable"}</p></div>{["OPEN", "AGREED"].includes(job.status) ? <StatusPill tone="success">Current signer</StatusPill> : <StatusPill>Waiting</StatusPill>}</article></section>
     <section className="manage-grid"><article className={`panel action-panel ${actionOutcomeClass}`}>{actionPanel()}{message && <div className={`action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}</article><article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Accurate sequence</p><h2>Lifecycle state</h2></div></div><Lifecycle job={job} result={data.result}/></article></section>
     {(view.isPending || view.isFinalized) && <SettlementProof job={job} result={data.result}/>}
   </div>;
