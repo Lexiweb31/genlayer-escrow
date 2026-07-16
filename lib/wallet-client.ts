@@ -11,7 +11,10 @@ interface WalletWriteInput {
   functionName: string;
   args?: CalldataEncodable[];
   value?: bigint;
+  onStage?: (stage: WalletWriteStage) => void;
 }
+
+export type WalletWriteStage = "preparing" | "awaiting_wallet" | "submitted" | "confirming";
 
 export interface WalletWriteResult {
   hash: string;
@@ -57,13 +60,23 @@ function calldataAddress(value: string): CalldataAddress {
   return new CalldataAddress(Uint8Array.from(normalized.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16))));
 }
 
-async function walletClient(account: string) {
+async function walletClient(account: string, onWalletRequest?: () => void) {
   const provider = browserProvider();
   if (!provider) throw new Error("Connect a browser wallet before submitting this transaction.");
   const chainId = String(await provider.request({ method: "eth_chainId" }));
   if (!isBradburyChain(chainId)) throw new Error("Switch the connected wallet to Bradbury before submitting this transaction.");
+  const accounts = await provider.request({ method: "eth_accounts" }) as string[];
+  if (!accounts.some((candidate) => sameAddress(candidate, account))) {
+    throw new Error("The connected wallet account changed. Reconnect Wallet Mode and try again.");
+  }
+  const notifyingProvider: BrowserProvider = {
+    request: async (request) => {
+      if (request.method === "eth_sendTransaction" || request.method === "eth_signTransaction") onWalletRequest?.();
+      return provider.request(request);
+    },
+  };
   type ClientConfig = NonNullable<Parameters<typeof createClient>[0]>;
-  return createClient({ chain: testnetBradbury, account: accountAddress(account), provider: provider as ClientConfig["provider"] });
+  return createClient({ chain: testnetBradbury, account: accountAddress(account), provider: notifyingProvider as ClientConfig["provider"] });
 }
 
 export function sameAddress(left?: string | null, right?: string | null): boolean {
@@ -71,7 +84,8 @@ export function sameAddress(left?: string | null, right?: string | null): boolea
 }
 
 export async function writeWalletContract(input: WalletWriteInput): Promise<WalletWriteResult> {
-  const client = await walletClient(input.account);
+  input.onStage?.("preparing");
+  const client = await walletClient(input.account, () => input.onStage?.("awaiting_wallet"));
 
   try {
     const hash = await client.writeContract({
@@ -80,6 +94,8 @@ export async function writeWalletContract(input: WalletWriteInput): Promise<Wall
       args: input.args || [],
       value: input.value || 0n,
     }) as TransactionHash;
+    input.onStage?.("submitted");
+    input.onStage?.("confirming");
     const receipt = await client.waitForTransactionReceipt({
       hash,
       status: TransactionStatus.ACCEPTED,

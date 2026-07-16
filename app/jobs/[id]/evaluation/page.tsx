@@ -36,12 +36,21 @@ export default function EvaluationPage() {
   const live = wallet.mode === "wallet" ? walletReady : demoLive;
   const score = data.result?.score ?? job.score ?? 0;
   const evaluationOutcomeClass = score >= (job.min_score ?? 70) ? "outcome-success" : score >= (job.partial_floor ?? 40) ? "outcome-pending" : "outcome-refund";
+  const evaluationStageMessage = (stage: "preparing" | "awaiting_wallet" | "submitted" | "confirming") => {
+    const messages = {
+      preparing: "Preparing the Bradbury transaction… Your wallet has not been asked to sign yet.",
+      awaiting_wallet: "Your wallet has received the request. Open the wallet extension and confirm the evaluation transaction.",
+      submitted: "Wallet confirmed. The evaluation transaction was submitted to Bradbury.",
+      confirming: "Validators are evaluating the public work. This can take several minutes—keep this page open.",
+    };
+    setMessage(messages[stage]);
+  };
   const runEvaluation = async () => {
     if (busy) return;
     if (!live) return setMessage(wallet.mode === "wallet" ? "Connect a wallet on Bradbury before requesting evaluation." : "Live evaluation is disabled. No on-chain result was simulated.");
     if (wallet.mode === "wallet" && !isClient) return setMessage("The connected wallet is not the client assigned to this job.");
-    setBusy(true); setMessage(wallet.mode === "wallet" ? "Confirm the evaluation transaction in your wallet…" : "Submitting a server-signed demo evaluation transaction to Bradbury…");
-    try { await (wallet.mode === "wallet" ? writeWalletContract({ account: wallet.address!, address: id, functionName: "evaluate" }) : meritApi.evaluate(id)); setMessage("Evaluation transaction accepted. Reading the confirmed result…"); await refresh(); }
+    setBusy(true); setMessage(wallet.mode === "wallet" ? "Preparing the Bradbury transaction… Your wallet has not been asked to sign yet." : "Submitting a server-signed demo evaluation transaction to Bradbury…");
+    try { await (wallet.mode === "wallet" ? writeWalletContract({ account: wallet.address!, address: id, functionName: "evaluate", onStage: evaluationStageMessage }) : meritApi.evaluate(id)); setMessage("Evaluation confirmed on Bradbury. Reading the result…"); await refresh(); }
     catch (nextError) { setMessage(friendlyApiError(nextError)); }
     finally { setBusy(false); }
   };
