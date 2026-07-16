@@ -31,3 +31,4 @@ export const CopyIcon = (props: IconProps) => <IconBase {...props}><rect x="8" y
 export const CodeIcon = (props: IconProps) => <IconBase {...props}><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></IconBase>;
 export const ChevronIcon = (props: IconProps) => <IconBase {...props}><path d="m9 18 6-6-6-6"/></IconBase>;
 export const ActivityIcon = (props: IconProps) => <IconBase {...props}><path d="M3 12h4l2-6 4 12 2-6h6"/></IconBase>;
+export const BellIcon = (props: IconProps) => <IconBase {...props}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></IconBase>;

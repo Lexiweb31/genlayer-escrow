@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CloseIcon, ContractIcon, HomeIcon, JobsIcon, MenuIcon, MoonIcon, PlusIcon, ShieldIcon, SparkIcon, SunIcon, WalletIcon } from "@/components/icons";
 import { DemoModeNotice } from "@/components/demo-mode-notice";
+import { NotificationCenter } from "@/components/notification-center";
 import { useWalletMode } from "@/components/providers";
 import { shortAddress } from "@/lib/utils";
 
@@ -57,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <header className="marketing-header">
       <Link className="brand" href="/" aria-label="Merit home"><span className="brand-mark"><span/></span><span>merit</span></Link>
       <nav className="marketing-nav" aria-label="Marketing navigation"><a href="#product">Product</a><a href="#how-it-works">How it works</a><a href="#security">Security</a><Link href="/jobs">Explorer</Link><a href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noreferrer">GitHub</a></nav>
-      <div className="marketing-actions"><div className="network-chip"><i/><span>Bradbury</span></div><button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>{theme === "light" ? <MoonIcon/> : <SunIcon/>}</button><Link className="button primary" href="/jobs">Launch App</Link><button className="marketing-menu-button" onClick={() => setMarketingMenuOpen((open) => !open)} aria-label={marketingMenuOpen ? "Close navigation" : "Open navigation"} aria-expanded={marketingMenuOpen}>{marketingMenuOpen ? <CloseIcon/> : <MenuIcon/>}</button></div>
+      <div className="marketing-actions"><div className="network-chip"><i/><span>Bradbury</span></div><NotificationCenter/><button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>{theme === "light" ? <MoonIcon/> : <SunIcon/>}</button><Link className="button primary" href="/jobs">Launch App</Link><button className="marketing-menu-button" onClick={() => setMarketingMenuOpen((open) => !open)} aria-label={marketingMenuOpen ? "Close navigation" : "Open navigation"} aria-expanded={marketingMenuOpen}>{marketingMenuOpen ? <CloseIcon/> : <MenuIcon/>}</button></div>
       {marketingMenuOpen && <nav className="marketing-mobile-nav" aria-label="Mobile marketing navigation"><a href="#product" onClick={() => setMarketingMenuOpen(false)}>Product</a><a href="#how-it-works" onClick={() => setMarketingMenuOpen(false)}>How it works</a><a href="#security" onClick={() => setMarketingMenuOpen(false)}>Security</a><Link href="/jobs" onClick={() => setMarketingMenuOpen(false)}>Explorer</Link><a href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noreferrer">GitHub</a></nav>}
     </header>
     <main id="main-content" tabIndex={-1}>{children}</main>
@@ -81,6 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link className="mobile-brand" href="/"><span className="brand-mark"><span/></span>merit</Link>
         <div className="mode-switch" aria-label="Account mode"><button className={wallet.mode === "demo" ? "active" : ""} onClick={wallet.useDemoMode}><ShieldIcon size={13}/> Demo mode</button><button className={wallet.mode === "wallet" ? "active" : ""} onClick={() => void wallet.connectWallet()} disabled={wallet.status === "connecting" || wallet.status === "switching"} title={wallet.providerAvailable ? "Connect a Bradbury wallet" : "Install a browser wallet to connect"}><WalletIcon size={13}/> {wallet.status === "connecting" ? "Connecting…" : "Wallet mode"}</button></div>
         <div className="network-chip"><i/><span>Bradbury</span></div>
+        <NotificationCenter/>
         <button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`} title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>
           {theme === "light" ? <MoonIcon/> : <SunIcon/>}
         </button>
