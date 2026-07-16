@@ -24,6 +24,7 @@ export interface DemoConfig {
   live_actions_enabled: boolean;
   client_address: string | null;
   worker_address: string | null;
+  platform_address?: string | null;
   notice: string;
 }
 
@@ -158,6 +159,13 @@ export interface CreateJobInput {
   fee_bps: number;
   min_score: number;
   partial_floor: number;
+}
+
+export interface RegisterWalletJobInput extends CreateJobInput {
+  address: string;
+  client_address: string;
+  worker_address: string;
+  deployment_tx: string;
 }
 
 export interface CreateJobResponse {

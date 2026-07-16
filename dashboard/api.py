@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -88,12 +89,16 @@ def _read_sender() -> str:
 
 
 def _demo_public_config() -> dict[str, Any]:
+    platform_address = os.getenv("PLATFORM_FEE_ADDRESS", "").strip() or str(
+        deployments.get("platform") or deployments.get("deployer") or ""
+    )
     return {
         "mode": "server-signed-demo" if DEMO_ROLES_READY else "simulated-walkthrough",
         "network": "testnet_bradbury",
         "live_actions_enabled": DEMO_ROLES_READY,
         "client_address": str(demo_client_account.address) if demo_client_account else None,
         "worker_address": str(demo_worker_account.address) if demo_worker_account else None,
+        "platform_address": platform_address or None,
         "notice": (
             "Transactions are signed by separate Bradbury demo accounts on the server. "
             "No browser wallet is connected and visitors do not control deposited GEN."
@@ -721,6 +726,73 @@ class CreateJobRequest(BaseModel):
     fee_bps: int = Field(default=200, ge=0, le=1000)
     min_score: int = Field(default=70, ge=0, le=100)
     partial_floor: int = Field(default=40, ge=0, le=100)
+
+
+class RegisterWalletJobRequest(CreateJobRequest):
+    address: str
+    client_address: str
+    worker_address: str
+    deployment_tx: str
+
+
+@app.post("/api/jobs/register")
+def register_wallet_job(req: RegisterWalletJobRequest):
+    address_pattern = re.compile(r"^0x[0-9a-fA-F]{40}$")
+    tx_pattern = re.compile(r"^0x[0-9a-fA-F]{64}$")
+    if not address_pattern.fullmatch(req.address):
+        raise HTTPException(status_code=422, detail={"code": "INVALID_CONTRACT_ADDRESS", "message": "Invalid escrow contract address."})
+    if not address_pattern.fullmatch(req.client_address) or not address_pattern.fullmatch(req.worker_address):
+        raise HTTPException(status_code=422, detail={"code": "INVALID_ROLE_ADDRESS", "message": "Invalid client or worker address."})
+    if req.client_address.lower() == req.worker_address.lower():
+        raise HTTPException(status_code=422, detail={"code": "SAME_ROLE_ADDRESS", "message": "Client and worker must use different wallets."})
+    if not tx_pattern.fullmatch(req.deployment_tx):
+        raise HTTPException(status_code=422, detail={"code": "INVALID_DEPLOYMENT_TX", "message": "Invalid deployment transaction hash."})
+    if req.partial_floor > req.min_score:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_THRESHOLDS", "message": "partial_floor cannot exceed min_score"})
+    spec = req.spec.strip()
+    if len(spec) < 20:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_SPEC", "message": "Spec must be at least 20 characters"})
+
+    try:
+        state = _job_state(req.address)["job"]
+    except Exception:
+        raise HTTPException(status_code=422, detail={"code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."})
+    expected = {
+        "client": req.client_address,
+        "worker": req.worker_address,
+        "spec": spec,
+        "fee_bps": req.fee_bps,
+        "min_score": req.min_score,
+        "partial_floor": req.partial_floor,
+        "status": "UNFUNDED",
+    }
+    for key, value in expected.items():
+        actual = state.get(key)
+        if key in ("client", "worker"):
+            matches = str(actual).lower() == str(value).lower()
+        else:
+            matches = actual == value
+        if not matches:
+            raise HTTPException(status_code=422, detail={"code": "CONTRACT_METADATA_MISMATCH", "message": "The deployed contract does not match the submitted job details."})
+
+    existing = store.get_job(req.address)
+    if existing:
+        return {"job": existing, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+    record = store.add_job({
+        "id": req.address,
+        "address": req.address,
+        "title": (req.title or spec.split(".")[0]).strip()[:80],
+        "spec": spec,
+        "fee_bps": req.fee_bps,
+        "min_score": req.min_score,
+        "partial_floor": req.partial_floor,
+        "client_address": req.client_address,
+        "worker_address": req.worker_address,
+        "lifecycle_status": "UNFUNDED",
+        "deployment_tx": req.deployment_tx,
+        "created_at": utc_now(),
+    })
+    return {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
 
 
 @app.post("/api/jobs")

@@ -274,6 +274,8 @@ class FreelanceEscrow(gl.Contract):
         """
         if self.status != SUBMITTED:
             raise gl.vm.UserError(f"[EXPECTED] Nothing to evaluate (status: {self.status})")
+        if gl.message.sender_address != self.client:
+            raise gl.vm.UserError("[EXPECTED] Only the client can request evaluation")
 
         result = _run_evaluation(self.spec, self.submission_url)
 
@@ -313,6 +315,8 @@ class FreelanceEscrow(gl.Contract):
         """
         if self.status != EVALUATED:
             raise gl.vm.UserError(f"[EXPECTED] Job not yet evaluated (status: {self.status})")
+        if gl.message.sender_address != self.client:
+            raise gl.vm.UserError("[EXPECTED] Only the client can finalize settlement")
 
         score         = self.score
         amount        = self.amount

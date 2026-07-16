@@ -65,7 +65,7 @@ Show the job contract, distinct demo signers, settlement status, recipient, amou
 
 ## 2:50–3:00 — close
 
-> Merit demonstrates an agreement that can understand public evidence, explain its decision, and queue score-based settlement on GenLayer. This competition build is server-signed and testnet-only; user wallet signing is future work.
+> Merit demonstrates an agreement that can understand public evidence, explain its decision, and queue score-based settlement on GenLayer. Demo Mode is server-signed and testnet-only; Wallet Mode supports connected Bradbury accounts and remains testnet-only.
 
 Finish on the evidence report or settlement receipt.
 

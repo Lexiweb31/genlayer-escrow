@@ -113,6 +113,7 @@ Only Render receives server secrets and durable-storage configuration:
 
 - `DEMO_CLIENT_PRIVATE_KEY`
 - `DEMO_WORKER_PRIVATE_KEY`
+- `PLATFORM_FEE_ADDRESS` (public Bradbury recipient used by wallet-created escrows)
 - `PERSIST_DATA_DIR`
 
 Signer keys and any future database credentials remain solely in Render environment variables. They must not be added to Vercel, browser code, API responses, or committed environment files.
@@ -126,9 +127,9 @@ The interface explicitly distinguishes two architectures:
 - **Demo mode:** available now; separate server-held Bradbury accounts sign transactions; testnet-only; not visitor custody.
 - **Wallet mode connection:** available; connects an injected wallet, requests Bradbury chain ID `4221`, and displays the connected address and native GEN balance.
 - **Wallet mode existing-contract actions:** available for funding, accepting, submitting work, requesting evaluation, appealing, and finalizing when the connected address matches the required client or worker role.
-- **Wallet-created escrow deployment:** intentionally locked until worker assignment, platform recipient selection, and durable registry registration are implemented and verified.
+- **Wallet-created escrow deployment:** available; requires a separate worker address, deploys through the connected client wallet, and verifies the resulting Bradbury contract before durable marketplace registration.
 
-Wallet writes use GenLayerJS, require Bradbury, wait for an accepted receipt, and reject contract execution errors. Real-wallet end-to-end custody testing and deployment registration remain release requirements before Wallet Mode should be described as production-ready.
+Wallet writes use GenLayerJS, require Bradbury, wait for an accepted receipt, and reject contract execution errors. If registration fails after deployment, the browser retains a recovery record and offers to restore the confirmed contract without deploying twice. Real-wallet end-to-end custody testing remains a release requirement before Wallet Mode should be described as production-ready.
 
 ## Backend and contract verification
 

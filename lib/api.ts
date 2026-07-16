@@ -5,6 +5,7 @@ import type {
   DemoConfig,
   JobDetailResponse,
   JobsResponse,
+  RegisterWalletJobInput,
   TransactionResponse,
 } from "@/lib/types";
 
@@ -52,6 +53,8 @@ export const meritApi = {
     request<JobDetailResponse>(`/api/jobs/${encodeURIComponent(id)}`, { signal }),
   createJob: (input: CreateJobInput) =>
     request<CreateJobResponse>("/api/jobs", { method: "POST", body: JSON.stringify(input) }),
+  registerWalletJob: (input: RegisterWalletJobInput) =>
+    request<CreateJobResponse>("/api/jobs/register", { method: "POST", body: JSON.stringify(input) }),
   fund: (id: string, amountWei: string) =>
     action(id, "fund", { amount_wei: amountWei }),
   acceptTerms: (id: string) => action(id, "accept_terms"),

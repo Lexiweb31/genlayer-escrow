@@ -60,6 +60,7 @@ export function isAllowedMeritApiRoute(method: string, segments: string[]): bool
 
   if (method === "POST") {
     if (segments.length === 1) return segments[0] === "jobs";
+    if (segments.length === 2) return segments[0] === "jobs" && segments[1] === "register";
     return segments.length === 3
       && segments[0] === "jobs"
       && isSafeExplorerReference(segments[1])
