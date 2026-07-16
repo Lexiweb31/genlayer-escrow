@@ -8,7 +8,7 @@ Merit combines a Next.js product interface, a trusted Render demo API, durable m
 
 ## Trust model
 
-The current transaction experience is a **server-signed, testnet-only demo**. The frontend can connect an injected browser wallet for Bradbury account and balance verification, but user-signed escrow writes remain locked until the complete GenLayer transaction flow is verified. Visitors do not control funds used by Demo Mode.
+Merit supports two clearly separated **Bradbury testnet-only** transaction paths. Demo Mode uses server-held test accounts; Wallet Mode lets a connected client or worker sign supported actions for an existing registered escrow. Wallet Mode never silently falls back to a demo signer. Visitors do not control funds used by Demo Mode.
 
 - Render owns `DEMO_CLIENT_PRIVATE_KEY` and `DEMO_WORKER_PRIVATE_KEY`.
 - The two keys must derive to different addresses.
@@ -125,9 +125,10 @@ The interface explicitly distinguishes two architectures:
 
 - **Demo mode:** available now; separate server-held Bradbury accounts sign transactions; testnet-only; not visitor custody.
 - **Wallet mode connection:** available; connects an injected wallet, requests Bradbury chain ID `4221`, and displays the connected address and native GEN balance.
-- **Wallet mode transactions:** intentionally locked; the application never falls back to a demo signer while Wallet Mode is selected.
+- **Wallet mode existing-contract actions:** available for funding, accepting, submitting work, requesting evaluation, appealing, and finalizing when the connected address matches the required client or worker role.
+- **Wallet-created escrow deployment:** intentionally locked until worker assignment, platform recipient selection, and durable registry registration are implemented and verified.
 
-Before wallet transactions are enabled, Merit still needs GenLayerJS-backed deploy/write calls, contract-side caller and role verification, transaction execution-result checks, accepted/finalized recovery, account-change handling across in-flight jobs, and end-to-end custody tests. A successful wallet connection alone is not presented as transaction support.
+Wallet writes use GenLayerJS, require Bradbury, wait for an accepted receipt, and reject contract execution errors. Real-wallet end-to-end custody testing and deployment registration remain release requirements before Wallet Mode should be described as production-ready.
 
 ## Backend and contract verification
 

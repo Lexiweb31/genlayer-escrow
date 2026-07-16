@@ -1,11 +1,23 @@
 import type { Metadata } from "next";
-import { DM_Mono, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
-const dmMono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono", display: "swap" });
+const manrope = localFont({
+  src: "./fonts/manrope-latin.woff2",
+  variable: "--font-manrope",
+  display: "swap",
+  weight: "200 800",
+});
+const dmMono = localFont({
+  src: [
+    { path: "./fonts/dm-mono-400-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/dm-mono-500-latin.woff2", weight: "500", style: "normal" },
+  ],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: { default: "Merit — Work that can prove itself", template: "%s · Merit" },
