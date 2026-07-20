@@ -7,8 +7,8 @@
 - Press `Cmd/Ctrl + J` and keep Judge Mode ready.
 - Keep the GitHub repository and Bradbury explorer in background tabs.
 - If Render is waking up, use the visible retry state and explain that the shared registry remains authoritative.
-- State up front that this is a **server-signed Bradbury testnet demo**. No visitor wallet is connected or controls the testnet GEN.
-- Confirm the Contracts page shows different demo client and worker addresses before attempting live actions. If either signer is missing, stay in the simulated walkthrough.
+- Use **Wallet Mode** for the primary demonstration: connect the client wallet on Bradbury, and keep a separate assigned worker wallet ready in another browser profile.
+- Use Demo Mode only as a clearly labelled fallback. Confirm that its Contracts page shows different server-held client and worker addresses before attempting demo actions.
 
 ## 0:00–0:30 — the problem
 
@@ -20,20 +20,20 @@ Show the animated escrow lifecycle and the “living protocol” telemetry.
 
 Open **Post a Job**. Apply the landing-page template.
 
-> The Bradbury demo client signer defines “done” before work begins. Merit checks whether the agreement is clear and testable and previews every settlement band. Those terms become the validator rubric and settlement rules.
+> The client defines “done” before work begins. Merit checks whether the agreement is clear and testable and previews every settlement band. Those terms become the validator rubric and settlement rules encoded in the escrow.
 
 Point out:
 
 - agreement-quality score;
 - full-payment and partial-payment thresholds;
 - deterministic payout thresholds;
-- server-signed deployment status.
+- connected-wallet deployment and transaction status.
 
 ## 1:10–1:35 — show the marketplace
 
 Open **Browse Jobs** and select a funded or completed listing.
 
-> Every live listing maps to a dedicated escrow contract. Separate server-controlled Bradbury accounts sign the client and worker steps; this is role-separated demo infrastructure, not browser-wallet custody.
+> Every live listing maps to a dedicated escrow contract. The contract separates the client actions from the assigned worker actions, and the shared registry makes the same job visible across browsers.
 
 Briefly show search, status filtering, precise GEN values, and the contract-backed job timeline.
 
@@ -65,7 +65,7 @@ Show the job contract, distinct demo signers, settlement status, recipient, amou
 
 ## 2:50–3:00 — close
 
-> Merit demonstrates an agreement that can understand public evidence, explain its decision, and queue score-based settlement on GenLayer. Demo Mode is server-signed and testnet-only; Wallet Mode supports connected Bradbury accounts and remains testnet-only.
+> Merit turns a plain-language agreement into inspectable evaluation and score-based settlement on GenLayer. Wallet Mode gives the client and worker control of their Bradbury actions; Demo Mode remains an explicitly labelled testnet fallback.
 
 Finish on the evidence report or settlement receipt.
 

@@ -11,7 +11,7 @@ interface WalletWriteInput {
   functionName: string;
   args?: CalldataEncodable[];
   value?: bigint;
-  onStage?: (stage: WalletWriteStage) => void;
+  onStage?: (stage: WalletWriteStage, transactionHash?: string) => void;
 }
 
 export type WalletWriteStage = "preparing" | "awaiting_wallet" | "submitted" | "confirming";
@@ -94,8 +94,8 @@ export async function writeWalletContract(input: WalletWriteInput): Promise<Wall
       args: input.args || [],
       value: input.value || 0n,
     }) as TransactionHash;
-    input.onStage?.("submitted");
-    input.onStage?.("confirming");
+    input.onStage?.("submitted", String(hash));
+    input.onStage?.("confirming", String(hash));
     const receipt = await client.waitForTransactionReceipt({
       hash,
       status: TransactionStatus.ACCEPTED,

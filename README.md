@@ -1,10 +1,25 @@
 # Merit
 
-**AI-arbitrated freelance escrow on GenLayer’s Bradbury testnet.**
+**Freelance escrow that can inspect public work before releasing payment.**
 
-Merit combines a Next.js product interface, a trusted Render demo API, durable marketplace data, and GenLayer intelligent contracts. A plain-English acceptance specification becomes an inspectable evaluation and a full payout, proportional split, or refund path.
+Clients and workers agree on observable requirements before GEN is locked. The worker submits a public deliverable, GenLayer validators inspect it against those exact requirements, and the intelligent escrow records a reasoned score before queuing a full payout, proportional split, or refund.
 
 [Live Next.js application](https://genlayer-escrow.vercel.app/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Demo script](DEMO_SCRIPT.md)
+
+## The trust problem
+
+A normal escrow contract can hold funds and compare numbers, but it cannot decide whether a website, research report, design, or other public deliverable actually satisfies a natural-language agreement. Traditional marketplaces return that decision to a private platform employee.
+
+Merit makes the agreement, evidence, evaluation reasoning, settlement rule, and transaction status inspectable. GenLayer is essential because its validators can retrieve public web evidence, apply contextual judgment, and reach consensus on a result that a deterministic smart contract cannot compute alone.
+
+## What is real
+
+- Every marketplace record points to a dedicated Bradbury intelligent contract.
+- Wallet Mode sends supported lifecycle transactions through the connected client or worker wallet.
+- Contract roles enforce that the client cannot perform the worker’s actions and vice versa.
+- Evaluations read the submitted public URL and compare it with the agreement encoded at deployment.
+- The interface never labels payment as confirmed without verified outbound transaction evidence.
+- Demo Mode is separately labelled and uses two different server-held testnet accounts; it never claims visitor custody.
 
 ## Trust model
 
@@ -120,7 +135,7 @@ Signer keys and any future database credentials remain solely in Render environm
 
 On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, currently `/var/data/merit`. Jobs are stored in SQLite so all browsers see the same registry and redeploys do not discard jobs when the disk is configured.
 
-## Wallet-mode roadmap
+## Wallet Mode
 
 The interface explicitly distinguishes two architectures:
 
@@ -144,4 +159,4 @@ GenLayer executes external messages only when their parent transaction finalizes
 
 ## License
 
-Built as an open competition prototype for GenLayer’s Bradbury testnet.
+Built as an open-source GenLayer application for Bradbury testnet.
