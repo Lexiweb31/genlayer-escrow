@@ -415,3 +415,49 @@ def test_settlement_requires_inspectable_transfer_record(
         assert settlement["transfer_reference"] == ["0xparent"]
         assert settlement["transfer_evidence"][0]["recipient"] == "0xclient"
         assert settlement["transfer_evidence"][0]["amount"] == 1000
+
+
+def test_finalized_messages_recover_stale_zero_value_contract_snapshot(monkeypatch):
+    class FakeClient:
+        def get_transaction(self, _transaction):
+            return {
+                "status": "FINALIZED",
+                "messages": [
+                    [0, "0xworker", 700, "0x", False, 0],
+                    [0, "0xclient", 290, "0x", False, 0],
+                    [0, "0xplatform", 10, "0x", False, 0],
+                ],
+            }
+
+        def get_triggered_transaction_ids(self, _transaction):
+            return []
+
+    monkeypatch.setattr(api, "network_client", FakeClient())
+    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: None)
+    settlement = api._refresh_settlement(
+        {
+            "address": "0xescrow",
+            "settlement": {
+                "parent_transaction": "0xparent",
+                "outcome": "",
+                "transfers": [
+                    {"recipient": "0xworker", "amount": 0, "settlement_type": "WORKER_PAYOUT"},
+                    {"recipient": "0xclient", "amount": 0, "settlement_type": "CLIENT_REFUND"},
+                ],
+            },
+        },
+        {
+            "worker": "0xworker",
+            "client": "0xclient",
+            "platform": "0xplatform",
+            "settlement": {"outcome": "", "transfers": []},
+        },
+    )
+    assert settlement["transfer_status"] == "FINALIZED"
+    assert settlement["outcome"] == "PARTIAL"
+    assert settlement["confirmation_basis"] == "FINALIZED_EXTERNAL_MESSAGE"
+    assert settlement["transfers"][0] == {
+        "recipient": "0xworker",
+        "amount": 700,
+        "settlement_type": "WORKER_PAYOUT",
+    }

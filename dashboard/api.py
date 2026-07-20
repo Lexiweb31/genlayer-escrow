@@ -408,7 +408,11 @@ def _action_error(exc: Exception) -> HTTPException:
 
 def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict[str, Any]:
     contract_settlement = chain_job.get("settlement") or {}
-    settlement = {**contract_settlement, **(meta.get("settlement") or {})}
+    # The contract is authoritative for outcome and transfer amounts. Stored
+    # metadata contributes the parent transaction reference and timestamps,
+    # but must never overwrite newer finalized contract state with the stale
+    # zero-value snapshot captured when finalize() was first submitted.
+    settlement = {**(meta.get("settlement") or {}), **contract_settlement}
     parent_tx = settlement.get("parent_transaction")
     if not parent_tx:
         return settlement
@@ -426,6 +430,32 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
             if int(transfer.get("amount") or 0) > 0
         ]
         external_messages = _external_value_messages(messages)
+        # Some Bradbury reads can continue returning the pre-finality contract
+        # snapshot even after the finalized transaction has already delivered
+        # its EOA messages. Those finalized messages are direct payment proof;
+        # reconstruct typed transfer rows only when every recipient is one of
+        # the immutable contract parties.
+        if not nonzero_transfers and external_messages:
+            role_addresses = {
+                str(chain_job.get("worker") or "").lower(): "WORKER_PAYOUT",
+                str(chain_job.get("client") or "").lower(): "CLIENT_REFUND",
+                str(chain_job.get("platform") or "").lower(): "PLATFORM_FEE",
+            }
+            derived_transfers = [
+                {
+                    "recipient": message["recipient"],
+                    "amount": message["amount"],
+                    "settlement_type": role_addresses.get(str(message["recipient"]).lower()),
+                }
+                for message in external_messages
+            ]
+            if derived_transfers and all(transfer["settlement_type"] for transfer in derived_transfers):
+                nonzero_transfers = derived_transfers
+                settlement["transfers"] = derived_transfers
+                has_worker = any(transfer["settlement_type"] == "WORKER_PAYOUT" for transfer in derived_transfers)
+                has_client = any(transfer["settlement_type"] == "CLIENT_REFUND" for transfer in derived_transfers)
+                settlement["outcome"] = "PARTIAL" if has_worker and has_client else "ACCEPTED" if has_worker else "REFUNDED"
+                settlement["settlement_type"] = "PROPORTIONAL_SPLIT" if has_worker and has_client else "FULL_WORKER_PAYOUT" if has_worker else "FULL_CLIENT_REFUND"
         confirmed_external = bool(nonzero_transfers) and all(
             any(
                 str(message["recipient"]).lower() == str(transfer.get("recipient") or "").lower()
