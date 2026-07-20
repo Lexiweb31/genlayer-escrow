@@ -135,6 +135,8 @@ Signer keys and any future database credentials remain solely in Render environm
 
 On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, currently `/var/data/merit`. Jobs are stored in SQLite so all browsers see the same registry and redeploys do not discard jobs when the disk is configured.
 
+The Render service also runs a lightweight contract-state reconciler every 30 seconds. It refreshes evaluation and settlement evidence into the durable registry even when no browser is open. Configure the interval with `MARKETPLACE_RECONCILE_SECONDS`; set `MARKETPLACE_RECONCILE_ENABLED=0` only for local debugging. Bradbury remains the source of truth, and transient read failures preserve the last verified snapshot rather than inventing a new state.
+
 ## Wallet Mode
 
 The interface explicitly distinguishes two architectures:

@@ -12,7 +12,7 @@ import os
 import re
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from threading import Lock
+from threading import Event, Lock, Thread
 from pathlib import Path
 from typing import Any, Optional
 
@@ -594,6 +594,8 @@ _EVALUATED_STATUSES = {"EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL",
 _FINAL_STATUSES = {"ACCEPTED", "PARTIAL", "REFUNDED"}
 _MARKETPLACE_REFRESH_LOCK = Lock()
 _marketplace_last_refresh = 0.0
+_RECONCILE_STOP = Event()
+_reconcile_thread: Thread | None = None
 
 
 def _wei_int(value: Any) -> int:
@@ -691,6 +693,52 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
         _marketplace_last_refresh = time.monotonic()
     finally:
         _MARKETPLACE_REFRESH_LOCK.release()
+
+
+def _reconcile_once() -> None:
+    """Persist current contract state without requiring an open browser."""
+    _refresh_marketplace_snapshots(store.list_jobs())
+
+
+def _reconcile_loop(stop: Event, interval_seconds: int) -> None:
+    # Reconcile immediately on service start, then at a bounded interval. The
+    # non-blocking marketplace lock prevents overlap with request-triggered
+    # refreshes or another reconciliation pass.
+    while not stop.is_set():
+        try:
+            _reconcile_once()
+        except Exception:
+            # A transient Bradbury failure must not terminate future recovery.
+            pass
+        stop.wait(interval_seconds)
+
+
+@app.on_event("startup")
+def start_marketplace_reconciliation() -> None:
+    global _reconcile_thread
+    if os.getenv("MARKETPLACE_RECONCILE_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+        return
+    if _reconcile_thread and _reconcile_thread.is_alive():
+        return
+    try:
+        interval = max(10, int(os.getenv("MARKETPLACE_RECONCILE_SECONDS", "30")))
+    except ValueError:
+        interval = 30
+    _RECONCILE_STOP.clear()
+    _reconcile_thread = Thread(
+        target=_reconcile_loop,
+        args=(_RECONCILE_STOP, interval),
+        name="merit-chain-reconciler",
+        daemon=True,
+    )
+    _reconcile_thread.start()
+
+
+@app.on_event("shutdown")
+def stop_marketplace_reconciliation() -> None:
+    _RECONCILE_STOP.set()
+    if _reconcile_thread and _reconcile_thread.is_alive():
+        _reconcile_thread.join(timeout=2)
 
 
 def _list_jobs_snapshot() -> dict[str, Any]:

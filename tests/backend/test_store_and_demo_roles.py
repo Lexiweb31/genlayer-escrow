@@ -45,6 +45,17 @@ def test_sqlite_jobs_survive_store_reopen(tmp_path):
     assert job["state_snapshot"]["amount"] == "1000"
 
 
+def test_background_reconciliation_reads_the_durable_registry(monkeypatch):
+    records = [_record("0xbackground")]
+    received = []
+    monkeypatch.setattr(api.store, "list_jobs", lambda: records)
+    monkeypatch.setattr(api, "_refresh_marketplace_snapshots", lambda jobs: received.extend(jobs))
+
+    api._reconcile_once()
+
+    assert received == records
+
+
 def test_legacy_import_is_read_only_and_does_not_overwrite_new_record(tmp_path):
     store = JobStore(tmp_path)
     store.add_job(_record())
