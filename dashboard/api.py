@@ -698,7 +698,16 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
     if not _MARKETPLACE_REFRESH_LOCK.acquire(blocking=False):
         return
     try:
-        live_records = [record for record in records if not record.get("legacy_contract")]
+        live_records = [
+            record
+            for record in records
+            if not record.get("legacy_contract")
+            and not (
+                isinstance((record.get("state_snapshot") or {}).get("job"), dict)
+                and (record.get("state_snapshot") or {}).get("status") in _FINAL_STATUSES
+                and ((record.get("state_snapshot") or {}).get("settlement") or {}).get("transfer_status") == "FINALIZED"
+            )
+        ]
         worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
             state_futures: dict[str, Future[dict[str, Any]]] = {
@@ -713,6 +722,8 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
                         "amount": public["job"].get("amount"),
                         "score": public["result"].get("score"),
                         "settlement": public["job"].get("settlement") or {},
+                        "job": public["job"],
+                        "result": public["result"],
                     }
                     store.update_job(
                         meta["address"],
@@ -819,6 +830,28 @@ def list_jobs(background_tasks: BackgroundTasks):
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     meta = _find_job(job_id)
+    snapshot = meta.get("state_snapshot") or {}
+    cached_job = snapshot.get("job")
+    cached_result = snapshot.get("result")
+    cached_settlement = cached_job.get("settlement") if isinstance(cached_job, dict) else {}
+    # A finalized escrow is immutable. Serving its last verified full snapshot
+    # avoids multiple slow Bradbury reads while preserving the exact confirmed
+    # transaction evidence. Older registry rows without a full snapshot fall
+    # through to the live read once and are upgraded below.
+    if (
+        isinstance(cached_job, dict)
+        and isinstance(cached_result, dict)
+        and cached_job.get("status") in _FINAL_STATUSES
+        and isinstance(cached_settlement, dict)
+        and cached_settlement.get("transfer_status") == "FINALIZED"
+    ):
+        return {
+            "meta": meta,
+            "job": cached_job,
+            "result": cached_result,
+            "addresses": _addresses(meta["address"]),
+            "demo": _demo_public_config(),
+        }
     try:
         public = _public_state(meta, _job_state(meta["address"]))
         live_status = str(public["job"].get("status") or "UNKNOWN")
@@ -831,6 +864,8 @@ def get_job(job_id: str):
                 "amount": public["job"].get("amount"),
                 "score": public["result"].get("score"),
                 "settlement": public["job"].get("settlement") or {},
+                "job": public["job"],
+                "result": public["result"],
             },
         )
         return {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClockIcon, ExternalIcon } from "@/components/icons";
 import { MonoValue, StatusPill } from "@/components/ui";
-import { formatWei } from "@/lib/amount";
+import { formatWei, safeWei } from "@/lib/amount";
 import { displayEscrowAmountWei, hasConfirmedEvaluation, recipientRole, settlementPresentation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
 import { relativeTime, shortAddress, txUrl } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { relativeTime, shortAddress, txUrl } from "@/lib/utils";
 export function JobCard({ job }: { job: JobRecord }) {
   const view = settlementPresentation(job);
   const scoreConfirmed = hasConfirmedEvaluation(job);
-  const positiveTransfers = (job.settlement?.transfers || []).filter((transfer) => BigInt(transfer.amount || "0") > 0n);
+  const positiveTransfers = (job.settlement?.transfers || []).filter((transfer) => safeWei(transfer.amount) > 0n);
   const parent = job.settlement?.parent_transaction;
   const parentLink = job.settlement?.parent_explorer || job.settlement?.explorer || txUrl(parent);
   const tone = view.status === "LEGACY_UNSAFE" ? "danger" : view.isPending ? "warning" : view.isFinalized ? "success" : "info";

@@ -1,4 +1,5 @@
 import type { EvaluationResult, JobRecord, JobStatus, SettlementTransfer } from "@/lib/types";
+import { safeWei } from "@/lib/amount";
 
 const FINAL_DECISIONS = new Set(["ACCEPTED", "PARTIAL", "REFUNDED"]);
 
@@ -110,12 +111,8 @@ export function hasConfirmedEvaluation(job: JobRecord, result?: EvaluationResult
 export function displayEscrowAmountWei(job: JobRecord): string {
   const transfers = job.settlement?.transfers || [];
   const settledTotal = transfers.reduce((total, transfer) => {
-    try {
-      const amount = BigInt(transfer.amount || "0");
-      return amount > 0n ? total + amount : total;
-    } catch {
-      return total;
-    }
+    const amount = safeWei(transfer.amount);
+    return amount > 0n ? total + amount : total;
   }, 0n);
   return settledTotal > 0n ? settledTotal.toString() : String(job.amount || "0");
 }

@@ -1,6 +1,14 @@
 export const WEI_PER_GEN = 1_000_000_000_000_000_000n;
 export const MIN_DEMO_AMOUNT_WEI = 1_000_000_000_000_000n;
 
+export function safeWei(value: string | number | bigint | null | undefined): bigint {
+  try {
+    return BigInt(value ?? 0);
+  } catch {
+    return 0n;
+  }
+}
+
 export function genToWei(value: string): string {
   const input = value.trim();
   if (!/^\d+(?:\.\d{0,18})?$/.test(input)) {
@@ -12,12 +20,7 @@ export function genToWei(value: string): string {
 }
 
 export function formatWei(value: string | number | bigint | null | undefined): string {
-  let wei: bigint;
-  try {
-    wei = BigInt(value ?? 0);
-  } catch {
-    wei = 0n;
-  }
+  const wei = safeWei(value);
   if (wei === 0n) return "0 GEN";
   const sign = wei < 0n ? "-" : "";
   const absolute = wei < 0n ? -wei : wei;

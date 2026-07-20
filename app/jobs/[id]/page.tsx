@@ -33,8 +33,24 @@ export default function JobOverviewPage() {
   const isClient = wallet.mode === "wallet" && sameAddress(wallet.address, clientAddress);
   const isWorker = wallet.mode === "wallet" && sameAddress(wallet.address, workerAddress);
   const viewerRole = wallet.mode === "demo" ? "demo" : isClient ? "client" : isWorker ? "worker" : "visitor";
-  const nextHref = viewerRole === "visitor" ? `/jobs/${encodeURIComponent(id)}` : job.status === "SUBMITTED" && viewerRole !== "worker" ? `/jobs/${encodeURIComponent(id)}/evaluation` : `/jobs/${encodeURIComponent(id)}/manage`;
-  const nextLabel = viewerRole === "client" ? "Open client workspace" : viewerRole === "worker" ? "Open worker workspace" : viewerRole === "visitor" ? "Public view only" : "Open next action";
+  const nextHref = view.isFinalized
+    ? `/jobs/${encodeURIComponent(id)}/evaluation`
+    : view.isPending
+      ? `/jobs/${encodeURIComponent(id)}/manage`
+      : job.status === "SUBMITTED" && viewerRole !== "worker"
+        ? `/jobs/${encodeURIComponent(id)}/evaluation`
+        : `/jobs/${encodeURIComponent(id)}/manage`;
+  const nextLabel = view.isFinalized
+    ? "View evaluation record"
+    : view.isPending
+      ? "View payment status"
+      : viewerRole === "client"
+        ? "Open client workspace"
+        : viewerRole === "worker"
+          ? "Open worker workspace"
+          : viewerRole === "visitor"
+            ? "Public view only"
+            : "Open next action";
   return <div className="page-container">
     <JobNavigation id={id}/>
     <PageHeader eyebrow={viewerRole === "client" ? "Your client job" : viewerRole === "worker" ? "Your assigned work" : "Public protected job"} title={data.meta.title || "Protected job"} description={viewerRole === "worker" ? "Track the requirements you accepted, your public submission, evaluation result, and verified payout." : viewerRole === "client" ? "Track protected funding, worker delivery, evaluation, and final settlement." : data.meta.spec || job.spec || "Job requirements unavailable."} actions={<button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh state</button>}/>

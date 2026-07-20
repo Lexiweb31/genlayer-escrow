@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatWei, genToWei, isAtLeastMinimumDemoAmount, MIN_DEMO_AMOUNT_WEI } from "@/lib/amount";
+import { formatWei, genToWei, isAtLeastMinimumDemoAmount, MIN_DEMO_AMOUNT_WEI, safeWei } from "@/lib/amount";
 
 describe("GEN and wei conversion", () => {
   it("converts decimal GEN without floating-point math", () => {
@@ -28,5 +28,10 @@ describe("GEN and wei conversion", () => {
     expect(formatWei("999")).toBe("0.000000000000000999 GEN");
     expect(formatWei("980000000000000")).toBe("0.00098 GEN");
     expect(formatWei("0")).toBe("0 GEN");
+  });
+
+  it("treats a malformed backend amount as zero instead of crashing the page", () => {
+    expect(safeWei("not-an-amount")).toBe(0n);
+    expect(safeWei("1000000000000000000")).toBe(1_000_000_000_000_000_000n);
   });
 });

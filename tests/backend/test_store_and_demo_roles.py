@@ -210,6 +210,30 @@ def test_marketplace_starts_independent_chain_reads_concurrently(monkeypatch):
     assert len(started) == 3
 
 
+def test_finalized_job_detail_uses_verified_full_snapshot(monkeypatch):
+    record = _record("0xfinalized")
+    record["state_snapshot"] = {
+        "status": "PARTIAL",
+        "amount": "0",
+        "score": 60,
+        "settlement": {"outcome": "PARTIAL", "transfer_status": "FINALIZED"},
+        "job": {
+            "address": "0xfinalized",
+            "status": "PARTIAL",
+            "amount": "0",
+            "settlement": {"outcome": "PARTIAL", "transfer_status": "FINALIZED"},
+        },
+        "result": {"status": "PARTIAL", "score": 60},
+    }
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: record)
+    monkeypatch.setattr(api, "_job_state", lambda _address: pytest.fail("finalized state should be served from its verified snapshot"))
+
+    response = api.get_job("0xfinalized")
+
+    assert response["job"]["status"] == "PARTIAL"
+    assert response["result"]["score"] == 60
+
+
 def test_wire_settlement_amounts_are_exact_strings():
     settlement = api._settlement_for_wire({
         "transfers": [{"amount": 10**18 + 1, "recipient": "0xworker"}],

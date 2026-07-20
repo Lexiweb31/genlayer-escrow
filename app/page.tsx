@@ -23,7 +23,7 @@ const storySteps = [
 ];
 
 const objections = [
-  ["Is this a user-controlled wallet?", "Not yet. Demo mode is server-signed on Bradbury and clearly separated from the disabled wallet-mode roadmap."],
+  ["Can I use my own wallet?", "Yes. Wallet mode lets an assigned Bradbury client or worker sign only the actions allowed for that role. Demo mode remains available for a guided server-signed test."],
   ["Can a client silently change the agreement?", "No. The acceptance specification and settlement thresholds are deployed with the escrow contract."],
   ["Does an evaluation decision mean funds moved?", "No. Merit keeps the decision and transfer status separate until outbound evidence finalizes."],
   ["What happens when the network is slow?", "Actions disable while pending, state can be refreshed safely, and the parent transaction remains inspectable."],
@@ -52,14 +52,14 @@ export default function HomePage() {
     <section className="cinematic-hero" id="product">
       <div className="hero-light hero-light-blue"/><div className="hero-light hero-light-violet"/>
       <div className="cinematic-copy">
-        <div className="hero-network"><span><i/> Bradbury testnet</span><b>Server-signed demo</b></div>
+        <div className="hero-network"><span><i/> Bradbury testnet</span><b>Demo + wallet mode</b></div>
         <h1>Work that can<br/><em>prove itself.</em></h1>
         <p>Merit protects payment until the work is checked. The client defines what must be delivered, the worker submits the finished work, and AI validators compare it with the agreement.</p>
         <p className="hero-outcome">Approved work pays the worker. Failed work returns the payment to the client.</p>
         <div className="cinematic-actions"><Link className="button primary hero-primary" href="/jobs">Launch Merit <ArrowIcon/></Link><a className="button secondary" href="#how-it-works">See how it works <span className="play-mark">▶</span></a></div>
         <div className="hero-assurances"><span><CheckIcon/> Separate client and worker roles</span><span><CheckIcon/> Finality-aware receipts</span><span><CheckIcon/> Same-origin API boundary</span></div>
       </div>
-      <EscrowProductVisual amount={featured ? displayEscrowAmountWei(featured) : "1000000000000000"} score={hasConfirmedEvaluation(featured || { address: "", status: "UNKNOWN" }) ? featured?.score || 82 : 82} address={featured?.address} transaction={featured?.settlement?.parent_transaction || featured?.deployment_tx}/>
+      <EscrowProductVisual amount={featured ? displayEscrowAmountWei(featured) : "1000000000000000"} score={hasConfirmedEvaluation(featured || { address: "", status: "UNKNOWN" }) ? featured?.score ?? 82 : 82} address={featured?.address} transaction={featured?.settlement?.parent_transaction || featured?.deployment_tx} outcome={featuredView?.label || "Illustrative worker payout"}/>
     </section>
 
     {registryUnavailable && <section className="registry-outage" role="alert"><div><span className="outage-dot"/><div><strong>Marketplace temporarily unavailable</strong><p>Merit’s shared registry could not be reached. No zero balances or empty contract states are being claimed as live data. On-chain contracts remain on Bradbury.</p></div></div><button className="button secondary" onClick={refresh} disabled={loading}>{loading ? "Retrying…" : "Retry connection"} <ActivityIcon/></button></section>}
@@ -115,6 +115,6 @@ export default function HomePage() {
 
     <section className="final-marketing-cta"><div className="final-core"><EscrowCoreMark size="large" tone="success"/></div><p className="section-index">Agreement → evidence → settlement</p><h2>Make the proof part of the work.</h2><p>Launch the Bradbury demo and inspect every state for yourself.</p><div><Link className="button primary hero-primary" href="/jobs">Launch Merit <ArrowIcon/></Link><a className="button secondary" href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noreferrer">View source <ExternalIcon/></a></div></section>
 
-    <footer className="marketing-footer"><Link className="brand" href="/"><span className="brand-mark"><span/></span><span>merit</span></Link><p>Intelligent escrow for work that can prove itself.</p><nav><a href="#product">Product</a><a href="#how-it-works">How it works</a><a href="#security">Security</a><Link href="/jobs">Explorer</Link><Link href="/contracts">Contracts</Link><a href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noreferrer">GitHub</a></nav><div><StatusPill tone="success"><i className="live-dot"/> Bradbury testnet</StatusPill><small>Server-signed demo · no browser wallet custody</small></div></footer>
+    <footer className="marketing-footer"><Link className="brand" href="/"><span className="brand-mark"><span/></span><span>merit</span></Link><p>Intelligent escrow for work that can prove itself.</p><nav><a href="#product">Product</a><a href="#how-it-works">How it works</a><a href="#security">Security</a><Link href="/jobs">Explorer</Link><Link href="/contracts">Contracts</Link><a href="https://github.com/Lexiweb31/genlayer-escrow" target="_blank" rel="noreferrer">GitHub</a></nav><div><StatusPill tone="success"><i className="live-dot"/> Bradbury testnet</StatusPill><small>Server-signed demo or connected-wallet signing</small></div></footer>
   </div>;
 }

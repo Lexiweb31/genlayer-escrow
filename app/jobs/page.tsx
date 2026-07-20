@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { PlusIcon, RefreshIcon } from "@/components/icons";
 import { JobCard } from "@/components/job-card";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
-import { formatWei } from "@/lib/amount";
+import { formatWei, safeWei } from "@/lib/amount";
 import { useJobs } from "@/lib/hooks";
 
 export default function BrowseJobsPage() {
@@ -21,7 +21,7 @@ export default function BrowseJobsPage() {
     return matchesQuery && matchesStatus;
   }).sort((a, b) => {
     if (sort === "VALUE_HIGH" || sort === "VALUE_LOW") {
-      const first = BigInt(a.amount || "0"); const second = BigInt(b.amount || "0");
+      const first = safeWei(a.amount); const second = safeWei(b.amount);
       const order = first === second ? 0 : first > second ? 1 : -1;
       return sort === "VALUE_HIGH" ? -order : order;
     }

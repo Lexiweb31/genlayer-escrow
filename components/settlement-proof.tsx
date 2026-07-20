@@ -1,7 +1,7 @@
 import { CheckIcon, ClockIcon, ExternalIcon } from "@/components/icons";
 import { EscrowCoreMark } from "@/components/escrow-core-mark";
 import { MonoValue, StatusPill } from "@/components/ui";
-import { formatWei } from "@/lib/amount";
+import { formatWei, safeWei } from "@/lib/amount";
 import { recipientRole, settlementPresentation } from "@/lib/settlement";
 import type { EvaluationResult, JobRecord } from "@/lib/types";
 import { shortAddress, txUrl } from "@/lib/utils";
@@ -11,7 +11,7 @@ export function SettlementProof({ job, result }: { job: JobRecord; result?: Eval
   const settlement = job.settlement || {};
   const parentStatus = String(settlement.parent_status || "UNKNOWN").toUpperCase();
   const failed = ["CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"].includes(parentStatus);
-  const transfers = (settlement.transfers || []).filter((transfer) => BigInt(transfer.amount || "0") > 0n);
+  const transfers = (settlement.transfers || []).filter((transfer) => safeWei(transfer.amount) > 0n);
   const parentLink = settlement.parent_explorer || settlement.explorer || txUrl(settlement.parent_transaction);
   if (!settlement.parent_transaction && !view.isFinalized) {
     return <section className="panel settlement-panel"><div className="panel-heading"><div><p className="card-kicker">Payment</p><h2>No payment transaction yet</h2></div><StatusPill>Waiting</StatusPill></div><p className="muted">The recipient, amount, and transaction link will appear after the evaluation result submits a payment or refund.</p></section>;

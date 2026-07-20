@@ -7,9 +7,10 @@ import { shortAddress } from "@/lib/utils";
 export { EscrowCoreMark } from "@/components/escrow-core-mark";
 
 export function ValidatorQuorum({ confirmed = false, illustrative = false, score }: { confirmed?: boolean; illustrative?: boolean; score?: number | null }) {
-  const illustrativeScores = [82, 79, 84, 81, 83];
+  const center = Math.min(100, Math.max(0, score ?? 82));
+  const illustrativeScores = [-2, 1, 0, -1, 2].map((offset) => Math.min(100, Math.max(0, center + offset)));
   return <div className={`validator-quorum ${confirmed ? "confirmed" : "pending"}`} aria-label={illustrative ? "Illustrative five-validator score sequence" : confirmed ? "Consensus confirmed; individual validator votes are not exposed by the backend" : "Validator results pending"}>
-    {illustrativeScores.map((nodeScore, index) => <div className="validator-node" key={nodeScore} style={{ "--node-delay": `${index * 120}ms` } as React.CSSProperties}>
+    {illustrativeScores.map((nodeScore, index) => <div className="validator-node" key={`validator-${index}`} style={{ "--node-delay": `${index * 120}ms` } as React.CSSProperties}>
       <span>V{index + 1}</span>
       <strong>{illustrative ? nodeScore : confirmed ? "✓" : "—"}</strong>
       <small>{illustrative ? "illustrative" : confirmed ? "quorum" : "waiting"}</small>
@@ -27,8 +28,8 @@ export function EscrowProductVisual({ amount = "1000000000000000", score = 82, a
       <div className="proof-line line-client"><i/></div><div className="proof-line line-worker"><i/></div>
       <div className="hero-core"><EscrowCoreMark size="large"/><small>Locked escrow</small><strong>{formatWei(amount)}</strong><MonoValue>{shortAddress(address, 8, 5)}</MonoValue></div>
       <div className="evidence-float"><FileIcon size={16}/><div><small>Public evidence</small><b>deliverable.vercel.app</b></div><CheckIcon size={15}/></div>
-      <div className="validator-float"><span>Validator consensus</span><ValidatorQuorum illustrative/><div className="consensus-score"><small>Consensus</small><strong>{score}<i>/100</i></strong></div></div>
-      <div className="receipt-float"><div><small>Settlement recipient</small><b>{outcome}</b><MonoValue>Worker · 0xf55d…599f</MonoValue></div><div className="receipt-amount"><CheckIcon/><strong>{formatWei(amount)}</strong></div><a href="#product-proof" aria-label="See live explorer proof below">Explorer proof <ExternalIcon size={13}/></a><MonoValue>{transaction}</MonoValue></div>
+      <div className="validator-float"><span>Illustrative validator sequence</span><ValidatorQuorum illustrative score={score}/><div className="consensus-score"><small>Illustrative consensus</small><strong>{score}<i>/100</i></strong></div></div>
+      <div className="receipt-float"><div><small>Settlement result</small><b>{outcome}</b><MonoValue>Registry-linked preview</MonoValue></div><div className="receipt-amount"><CheckIcon/><strong>{formatWei(amount)}</strong></div><a href="#product-proof" aria-label="See live explorer proof below">Explorer proof <ExternalIcon size={13}/></a><MonoValue>{transaction}</MonoValue></div>
     </div>
   </div>;
 }

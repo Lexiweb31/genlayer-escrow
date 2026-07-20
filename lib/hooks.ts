@@ -38,6 +38,17 @@ export function useJobs(): ResourceState<JobsResponse> {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const shouldReconcile = Boolean(data && (
+      data.stats.degraded_jobs > 0
+      || data.stats.settlement_pending > 0
+      || data.jobs.some((job) => job.status === "UNKNOWN")
+    ));
+    if (!shouldReconcile) return;
+    const timer = window.setInterval(refresh, 15_000);
+    return () => window.clearInterval(timer);
+  }, [data, refresh]);
+
   return { data, error, loading, refresh };
 }
 
@@ -68,7 +79,12 @@ export function useJob(id: string): ResourceState<JobDetailResponse> {
   }, [id]);
 
   useEffect(() => {
-    if (!data || data.job.settlement?.transfer_status !== "PENDING_FINALIZATION") return;
+    if (!data) return;
+    const transferStatus = String(data.job.settlement?.transfer_status || "");
+    const shouldReconcile = data.job.status === "SETTLEMENT_PENDING"
+      || transferStatus.startsWith("PENDING_")
+      || data.job.status === "UNKNOWN";
+    if (!shouldReconcile) return;
     const timer = window.setInterval(refresh, 12_000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
