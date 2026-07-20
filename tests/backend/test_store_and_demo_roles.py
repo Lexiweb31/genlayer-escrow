@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import time
 
 import pytest
 from fastapi import HTTPException
@@ -181,6 +182,29 @@ def test_submitted_job_is_not_reported_as_evaluated(monkeypatch):
     assert response["jobs"][0]["evaluation_complete"] is False
     assert response["jobs"][0]["score"] is None
     assert response["stats"]["locked_wei"] == "1"
+
+
+def test_marketplace_starts_independent_chain_reads_concurrently(monkeypatch):
+    records = [_record("0xfirst"), _record("0xsecond"), _record("0xthird")]
+    monkeypatch.setattr(api.store, "list_jobs", lambda: records)
+    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: None)
+    started = []
+
+    def read_state(address):
+        started.append(address)
+        # Every task must have started before any one is allowed to finish.
+        deadline = time.monotonic() + 1
+        while len(started) < len(records) and time.monotonic() < deadline:
+            time.sleep(0.005)
+        return {
+            "job": {"status": "OPEN", "amount": 1, "settlement": {}},
+            "result": {"status": "OPEN", "score": 0},
+        }
+
+    monkeypatch.setattr(api, "_job_state", read_state)
+    response = api.list_jobs()
+    assert len(started) == 3
+    assert len(response["jobs"]) == 3
 
 
 def test_wire_settlement_amounts_are_exact_strings():

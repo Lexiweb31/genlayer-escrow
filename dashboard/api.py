@@ -11,6 +11,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Optional
 
@@ -657,6 +658,24 @@ def stats():
 def list_jobs():
     output: list[dict[str, Any]] = []
     records = store.list_jobs()
+    live_records = [record for record in records if not record.get("legacy_contract")]
+    # Bradbury reads commonly take several seconds. Start every independent
+    # contract read together so marketplace latency is bounded by the slowest
+    # job instead of the sum of all jobs. Detail pages still perform a fresh,
+    # single-contract read before presenting or accepting an action.
+    state_futures: dict[str, Future[dict[str, Any]]] = {}
+    worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
+        for record in live_records:
+            state_futures[record["address"].lower()] = executor.submit(_job_state, record["address"])
+
+        resolved_states: dict[str, dict[str, Any] | Exception] = {}
+        for address, future in state_futures.items():
+            try:
+                resolved_states[address] = future.result()
+            except Exception as exc:
+                resolved_states[address] = exc
+
     degraded = 0
     for meta in records:
         entry = dict(meta)
@@ -667,7 +686,10 @@ def list_jobs():
             })
         else:
             try:
-                public = _public_state(meta, _job_state(meta["address"]))
+                state = resolved_states[meta["address"].lower()]
+                if isinstance(state, Exception):
+                    raise state
+                public = _public_state(meta, state)
                 entry["status"] = public["job"].get("status")
                 entry["amount"] = public["job"].get("amount")
                 entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
