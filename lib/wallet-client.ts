@@ -21,6 +21,14 @@ export interface WalletWriteResult {
   status: string;
 }
 
+export interface WalletTransactionState {
+  status: string;
+  executionResult: string;
+  result: string;
+  failed: boolean;
+  confirmed: boolean;
+}
+
 interface WalletDeployInput {
   account: string;
   code: string;
@@ -81,6 +89,23 @@ async function walletClient(account: string, onWalletRequest?: () => void) {
 
 export function sameAddress(left?: string | null, right?: string | null): boolean {
   return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
+}
+
+export async function readBradburyTransaction(hash: string): Promise<WalletTransactionState> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("The saved evaluation transaction hash is invalid.");
+  const client = createClient({ chain: testnetBradbury });
+  const transaction = await client.getTransaction({ hash: hash as TransactionHash });
+  const status = String(transaction.statusName || transaction.status || "UNKNOWN");
+  const executionResult = String(transaction.txExecutionResultName || transaction.txExecutionResult || "UNKNOWN");
+  const result = String(transaction.resultName || transaction.result || "UNKNOWN");
+  const failedStatuses = new Set(["CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"]);
+  return {
+    status,
+    executionResult,
+    result,
+    failed: failedStatuses.has(status) || executionResult === ExecutionResult.FINISHED_WITH_ERROR || result === "FAILURE",
+    confirmed: ["ACCEPTED", "FINALIZED"].includes(status) && executionResult === ExecutionResult.FINISHED_WITH_RETURN,
+  };
 }
 
 export async function writeWalletContract(input: WalletWriteInput): Promise<WalletWriteResult> {

@@ -13,7 +13,7 @@ import { explorerRedirectPath } from "@/lib/explorer";
 import { useJob } from "@/lib/hooks";
 import { hasConfirmedEvaluation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
-import { sameAddress, writeWalletContract } from "@/lib/wallet-client";
+import { readBradburyTransaction, sameAddress, writeWalletContract, type WalletTransactionState } from "@/lib/wallet-client";
 
 export default function EvaluationPage() {
   const params = useParams<{ id: string }>();
@@ -25,6 +25,9 @@ export default function EvaluationPage() {
   const [message, setMessage] = useState("");
   const pendingEvaluationKey = `merit-pending-evaluation:${id}`;
   const [pendingEvaluationHash, setPendingEvaluationHash] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(pendingEvaluationKey) || "");
+  const [pendingTransaction, setPendingTransaction] = useState<WalletTransactionState | null>(null);
+  const [checkingTransaction, setCheckingTransaction] = useState(false);
+  const [transactionError, setTransactionError] = useState("");
   useEffect(() => {
     if (!data) return;
     const currentJob: JobRecord = { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status };
@@ -32,6 +35,14 @@ export default function EvaluationPage() {
       localStorage.removeItem(pendingEvaluationKey);
     }
   }, [data, pendingEvaluationKey]);
+  useEffect(() => {
+    if (!pendingEvaluationHash) return;
+    let active = true;
+    void readBradburyTransaction(pendingEvaluationHash)
+      .then((state) => { if (active) setPendingTransaction(state); })
+      .catch(() => { if (active) setTransactionError("Bradbury could not return this transaction status. Use the explorer link before taking another action."); })
+    return () => { active = false; };
+  }, [pendingEvaluationHash]);
   if (loading && !data) return <div className="page-container"><JobNavigation id={id}/><LoadingState label="Opening the evaluation evidence room…"/></div>;
   if (error && !data) return <div className="page-container"><JobNavigation id={id}/><ErrorState message={error.message} retry={refresh}/></div>;
   if (!data) return null;
@@ -68,6 +79,20 @@ export default function EvaluationPage() {
     catch (nextError) { setMessage(friendlyApiError(nextError)); }
     finally { setBusy(false); }
   };
+  const checkPendingEvaluation = async () => {
+    if (!pendingEvaluationHash || checkingTransaction) return;
+    setCheckingTransaction(true); setTransactionError("");
+    try { setPendingTransaction(await readBradburyTransaction(pendingEvaluationHash)); await refresh(); }
+    catch { setTransactionError("Bradbury could not return this transaction status. Use the explorer link before taking another action."); }
+    finally { setCheckingTransaction(false); }
+  };
+  const clearFailedEvaluation = () => {
+    if (!pendingTransaction?.failed) return;
+    localStorage.removeItem(pendingEvaluationKey);
+    setPendingEvaluationHash("");
+    setPendingTransaction(null);
+    setMessage("The failed evaluation transaction was cleared. You may submit a new evaluation transaction.");
+  };
   const appeal = async () => {
     if (busy || !live) return;
     if (wallet.mode === "wallet" && !isParty) return setMessage("Only the connected client or worker wallet can appeal this evaluation.");
@@ -78,7 +103,7 @@ export default function EvaluationPage() {
   };
   return <div className="page-container">
     <JobNavigation id={id}/><PageHeader eyebrow="AI Evaluation" title="Check the work against the requirements" description="Merit shows a score only after the backend confirms the evaluation and reasoning." actions={<button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh</button>}/>
-    {!evaluated ? <section className="evaluation-empty panel"><span className="evaluation-orb"><EscrowCoreMark/></span><p className="eyebrow">{pendingEvaluationHash ? "Evaluation processing" : "Awaiting confirmed result"}</p><h2>{pendingEvaluationHash ? "Validators are evaluating the public work." : job.status === "SUBMITTED" ? "Public work is ready for evaluation." : "No evaluation is available yet."}</h2><p>{pendingEvaluationHash ? "You may safely leave and return later; Merit will read the confirmed result from the contract." : job.status === "SUBMITTED" ? "The client can ask GenLayer to inspect the submitted URL against the immutable job requirements. The UI will show no score until the backend confirms one." : "Complete funding, acceptance, and public submission before starting evaluation."}</p><ValidatorQuorum/>{job.submission_url && <a className="submission-link" href={job.submission_url} target="_blank" rel="noreferrer">Inspect submitted work <ExternalIcon/></a>}{pendingEvaluationHash ? <div className="evaluation-actions"><a className="button secondary" href={explorerRedirectPath("tx", pendingEvaluationHash) || "#"} target="_blank" rel="noreferrer">View evaluation transaction <ExternalIcon/></a><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Check for result</button></div> : job.status === "SUBMITTED" ? <button className="button primary large" onClick={runEvaluation} disabled={busy || !live || (wallet.mode === "wallet" && !isClient)}>{busy ? "Evaluating…" : wallet.mode === "wallet" ? isClient ? "Evaluate with connected wallet" : "Client wallet required" : "Evaluate with demo client"}<ArrowIcon/></button> : <Link className="button secondary" href={`/jobs/${encodeURIComponent(id)}/manage`}>Return to Manage Job</Link>}{message && <div className="action-message info" role="status">{message}</div>}</section> : <>
+    {!evaluated ? <section className="evaluation-empty panel"><span className="evaluation-orb"><EscrowCoreMark/></span><p className="eyebrow">{pendingTransaction?.failed ? "Evaluation failed" : pendingTransaction?.confirmed ? "Transaction confirmed" : pendingEvaluationHash ? "Evaluation processing" : "Awaiting confirmed result"}</p><h2>{pendingTransaction?.failed ? "The evaluation transaction did not complete." : pendingTransaction?.confirmed ? "Evaluation confirmed; reading the result." : pendingEvaluationHash ? "Validators are evaluating the public work." : job.status === "SUBMITTED" ? "Public work is ready for evaluation." : "No evaluation is available yet."}</h2><p>{pendingTransaction?.failed ? `Bradbury reported ${pendingTransaction.status}. This transaction cannot produce an evaluation result.` : pendingTransaction?.confirmed ? "Bradbury accepted the evaluation transaction. Merit is waiting for the contract result to appear in the shared job record." : pendingEvaluationHash ? "You may safely leave and return later; Merit will read the confirmed result from the contract." : job.status === "SUBMITTED" ? "The client can ask GenLayer to inspect the submitted URL against the immutable job requirements. The UI will show no score until the backend confirms one." : "Complete funding, acceptance, and public submission before starting evaluation."}</p><ValidatorQuorum confirmed={pendingTransaction?.confirmed}/>{job.submission_url && <a className="submission-link" href={job.submission_url} target="_blank" rel="noreferrer">Inspect submitted work <ExternalIcon/></a>}{pendingEvaluationHash ? <><div className="evaluation-actions"><a className="button secondary" href={explorerRedirectPath("tx", pendingEvaluationHash) || "#"} target="_blank" rel="noreferrer">View evaluation transaction <ExternalIcon/></a><button className="button secondary" onClick={checkPendingEvaluation} disabled={loading || checkingTransaction}><RefreshIcon/> {checkingTransaction ? "Checking Bradbury…" : "Check transaction and result"}</button>{pendingTransaction?.failed && <button className="button primary" onClick={clearFailedEvaluation}>Clear failed transaction and retry</button>}</div>{pendingTransaction && <small className="technical-status">Bradbury status · {pendingTransaction.status} · {pendingTransaction.executionResult}</small>}{transactionError && <div className="action-message error" role="alert">{transactionError}</div>}</> : job.status === "SUBMITTED" ? <button className="button primary large" onClick={runEvaluation} disabled={busy || !live || (wallet.mode === "wallet" && !isClient)}>{busy ? "Evaluating…" : wallet.mode === "wallet" ? isClient ? "Evaluate with connected wallet" : "Client wallet required" : "Evaluate with demo client"}<ArrowIcon/></button> : <Link className="button secondary" href={`/jobs/${encodeURIComponent(id)}/manage`}>Return to Manage Job</Link>}{message && <div className="action-message info" role="status">{message}</div>}</section> : <>
       <section className="evaluation-stage">
         <div className={`score-panel panel ${evaluationOutcomeClass}`}><p className="card-kicker">Backend-confirmed score</p><div className="score-orbit" style={{ "--score": `${score}%` } as React.CSSProperties}><strong>{score}<small>/100</small></strong></div><StatusPill tone={score >= (job.min_score ?? 70) ? "success" : score >= (job.partial_floor ?? 40) ? "warning" : "danger"}>{data.result.settlement_outcome || data.result.status || "Evaluated"}</StatusPill><small>Confirmed result returned by the Render API</small></div>
         <article className="panel reasoning-panel"><div className="panel-heading"><div><p className="card-kicker">Why it received this score</p><h2>Evaluation reasoning</h2></div><StatusPill tone="success"><CheckIcon size={14}/> Evaluation completed</StatusPill></div><ValidatorQuorum confirmed score={score}/><blockquote>{data.result.reasoning || "The backend confirmed a score but did not return explanatory reasoning."}</blockquote><div className="evidence-checks"><span><CheckIcon/> Job requirements loaded</span><span><CheckIcon/> Public work inspected</span><span><CheckIcon/> Payment rule applied</span><span><CheckIcon/> Evaluation result saved</span></div>{job.submission_url && <a className="submission-link" href={job.submission_url} target="_blank" rel="noreferrer">Open evaluated work <ExternalIcon/></a>}<div className={`evaluation-consequence ${evaluationOutcomeClass}`}><span>Payment result</span><strong>{score >= (job.min_score ?? 70) ? "Worker receives full payment" : score >= (job.partial_floor ?? 40) ? "Payment is split based on the score" : "Client receives a refund"}</strong><small>The payment remains processing until the on-chain transfer is confirmed.</small></div><details className="technical-details"><summary>Technical evaluation details</summary><p>AI validator consensus returned <strong>{data.result.settlement_outcome || data.result.status || "EVALUATED"}</strong>. On-chain finalization is tracked separately from this contract decision.</p></details></article>
