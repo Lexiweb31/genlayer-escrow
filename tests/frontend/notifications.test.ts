@@ -18,6 +18,28 @@ describe("lifecycle notifications", () => {
     expect(item?.read).toBe(false);
   });
 
+  it("gives the client the next required action after work is submitted", () => {
+    const item = notificationForStatus(
+      { ...job, status: "SUBMITTED" },
+      "SUBMITTED",
+      "2026-07-16T20:00:00.000Z",
+      job.client_address,
+    );
+    expect(item?.title).toBe("Work ready for evaluation");
+    expect(item?.message).toContain("request GenLayer evaluation");
+  });
+
+  it("gives the worker a role-specific funded-job action", () => {
+    const item = notificationForStatus(
+      { ...job, status: "OPEN" },
+      "OPEN",
+      "2026-07-16T20:00:00.000Z",
+      job.worker_address,
+    );
+    expect(item?.title).toBe("Assigned job funded");
+    expect(item?.message).toContain("accept the job requirements");
+  });
+
   it("does not claim a notification for unchanged waiting state", () => {
     expect(notificationForStatus({ ...job, status: "UNFUNDED" }, "UNFUNDED")).toBeNull();
   });

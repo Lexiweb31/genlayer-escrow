@@ -23,8 +23,8 @@ export function NotificationCenter() {
   const save = useCallback((next: MeritNotification[]) => { const limited = next.slice(0, 30); setItems(limited); localStorage.setItem(ITEMS_KEY, JSON.stringify(limited)); }, []);
   const check = useCallback(async () => {
     try {
-      const response = await meritApi.jobs(); const previous = readSnapshot(); const nextSnapshot: Record<string, JobStatus> = {}; const additions: MeritNotification[] = [];
-      for (const job of response.jobs as JobRecord[]) { nextSnapshot[job.address] = job.status; const relevant = wallet.mode === "demo" || jobRelevantToWallet(job, wallet.address); if (!relevant || previous[job.address] === job.status) continue; const item = notificationForStatus(job, job.status); if (item) additions.push(item); }
+      const response = await meritApi.jobs(); const hasBaseline = localStorage.getItem(SNAPSHOT_KEY) !== null; const previous = readSnapshot(); const nextSnapshot: Record<string, JobStatus> = {}; const additions: MeritNotification[] = [];
+      for (const job of response.jobs as JobRecord[]) { nextSnapshot[job.address] = job.status; const relevant = wallet.mode === "demo" || jobRelevantToWallet(job, wallet.address); if (!hasBaseline || !relevant || previous[job.address] === job.status) continue; const item = notificationForStatus(job, job.status, new Date().toISOString(), wallet.mode === "wallet" ? wallet.address : undefined); if (item) additions.push(item); }
       localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(nextSnapshot));
       if (additions.length) { const existing = readItems(); const known = new Set(existing.map((item) => item.id)); save([...additions.filter((item) => !known.has(item.id)), ...existing]); }
       setRegistryError(false);
