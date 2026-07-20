@@ -4,7 +4,7 @@
 
 Clients and workers agree on observable requirements before GEN is locked. The worker submits a public deliverable, GenLayer validators inspect it against those exact requirements, and the intelligent escrow records a reasoned score before queuing a full payout, proportional split, or refund.
 
-[Live Next.js application](https://genlayer-escrow.vercel.app/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Demo script](DEMO_SCRIPT.md)
+[Live Next.js application](https://genlayer-escrow.vercel.app/) · [Bradbury explorer](https://explorer-bradbury.genlayer.com) · [Project submission](PROJECT_SUBMISSION.md) · [Demo script](DEMO_SCRIPT.md)
 
 ## The trust problem
 
