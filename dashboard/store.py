@@ -33,6 +33,7 @@ class JobStore:
         "lifecycle_status",
         "deployment_tx",
         "settlement_json",
+        "state_json",
         "updated_at",
     }
 
@@ -68,12 +69,16 @@ class JobStore:
                     lifecycle_status TEXT NOT NULL DEFAULT 'UNKNOWN',
                     deployment_tx TEXT NOT NULL DEFAULT '',
                     settlement_json TEXT NOT NULL DEFAULT '{}',
+                    state_json TEXT NOT NULL DEFAULT '{}',
                     legacy_contract INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+            if "state_json" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN state_json TEXT NOT NULL DEFAULT '{}'")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)"
             )
@@ -87,6 +92,10 @@ class JobStore:
             item["settlement"] = json.loads(item.pop("settlement_json") or "{}")
         except json.JSONDecodeError:
             item["settlement"] = {"transfer_status": "RECORD_INVALID"}
+        try:
+            item["state_snapshot"] = json.loads(item.pop("state_json") or "{}")
+        except json.JSONDecodeError:
+            item["state_snapshot"] = {}
         item["explorer"] = f"https://explorer-bradbury.genlayer.com/address/{item['address']}"
         return item
 
@@ -105,6 +114,7 @@ class JobStore:
             "lifecycle_status": str(record.get("lifecycle_status") or record.get("status") or "UNKNOWN"),
             "deployment_tx": str(record.get("deployment_tx") or ""),
             "settlement_json": json.dumps(record.get("settlement") or {}, default=str),
+            "state_json": json.dumps(record.get("state_snapshot") or {}, default=str),
             "legacy_contract": int(bool(record.get("legacy_contract"))),
             "created_at": str(record.get("created_at") or now),
             "updated_at": str(record.get("updated_at") or now),
@@ -140,6 +150,8 @@ class JobStore:
             changes["specification"] = changes.pop("spec")
         if "settlement" in changes:
             changes["settlement_json"] = json.dumps(changes.pop("settlement"), default=str)
+        if "state_snapshot" in changes:
+            changes["state_json"] = json.dumps(changes.pop("state_snapshot"), default=str)
         changes["updated_at"] = utc_now()
         unknown = set(changes) - self._UPDATABLE
         if unknown:

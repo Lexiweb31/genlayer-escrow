@@ -31,6 +31,7 @@ def test_sqlite_jobs_survive_store_reopen(tmp_path):
         "0xabc",
         lifecycle_status="SETTLEMENT_PENDING",
         settlement={"transfer_status": "PENDING_FINALIZATION", "parent_transaction": "0xfinalize"},
+        state_snapshot={"status": "SETTLEMENT_PENDING", "amount": "1000"},
     )
 
     restarted = JobStore(tmp_path)
@@ -41,6 +42,7 @@ def test_sqlite_jobs_survive_store_reopen(tmp_path):
     assert job["deployment_tx"] == "0xdeploy"
     assert job["lifecycle_status"] == "SETTLEMENT_PENDING"
     assert job["settlement"]["parent_transaction"] == "0xfinalize"
+    assert job["state_snapshot"]["amount"] == "1000"
 
 
 def test_legacy_import_is_read_only_and_does_not_overwrite_new_record(tmp_path):
@@ -161,23 +163,14 @@ def test_marketplace_stats_separate_locked_pending_and_finalized():
 
 def test_submitted_job_is_not_reported_as_evaluated(monkeypatch):
     record = _record("0xsubmitted")
+    record["state_snapshot"] = {
+        "status": "SUBMITTED",
+        "amount": "1",
+        "score": 0,
+        "settlement": {"transfer_status": "NOT_STARTED", "transfers": []},
+    }
     monkeypatch.setattr(api.store, "list_jobs", lambda: [record])
-    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        api,
-        "_job_state",
-        lambda _address: {
-            "job": {
-                "status": "SUBMITTED",
-                "amount": 1,
-                "settlement": {"transfer_status": "NOT_STARTED", "transfers": []},
-            },
-            # Some contract readers expose the default numeric score before an
-            # evaluation. The marketplace must not treat it as a real result.
-            "result": {"score": 0, "status": "SUBMITTED"},
-        },
-    )
-    response = api.list_jobs()
+    response = api._list_jobs_snapshot()
     assert response["jobs"][0]["amount"] == "1"
     assert response["jobs"][0]["evaluation_complete"] is False
     assert response["jobs"][0]["score"] is None
@@ -202,9 +195,8 @@ def test_marketplace_starts_independent_chain_reads_concurrently(monkeypatch):
         }
 
     monkeypatch.setattr(api, "_job_state", read_state)
-    response = api.list_jobs()
+    api._refresh_marketplace_snapshots(records)
     assert len(started) == 3
-    assert len(response["jobs"]) == 3
 
 
 def test_wire_settlement_amounts_are_exact_strings():

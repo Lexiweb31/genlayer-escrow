@@ -12,11 +12,12 @@ import os
 import re
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from threading import Lock
 from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
@@ -591,6 +592,8 @@ _ACTIVE_STATUSES = {"UNFUNDED", "OPEN", "AGREED", "SUBMITTED", "EVALUATED", "SET
 _LOCKED_STATUSES = {"OPEN", "AGREED", "SUBMITTED", "EVALUATED"}
 _EVALUATED_STATUSES = {"EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED"}
 _FINAL_STATUSES = {"ACCEPTED", "PARTIAL", "REFUNDED"}
+_MARKETPLACE_REFRESH_LOCK = Lock()
+_marketplace_last_refresh = 0.0
 
 
 def _wei_int(value: Any) -> int:
@@ -651,58 +654,64 @@ def _marketplace_stats(
 
 @app.get("/api/stats")
 def stats():
-    return list_jobs()["stats"]
+    return _list_jobs_snapshot()["stats"]
 
 
-@app.get("/api/jobs")
-def list_jobs():
+def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
+    global _marketplace_last_refresh
+    if not _MARKETPLACE_REFRESH_LOCK.acquire(blocking=False):
+        return
+    try:
+        live_records = [record for record in records if not record.get("legacy_contract")]
+        worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
+            state_futures: dict[str, Future[dict[str, Any]]] = {
+                record["address"].lower(): executor.submit(_job_state, record["address"])
+                for record in live_records
+            }
+            for meta in live_records:
+                try:
+                    public = _public_state(meta, state_futures[meta["address"].lower()].result())
+                    snapshot = {
+                        "status": public["job"].get("status"),
+                        "amount": public["job"].get("amount"),
+                        "score": public["result"].get("score"),
+                        "settlement": public["job"].get("settlement") or {},
+                    }
+                    store.update_job(
+                        meta["address"],
+                        lifecycle_status=str(snapshot["status"] or "UNKNOWN"),
+                        settlement=snapshot["settlement"],
+                        state_snapshot=snapshot,
+                    )
+                except Exception:
+                    # Preserve the last known-good snapshot when Bradbury has a
+                    # transient read failure.
+                    continue
+        _marketplace_last_refresh = time.monotonic()
+    finally:
+        _MARKETPLACE_REFRESH_LOCK.release()
+
+
+def _list_jobs_snapshot() -> dict[str, Any]:
     output: list[dict[str, Any]] = []
     records = store.list_jobs()
-    live_records = [record for record in records if not record.get("legacy_contract")]
-    # Bradbury reads commonly take several seconds. Start every independent
-    # contract read together so marketplace latency is bounded by the slowest
-    # job instead of the sum of all jobs. Detail pages still perform a fresh,
-    # single-contract read before presenting or accepting an action.
-    state_futures: dict[str, Future[dict[str, Any]]] = {}
-    worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
-    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
-        for record in live_records:
-            state_futures[record["address"].lower()] = executor.submit(_job_state, record["address"])
-
-        resolved_states: dict[str, dict[str, Any] | Exception] = {}
-        for address, future in state_futures.items():
-            try:
-                resolved_states[address] = future.result()
-            except Exception as exc:
-                resolved_states[address] = exc
-
     degraded = 0
     for meta in records:
         entry = dict(meta)
+        snapshot = entry.pop("state_snapshot", {}) or {}
         if meta.get("legacy_contract"):
             entry.update({
                 "status": "LEGACY_UNSAFE",
                 "legacy_warning": "Legacy settlement contract — do not fund",
             })
         else:
-            try:
-                state = resolved_states[meta["address"].lower()]
-                if isinstance(state, Exception):
-                    raise state
-                public = _public_state(meta, state)
-                entry["status"] = public["job"].get("status")
-                entry["amount"] = public["job"].get("amount")
-                entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
-                entry["score"] = (
-                    public["result"].get("score")
-                    if entry["evaluation_complete"]
-                    else None
-                )
-                entry["settlement"] = public["job"].get("settlement")
-                store.update_job(meta["address"], lifecycle_status=entry["status"])
-            except Exception as exc:
-                entry["status"] = "UNKNOWN"
-                entry["error"] = str(exc)
+            entry["status"] = snapshot.get("status") or meta.get("lifecycle_status") or "UNKNOWN"
+            entry["amount"] = snapshot.get("amount")
+            entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
+            entry["score"] = snapshot.get("score") if entry["evaluation_complete"] else None
+            entry["settlement"] = snapshot.get("settlement") or meta.get("settlement") or {}
+            if not snapshot:
                 degraded += 1
         output.append(entry)
     return {
@@ -717,11 +726,31 @@ def list_jobs():
     }
 
 
+@app.get("/api/jobs")
+def list_jobs(background_tasks: BackgroundTasks):
+    response = _list_jobs_snapshot()
+    if time.monotonic() - _marketplace_last_refresh > 15:
+        background_tasks.add_task(_refresh_marketplace_snapshots, store.list_jobs())
+    return response
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     meta = _find_job(job_id)
     try:
         public = _public_state(meta, _job_state(meta["address"]))
+        live_status = str(public["job"].get("status") or "UNKNOWN")
+        store.update_job(
+            meta["address"],
+            lifecycle_status=live_status,
+            settlement=public["job"].get("settlement") or {},
+            state_snapshot={
+                "status": live_status,
+                "amount": public["job"].get("amount"),
+                "score": public["result"].get("score"),
+                "settlement": public["job"].get("settlement") or {},
+            },
+        )
         return {
             "meta": meta,
             "job": public["job"],
