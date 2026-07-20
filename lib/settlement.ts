@@ -106,3 +106,16 @@ export function recipientRole(transfer: SettlementTransfer): string {
 export function hasConfirmedEvaluation(job: JobRecord, result?: EvaluationResult): boolean {
   return typeof (result?.score ?? job.score) === "number";
 }
+
+export function displayEscrowAmountWei(job: JobRecord): string {
+  const transfers = job.settlement?.transfers || [];
+  const settledTotal = transfers.reduce((total, transfer) => {
+    try {
+      const amount = BigInt(transfer.amount || "0");
+      return amount > 0n ? total + amount : total;
+    } catch {
+      return total;
+    }
+  }, 0n);
+  return settledTotal > 0n ? settledTotal.toString() : String(job.amount || "0");
+}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ClockIcon, ExternalIcon } from "@/components/icons";
 import { MonoValue, StatusPill } from "@/components/ui";
 import { formatWei } from "@/lib/amount";
-import { hasConfirmedEvaluation, recipientRole, settlementPresentation } from "@/lib/settlement";
+import { displayEscrowAmountWei, hasConfirmedEvaluation, recipientRole, settlementPresentation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
 import { relativeTime, shortAddress, txUrl } from "@/lib/utils";
 
@@ -24,6 +24,6 @@ export function JobCard({ job }: { job: JobRecord }) {
       {parent && <span>Payment transaction · <MonoValue title={parent}>{shortAddress(parent, 10, 8)}</MonoValue>{parentLink && <a href={parentLink} target="_blank" rel="noreferrer">Explorer <ExternalIcon size={14}/></a>}</span>}
     </div>}
     <div className="job-card-meta"><span>{scoreConfirmed ? `AI score ${job.score}/100` : "Not evaluated yet"}</span><span><ClockIcon size={14}/>{relativeTime(job.created_at) || "Registry record"}</span></div>
-    <div className="job-card-foot"><div><small>Protected payment</small><strong>{formatWei(job.amount)}</strong></div><Link className="text-link" href={`/jobs/${encodeURIComponent(job.address)}`}>Open job <span>→</span></Link></div>
+    <div className="job-card-foot"><div><small>{view.isFinalized ? "Settled value" : "Protected payment"}</small><strong>{formatWei(displayEscrowAmountWei(job))}</strong></div><Link className="text-link" href={`/jobs/${encodeURIComponent(job.address)}`}>Open job <span>→</span></Link></div>
   </article>;
 }

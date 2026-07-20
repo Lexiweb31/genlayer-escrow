@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasConfirmedEvaluation, settlementPresentation } from "@/lib/settlement";
+import { displayEscrowAmountWei, hasConfirmedEvaluation, settlementPresentation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
 
 const baseJob: JobRecord = {
@@ -104,5 +104,22 @@ describe("settlement lifecycle mapping", () => {
   it("does not infer evaluation from an absent score", () => {
     expect(hasConfirmedEvaluation({ ...baseJob, status: "SUBMITTED" }, { score: null })).toBe(false);
     expect(hasConfirmedEvaluation({ ...baseJob, score: 0 }, {})).toBe(true);
+  });
+
+  it("shows the original settled value after the contract balance reaches zero", () => {
+    expect(displayEscrowAmountWei({
+      ...baseJob,
+      status: "PARTIAL",
+      amount: "0",
+      settlement: {
+        outcome: "PARTIAL",
+        transfer_status: "FINALIZED",
+        transfers: [
+          { recipient: "0xworker", amount: "2227500000000000000", settlement_type: "WORKER_PAYOUT" },
+          { recipient: "0xclient", amount: "750000000000000000", settlement_type: "CLIENT_REFUND" },
+          { recipient: "0xfee", amount: "22500000000000000", settlement_type: "PLATFORM_FEE" },
+        ],
+      },
+    })).toBe("3000000000000000000");
   });
 });
