@@ -29,6 +29,7 @@ export function settlementPresentation(
   const settlement = job.settlement || {};
   const decision = settlement.outcome || result?.settlement_outcome;
   const hasQueuedTransfer = Boolean(settlement.parent_transaction);
+  const parentStatus = String(settlement.parent_status || "").toUpperCase();
   const isFinalized = settlement.transfer_status === "FINALIZED" && Boolean(decision);
   const isSettlementPending = !isFinalized && (
     hasQueuedTransfer
@@ -40,7 +41,11 @@ export function settlementPresentation(
     return {
       status: "SETTLEMENT_PENDING",
       label: hasQueuedTransfer
-        ? "Payment processing"
+        ? parentStatus === "ACCEPTED"
+          ? "Waiting for Bradbury finality"
+          : ["CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"].includes(parentStatus)
+            ? "Settlement transaction failed"
+            : "Payment processing"
         : decision === "REFUNDED"
           ? "Refund transaction not verified"
           : "Payment transaction not verified",

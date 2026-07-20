@@ -25,6 +25,36 @@ describe("settlement lifecycle mapping", () => {
     expect(view.hasTransactionReference).toBe(true);
   });
 
+  it("shows the exact Bradbury acceptance state before finality", () => {
+    const view = settlementPresentation({
+      ...baseJob,
+      status: "SETTLEMENT_PENDING",
+      settlement: {
+        outcome: "PARTIAL",
+        transfer_status: "PENDING_FINALIZATION",
+        parent_transaction: "0xparent",
+        parent_status: "ACCEPTED",
+      },
+    });
+    expect(view.label).toBe("Waiting for Bradbury finality");
+    expect(view.isFinalized).toBe(false);
+  });
+
+  it("does not disguise a canceled settlement as processing", () => {
+    const view = settlementPresentation({
+      ...baseJob,
+      status: "SETTLEMENT_PENDING",
+      settlement: {
+        outcome: "PARTIAL",
+        transfer_status: "FAILED_FINALIZATION",
+        parent_transaction: "0xparent",
+        parent_status: "CANCELED",
+      },
+    });
+    expect(view.label).toBe("Settlement transaction failed");
+    expect(view.isFinalized).toBe(false);
+  });
+
   it("never claims confirmation for a pending settlement without a transaction reference", () => {
     const view = settlementPresentation({
       ...baseJob,

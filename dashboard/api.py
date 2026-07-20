@@ -487,7 +487,11 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
         # do not always produce a child GenLayer transaction ID. Confirm only
         # when every contract-recorded transfer matches a finalized message, or
         # when the network exposes an inspectable triggered transaction.
-        if parent_status == "FINALIZED" and (triggered or confirmed_external):
+        failed_statuses = {"CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"}
+        if parent_status in failed_statuses:
+            settlement["transfer_status"] = "FAILED_FINALIZATION"
+            settlement["status_error"] = f"Bradbury settlement transaction ended with {parent_status}."
+        elif parent_status == "FINALIZED" and (triggered or confirmed_external):
             settlement["transfer_status"] = "FINALIZED"
             settlement["finalized_at"] = settlement.get("finalized_at") or utc_now()
         elif parent_status == "FINALIZED":

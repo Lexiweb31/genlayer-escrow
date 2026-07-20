@@ -20,7 +20,7 @@ export function Lifecycle({ job, result, transactionPending = false }: { job: Jo
   const settlementStage = presentation.isPending && !presentation.hasTransactionReference
     ? presentation.decision === "REFUNDED" ? "Refund transaction not verified" : "Payment transaction not verified"
     : presentation.hasTransactionReference
-    ? "Payment transaction submitted"
+    ? String(job.settlement?.parent_status || "").toUpperCase() === "ACCEPTED" ? "Settlement accepted by Bradbury" : "Payment transaction submitted"
     : "Settlement submitted";
   const confirmedLabel = presentation.decision === "REFUNDED" ? "Refund confirmed" : presentation.decision === "PARTIAL" ? "Split payment confirmed" : "Payment confirmed";
   const stages = ["Job created", "Payment locked", "Requirements accepted", "Work submitted", "Evaluation completed", settlementStage, confirmedLabel];
