@@ -3,6 +3,7 @@
 import { createClient } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { CalldataAddress, ExecutionResult, TransactionStatus, type CalldataEncodable, type TransactionHash } from "genlayer-js/types";
+import { classifyTransactionState, type ClassifiedTransactionState } from "@/lib/transaction-state";
 import { isBradburyChain, walletErrorMessage } from "@/lib/wallet";
 
 interface WalletWriteInput {
@@ -21,13 +22,7 @@ export interface WalletWriteResult {
   status: string;
 }
 
-export interface WalletTransactionState {
-  status: string;
-  executionResult: string;
-  result: string;
-  failed: boolean;
-  confirmed: boolean;
-}
+export type WalletTransactionState = ClassifiedTransactionState;
 
 interface WalletDeployInput {
   account: string;
@@ -98,14 +93,11 @@ export async function readBradburyTransaction(hash: string): Promise<WalletTrans
   const status = String(transaction.statusName || transaction.status || "UNKNOWN");
   const executionResult = String(transaction.txExecutionResultName || transaction.txExecutionResult || "UNKNOWN");
   const result = String(transaction.resultName || transaction.result || "UNKNOWN");
-  const failedStatuses = new Set(["CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"]);
-  return {
+  return classifyTransactionState({
     status,
     executionResult,
     result,
-    failed: failedStatuses.has(status) || executionResult === ExecutionResult.FINISHED_WITH_ERROR || result === "FAILURE",
-    confirmed: ["ACCEPTED", "FINALIZED"].includes(status) && executionResult === ExecutionResult.FINISHED_WITH_RETURN,
-  };
+  });
 }
 
 export async function writeWalletContract(input: WalletWriteInput): Promise<WalletWriteResult> {

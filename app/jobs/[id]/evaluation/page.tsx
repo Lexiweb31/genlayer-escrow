@@ -28,21 +28,29 @@ export default function EvaluationPage() {
   const [pendingTransaction, setPendingTransaction] = useState<WalletTransactionState | null>(null);
   const [checkingTransaction, setCheckingTransaction] = useState(false);
   const [transactionError, setTransactionError] = useState("");
+  const confirmedFromContract = data ? hasConfirmedEvaluation({ ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status }, data.result) : false;
+  useEffect(() => { if (confirmedFromContract) localStorage.removeItem(pendingEvaluationKey); }, [confirmedFromContract, pendingEvaluationKey]);
   useEffect(() => {
-    if (!data) return;
-    const currentJob: JobRecord = { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status };
-    if (hasConfirmedEvaluation(currentJob, data.result)) {
-      localStorage.removeItem(pendingEvaluationKey);
-    }
-  }, [data, pendingEvaluationKey]);
-  useEffect(() => {
-    if (!pendingEvaluationHash) return;
+    if (!pendingEvaluationHash || confirmedFromContract) return;
     let active = true;
-    void readBradburyTransaction(pendingEvaluationHash)
-      .then((state) => { if (active) setPendingTransaction(state); })
-      .catch(() => { if (active) setTransactionError("Bradbury could not return this transaction status. Use the explorer link before taking another action."); })
-    return () => { active = false; };
-  }, [pendingEvaluationHash]);
+    let timer: number | undefined;
+    const reconcile = async () => {
+      try {
+        const state = await readBradburyTransaction(pendingEvaluationHash);
+        if (!active) return;
+        setPendingTransaction(state);
+        setTransactionError("");
+        if (state.confirmed) await refresh();
+        if (!state.failed && active) timer = window.setTimeout(reconcile, 15_000);
+      } catch {
+        if (!active) return;
+        setTransactionError("Bradbury could not return this transaction status. Merit will retry automatically; use the explorer link before taking another action.");
+        timer = window.setTimeout(reconcile, 30_000);
+      }
+    };
+    void reconcile();
+    return () => { active = false; if (timer) window.clearTimeout(timer); };
+  }, [confirmedFromContract, pendingEvaluationHash, refresh]);
   if (loading && !data) return <div className="page-container"><JobNavigation id={id}/><LoadingState label="Opening the evaluation evidence room…"/></div>;
   if (error && !data) return <div className="page-container"><JobNavigation id={id}/><ErrorState message={error.message} retry={refresh}/></div>;
   if (!data) return null;
