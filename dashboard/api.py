@@ -1183,15 +1183,42 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
     status = _status_name(transaction)
     execution = str(transaction.get("tx_execution_result_name") or "")
     recipient = str(transaction.get("recipient") or "")
-    if status not in {"ACCEPTED", "FINALIZED"} or "ERROR" in execution.upper():
+    activator = str(
+        transaction.get("activator")
+        or transaction.get("sender")
+        or transaction.get("from")
+        or ""
+    )
+    failed_statuses = {
+        "CANCELED",
+        "UNDETERMINED",
+        "VALIDATORS_TIMEOUT",
+        "LEADER_TIMEOUT",
+        "OUT_OF_FEE",
+        "OUTOFFEE",
+    }
+    # Wallet Mode reports the hash as soon as the browser broadcasts it. Save
+    # that reference while Bradbury is still processing so a refresh, closed
+    # tab, or short API timing race cannot orphan an otherwise valid refund.
+    if status in failed_statuses or "ERROR" in execution.upper():
         raise HTTPException(status_code=422, detail={
             "code": "SETTLEMENT_TX_REJECTED",
-            "message": "The settlement transaction has not completed successfully on Bradbury.",
+            "message": "The settlement transaction failed on Bradbury.",
+        })
+    if status == "UNKNOWN":
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_TX_NOT_READY",
+            "message": "Bradbury has not indexed the settlement transaction yet. Merit will retry it from this browser.",
         })
     if recipient.lower() != str(job["address"]).lower():
         raise HTTPException(status_code=422, detail={
             "code": "SETTLEMENT_CONTRACT_MISMATCH",
             "message": "This transaction does not belong to the selected escrow.",
+        })
+    if activator and activator.lower() != str(job["client_address"]).lower():
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_SIGNER_MISMATCH",
+            "message": "Only the assigned client wallet can register this settlement transaction.",
         })
     state = _job_state(job["address"])
     chain_job = state["job"]

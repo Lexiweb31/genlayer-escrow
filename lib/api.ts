@@ -86,6 +86,8 @@ export function friendlyApiError(error: unknown): string {
     WRONG_ROLE: "This action belongs to a different Bradbury demo role.",
     STALE_STATE: "The escrow changed on-chain. Refresh before retrying.",
     TESTNET_REJECTION: "Bradbury rejected the transaction. No success has been recorded.",
+    SETTLEMENT_TX_NOT_READY: "Bradbury is still indexing this refund transaction. Merit saved the hash and will retry without sending another transaction.",
+    SETTLEMENT_SIGNER_MISMATCH: "This settlement was not signed by the assigned client wallet.",
     LEGACY_SETTLEMENT_CONTRACT: "Legacy settlement contract — read only and unsafe to fund.",
     DEMO_ROLES_UNAVAILABLE: "Live demo actions require two different server-side demo signers.",
   };

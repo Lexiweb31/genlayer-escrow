@@ -344,6 +344,58 @@ def test_wallet_registration_rejects_wrong_platform_recipient(monkeypatch):
     assert exc.value.detail["code"] == "CONTRACT_METADATA_MISMATCH"
 
 
+def test_wallet_settlement_registration_persists_activated_transaction(monkeypatch):
+    tx_hash = "0x" + "9" * 64
+    job = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+        "settlement": {},
+    }
+    transaction = {
+        "status_name": "Activated",
+        "recipient": job["address"],
+        "activator": job["client_address"],
+    }
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: transaction))
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "status": "SETTLEMENT_PENDING",
+        "settlement": {"outcome": "REFUNDED", "transfer_status": "PENDING_FINALIZATION"},
+    }})
+    saved = {}
+    monkeypatch.setattr(api.store, "update_job", lambda _address, **changes: saved.update(changes))
+    monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
+
+    response = api.register_wallet_settlement(
+        job["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+    )
+
+    assert saved["settlement"]["parent_transaction"] == tx_hash
+    assert saved["settlement"]["parent_status"] == "ACTIVATED"
+    assert response["status"] == "PENDING_FINALIZATION"
+
+
+def test_wallet_settlement_registration_rejects_wrong_client(monkeypatch):
+    job = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+    }
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
+        "status_name": "Accepted",
+        "recipient": job["address"],
+        "activator": "0x" + "3" * 40,
+    }))
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_settlement(
+            job["address"],
+            api.RegisterWalletSettlementRequest(transaction_hash="0x" + "9" * 64),
+        )
+
+    assert exc.value.detail["code"] == "SETTLEMENT_SIGNER_MISMATCH"
+
+
 def test_wait_tolerates_unknown_bradbury_intermediate_status(monkeypatch):
     class FakeProvider:
         def __init__(self):

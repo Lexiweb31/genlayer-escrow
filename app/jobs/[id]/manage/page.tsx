@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowIcon, CheckIcon, ClockIcon, LockIcon, RefreshIcon, UserIcon } from "@/components/icons";
@@ -29,14 +29,46 @@ export default function ManageJobPage() {
   const [amount, setAmount] = useState("0.001");
   const [confirmHighValue, setConfirmHighValue] = useState(false);
   const [submissionUrl, setSubmissionUrl] = useState("");
-  const [recoveryTx, setRecoveryTx] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(`merit-pending-settlement:${id}`) || "");
+  const settlementRecoveryKey = `merit-pending-settlement:${id}`;
   const pendingActionKey = `merit-pending-action:${id}`;
+  const [recoveryTx, setRecoveryTx] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const savedSettlement = localStorage.getItem(settlementRecoveryKey);
+    if (savedSettlement) return savedSettlement;
+    try {
+      const pending = JSON.parse(localStorage.getItem(pendingActionKey) || "null") as PendingWalletAction | null;
+      return pending?.label === "Submitting payment" ? pending.hash : "";
+    } catch { return ""; }
+  });
   const [pendingAction, setPendingAction] = useState<PendingWalletAction | null>(() => {
     if (typeof window === "undefined") return null;
     try { return JSON.parse(localStorage.getItem(pendingActionKey) || "null") as PendingWalletAction | null; } catch { return null; }
   });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
+  const automaticRecoveryJob: JobRecord | null = data ? { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status } : null;
+  const automaticRecoveryView = automaticRecoveryJob ? settlementPresentation(automaticRecoveryJob, data?.result) : null;
+  useEffect(() => {
+    if (!automaticRecoveryView?.isPending || automaticRecoveryView.hasTransactionReference || !/^0x[0-9a-fA-F]{64}$/.test(recoveryTx)) return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const registerSavedSettlement = async () => {
+      try {
+        await meritApi.registerWalletSettlement(id, recoveryTx);
+        if (cancelled) return;
+        localStorage.removeItem(settlementRecoveryKey);
+        setRecoveryTx("");
+        setMessage({ tone: "success", text: "Merit recovered the refund transaction automatically. Refreshing confirmation evidence…" });
+        await refresh();
+      } catch {
+        // Keep the hash locally. Bradbury may still be indexing it, and the
+        // assigned client can retry without signing or sending another refund.
+        if (!cancelled) retryTimer = setTimeout(registerSavedSettlement, 10_000);
+      }
+    };
+    void registerSavedSettlement();
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
+  }, [automaticRecoveryView?.hasTransactionReference, automaticRecoveryView?.isPending, id, recoveryTx, refresh, settlementRecoveryKey]);
   if (loading && !data) return <div className="page-container"><JobNavigation id={id}/><LoadingState label="Reading the live job lifecycle…"/></div>;
   if (error && !data) return <div className="page-container"><JobNavigation id={id}/><ErrorState message={error.message} retry={refresh}/></div>;
   if (!data) return null;
@@ -101,10 +133,17 @@ export default function ManageJobPage() {
   };
 
   const finalizeWithWallet = async (onStage: (stage: WalletWriteStage, transactionHash?: string) => void) => {
-    const result = await writeWalletContract({ account: wallet.address!, address: id, functionName: "finalize", onStage });
-    localStorage.setItem(`merit-pending-settlement:${id}`, result.hash);
+    const rememberSettlement = (stage: WalletWriteStage, transactionHash?: string) => {
+      if (transactionHash) {
+        localStorage.setItem(settlementRecoveryKey, transactionHash);
+        setRecoveryTx(transactionHash);
+      }
+      onStage(stage, transactionHash);
+    };
+    const result = await writeWalletContract({ account: wallet.address!, address: id, functionName: "finalize", onStage: rememberSettlement });
     await meritApi.registerWalletSettlement(id, result.hash);
-    localStorage.removeItem(`merit-pending-settlement:${id}`);
+    localStorage.removeItem(settlementRecoveryKey);
+    setRecoveryTx("");
     return result;
   };
 
@@ -112,7 +151,7 @@ export default function ManageJobPage() {
     event.preventDefault();
     if (!/^0x[0-9a-fA-F]{64}$/.test(recoveryTx.trim())) return setMessage({ tone: "error", text: "Paste the 0x transaction hash from your client wallet." });
     setBusy(true); setMessage({ tone: "info", text: "Verifying the wallet transaction on Bradbury…" });
-    try { await meritApi.registerWalletSettlement(id, recoveryTx.trim()); localStorage.removeItem(`merit-pending-settlement:${id}`); setMessage({ tone: "success", text: "Settlement transaction recovered. Refreshing payment evidence…" }); await refresh(); }
+    try { await meritApi.registerWalletSettlement(id, recoveryTx.trim()); localStorage.removeItem(settlementRecoveryKey); setRecoveryTx(""); setMessage({ tone: "success", text: "Settlement transaction recovered. Refreshing payment evidence…" }); await refresh(); }
     catch (nextError) { setMessage({ tone: "error", text: friendlyApiError(nextError) }); }
     finally { setBusy(false); }
   };
