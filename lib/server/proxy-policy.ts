@@ -54,7 +54,9 @@ function rewriteExplorerUrl(value: string): string | null {
 
 export function isAllowedMeritApiRoute(method: string, segments: string[]): boolean {
   if (method === "GET") {
-    if (segments.length === 1) return segments[0] === "demo-mode" || segments[0] === "jobs";
+    if (segments.length === 1) {
+      return segments[0] === "demo-mode" || segments[0] === "health" || segments[0] === "jobs";
+    }
     return segments.length === 2 && segments[0] === "jobs" && isSafeExplorerReference(segments[1]);
   }
 
