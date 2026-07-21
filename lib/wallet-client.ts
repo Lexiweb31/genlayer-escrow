@@ -35,6 +35,16 @@ interface WalletDeployInput {
   partialFloor: number;
 }
 
+interface WalletBountyDeployInput {
+  account: string;
+  code: string;
+  spec: string;
+  platform: string;
+  feeBps: number;
+  minScore: number;
+  maxSubmissions: number;
+}
+
 export interface WalletDeployResult extends WalletWriteResult {
   address: string;
 }
@@ -157,6 +167,26 @@ export async function deployWalletEscrow(input: WalletDeployInput): Promise<Wall
     if (!address || !/^0x[0-9a-fA-F]{40}$/.test(String(address))) {
       throw new Error("The accepted deployment did not return a valid contract address. Inspect the transaction before retrying.");
     }
+    return { hash: String(hash), address: String(address), status: String(receipt.statusName || TransactionStatus.ACCEPTED) };
+  } catch (error) {
+    throw new Error(walletErrorMessage(error));
+  }
+}
+
+export async function deployWalletBounty(input: WalletBountyDeployInput): Promise<WalletDeployResult> {
+  const client = await walletClient(input.account);
+  try {
+    const hash = await client.deployContract({
+      code: input.code,
+      args: [input.spec, calldataAddress(input.platform), input.feeBps, input.minScore, input.maxSubmissions],
+    }) as TransactionHash;
+    const receipt = await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, interval: 4_000, retries: 150 });
+    if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+      throw new Error("The Bounty deployment did not finish successfully. Inspect the transaction before retrying.");
+    }
+    const decoded = receipt.txDataDecoded && "contractAddress" in receipt.txDataDecoded ? receipt.txDataDecoded.contractAddress : undefined;
+    const address = receipt.recipient || decoded;
+    if (!address || !/^0x[0-9a-fA-F]{40}$/.test(String(address))) throw new Error("The accepted Bounty deployment did not return a contract address.");
     return { hash: String(hash), address: String(address), status: String(receipt.statusName || TransactionStatus.ACCEPTED) };
   } catch (error) {
     throw new Error(walletErrorMessage(error));

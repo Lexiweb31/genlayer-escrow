@@ -1,6 +1,6 @@
 import { explorerRedirectPath, isSafeExplorerReference } from "@/lib/explorer";
 
-const ACTIONS = new Set(["fund", "accept_terms", "submit", "evaluate", "appeal", "finalize", "register_settlement"]);
+const ACTIONS = new Set(["fund", "accept_terms", "submit", "close_submissions", "evaluate", "appeal", "finalize", "register_settlement"]);
 const MAX_SANITIZE_DEPTH = 20;
 
 const BLOCKED_RESPONSE_KEYS = new Set([

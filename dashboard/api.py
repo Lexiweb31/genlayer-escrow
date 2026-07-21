@@ -14,7 +14,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Lock, Thread
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -48,6 +48,7 @@ deployments_path = ROOT / "artifacts" / "deployments.json"
 deployments = json.loads(deployments_path.read_text()) if deployments_path.exists() else {}
 EVAL_ADDR = str(deployments.get("evaluate_submission") or "")
 ESCROW_CODE = (ROOT / "contracts" / "freelance_escrow.py").read_text()
+BOUNTY_CODE = (ROOT / "contracts" / "bounty_escrow.py").read_text()
 
 
 def _configure_demo_accounts() -> tuple[Any, Any, Optional[str]]:
@@ -340,7 +341,15 @@ def _job_state(escrow_addr: str) -> dict[str, Any]:
     return {"job": job, "result": result}
 
 
-def _expected_state(method: str) -> str:
+def _expected_state(method: str, job_type: str = "DIRECT_HIRE") -> str:
+    if job_type == "BOUNTY":
+        return {
+            "fund": "UNFUNDED",
+            "submit_work": "OPEN",
+            "close_submissions": "OPEN",
+            "evaluate": "CLOSED",
+            "finalize": "EVALUATED",
+        }[method]
     return {
         "fund": "UNFUNDED",
         "accept_terms": "OPEN",
@@ -361,7 +370,8 @@ def _preflight(job: dict[str, Any], method: str, role: str) -> dict[str, Any]:
     _require_safe_job(job)
     state = _job_state(job["address"])
     chain_job = state["job"]
-    expected_status = _expected_state(method)
+    job_type = str(job.get("job_type") or chain_job.get("job_type") or "DIRECT_HIRE")
+    expected_status = _expected_state(method, job_type)
     actual_status = str(chain_job.get("status") or "UNKNOWN")
     if actual_status != expected_status:
         raise HTTPException(status_code=409, detail={
@@ -370,8 +380,15 @@ def _preflight(job: dict[str, Any], method: str, role: str) -> dict[str, Any]:
             "expected_status": expected_status,
             "actual_status": actual_status,
         })
-    expected_actor = str(chain_job.get(role) or "")
     signer = _role_address(role)
+    if job_type == "BOUNTY" and method == "submit_work":
+        if not signer or signer.lower() == str(chain_job.get("client") or "").lower():
+            raise HTTPException(status_code=403, detail={
+                "code": "WRONG_ROLE",
+                "message": "A bounty submission must come from a wallet other than the client.",
+            })
+        return state
+    expected_actor = str(chain_job.get(role) or "")
     if not signer or expected_actor.lower() != signer.lower():
         raise HTTPException(status_code=403, detail={
             "code": "WRONG_ROLE",
@@ -622,8 +639,8 @@ def demo_mode():
 
 
 MIN_DEMO_AMOUNT_WEI = 10**15  # 0.001 GEN
-_ACTIVE_STATUSES = {"UNFUNDED", "OPEN", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING"}
-_LOCKED_STATUSES = {"OPEN", "AGREED", "SUBMITTED", "EVALUATED"}
+_ACTIVE_STATUSES = {"UNFUNDED", "OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING"}
+_LOCKED_STATUSES = {"OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED"}
 _EVALUATED_STATUSES = {"EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED"}
 _FINAL_STATUSES = {"ACCEPTED", "PARTIAL", "REFUNDED"}
 _MARKETPLACE_REFRESH_LOCK = Lock()
@@ -902,12 +919,14 @@ class CreateJobRequest(BaseModel):
     fee_bps: int = Field(default=200, ge=0, le=1000)
     min_score: int = Field(default=70, ge=0, le=100)
     partial_floor: int = Field(default=40, ge=0, le=100)
+    job_type: Literal["DIRECT_HIRE", "BOUNTY"] = "DIRECT_HIRE"
+    max_submissions: int = Field(default=5, ge=2, le=5)
 
 
 class RegisterWalletJobRequest(CreateJobRequest):
     address: str
     client_address: str
-    worker_address: str
+    worker_address: Optional[str] = None
     deployment_tx: str
 
 
@@ -919,13 +938,16 @@ class RegisterWalletSettlementRequest(BaseModel):
 def register_wallet_job(req: RegisterWalletJobRequest):
     if not ADDRESS_PATTERN.fullmatch(req.address):
         raise HTTPException(status_code=422, detail={"code": "INVALID_CONTRACT_ADDRESS", "message": "Invalid escrow contract address."})
-    if not ADDRESS_PATTERN.fullmatch(req.client_address) or not ADDRESS_PATTERN.fullmatch(req.worker_address):
-        raise HTTPException(status_code=422, detail={"code": "INVALID_ROLE_ADDRESS", "message": "Invalid client or worker address."})
-    if req.client_address.lower() == req.worker_address.lower():
-        raise HTTPException(status_code=422, detail={"code": "SAME_ROLE_ADDRESS", "message": "Client and worker must use different wallets."})
+    if not ADDRESS_PATTERN.fullmatch(req.client_address):
+        raise HTTPException(status_code=422, detail={"code": "INVALID_ROLE_ADDRESS", "message": "Invalid client address."})
+    if req.job_type == "DIRECT_HIRE":
+        if not req.worker_address or not ADDRESS_PATTERN.fullmatch(req.worker_address):
+            raise HTTPException(status_code=422, detail={"code": "INVALID_ROLE_ADDRESS", "message": "Invalid worker address."})
+        if req.client_address.lower() == req.worker_address.lower():
+            raise HTTPException(status_code=422, detail={"code": "SAME_ROLE_ADDRESS", "message": "Client and worker must use different wallets."})
     if not TX_PATTERN.fullmatch(req.deployment_tx):
         raise HTTPException(status_code=422, detail={"code": "INVALID_DEPLOYMENT_TX", "message": "Invalid deployment transaction hash."})
-    if req.partial_floor > req.min_score:
+    if req.job_type == "DIRECT_HIRE" and req.partial_floor > req.min_score:
         raise HTTPException(status_code=422, detail={"code": "INVALID_THRESHOLDS", "message": "partial_floor cannot exceed min_score"})
     spec = req.spec.strip()
     if len(spec) < 20:
@@ -965,14 +987,16 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         raise HTTPException(status_code=422, detail={"code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."})
     expected = {
         "client": req.client_address,
-        "worker": req.worker_address,
         "platform": platform_address,
         "spec": spec,
         "fee_bps": req.fee_bps,
         "min_score": req.min_score,
-        "partial_floor": req.partial_floor,
         "status": "UNFUNDED",
     }
+    if req.job_type == "DIRECT_HIRE":
+        expected.update({"worker": req.worker_address, "partial_floor": req.partial_floor})
+    else:
+        expected.update({"job_type": "BOUNTY", "max_submissions": req.max_submissions})
     for key, value in expected.items():
         actual = state.get(key)
         if key in ("client", "worker", "platform"):
@@ -993,8 +1017,10 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         "fee_bps": req.fee_bps,
         "min_score": req.min_score,
         "partial_floor": req.partial_floor,
+        "job_type": req.job_type,
+        "max_submissions": req.max_submissions if req.job_type == "BOUNTY" else 0,
         "client_address": req.client_address,
-        "worker_address": req.worker_address,
+        "worker_address": req.worker_address or "",
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": req.deployment_tx,
         "created_at": utc_now(),
@@ -1008,21 +1034,34 @@ def create_job(req: CreateJobRequest):
     spec = req.spec.strip()
     if len(spec) < 20:
         raise HTTPException(status_code=422, detail={"code": "INVALID_SPEC", "message": "Spec must be at least 20 characters"})
-    if req.partial_floor > req.min_score:
+    if req.job_type == "DIRECT_HIRE" and req.partial_floor > req.min_score:
         raise HTTPException(status_code=422, detail={"code": "INVALID_THRESHOLDS", "message": "partial_floor cannot exceed min_score"})
     try:
-        tx = network_client.deploy_contract(
-            ESCROW_CODE,
-            account=demo_client_account,
-            args=[
-                spec,
-                CalldataAddress(demo_worker_account.address),
-                CalldataAddress(demo_client_account.address),
-                req.fee_bps,
-                req.min_score,
-                req.partial_floor,
-            ],
-        )
+        if req.job_type == "BOUNTY":
+            tx = network_client.deploy_contract(
+                BOUNTY_CODE,
+                account=demo_client_account,
+                args=[
+                    spec,
+                    CalldataAddress(demo_client_account.address),
+                    req.fee_bps,
+                    req.min_score,
+                    req.max_submissions,
+                ],
+            )
+        else:
+            tx = network_client.deploy_contract(
+                ESCROW_CODE,
+                account=demo_client_account,
+                args=[
+                    spec,
+                    CalldataAddress(demo_worker_account.address),
+                    CalldataAddress(demo_client_account.address),
+                    req.fee_bps,
+                    req.min_score,
+                    req.partial_floor,
+                ],
+            )
         receipt = _wait(tx)
         address = _get_address(receipt)
         if not address:
@@ -1038,8 +1077,10 @@ def create_job(req: CreateJobRequest):
         "fee_bps": req.fee_bps,
         "min_score": req.min_score,
         "partial_floor": req.partial_floor,
+        "job_type": req.job_type,
+        "max_submissions": req.max_submissions if req.job_type == "BOUNTY" else 0,
         "client_address": str(demo_client_account.address),
-        "worker_address": str(demo_worker_account.address),
+        "worker_address": "" if req.job_type == "BOUNTY" else str(demo_worker_account.address),
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": tx,
         "created_at": utc_now(),
@@ -1114,6 +1155,17 @@ def submit_work(job_id: str, req: SubmitRequest):
     if not req.url.startswith("http"):
         raise HTTPException(status_code=422, detail={"code": "INVALID_URL", "message": "URL must start with http"})
     return _run_action(job_id, "submit_work", "worker", args=[req.url])
+
+
+@app.post("/api/jobs/{job_id}/close_submissions")
+def close_submissions(job_id: str):
+    job = _find_job(job_id)
+    if str(job.get("job_type") or "DIRECT_HIRE") != "BOUNTY":
+        raise HTTPException(status_code=409, detail={
+            "code": "NOT_A_BOUNTY",
+            "message": "Only Bounty jobs have an open submission round.",
+        })
+    return _run_action(job_id, "close_submissions", "client")
 
 
 @app.post("/api/jobs/{job_id}/evaluate")

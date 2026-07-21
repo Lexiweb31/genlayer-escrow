@@ -30,6 +30,8 @@ class JobStore:
         "specification",
         "client_address",
         "worker_address",
+        "job_type",
+        "max_submissions",
         "lifecycle_status",
         "deployment_tx",
         "settlement_json",
@@ -64,6 +66,8 @@ class JobStore:
                     fee_bps INTEGER NOT NULL,
                     min_score INTEGER NOT NULL,
                     partial_floor INTEGER NOT NULL,
+                    job_type TEXT NOT NULL DEFAULT 'DIRECT_HIRE',
+                    max_submissions INTEGER NOT NULL DEFAULT 0,
                     client_address TEXT NOT NULL DEFAULT '',
                     worker_address TEXT NOT NULL DEFAULT '',
                     lifecycle_status TEXT NOT NULL DEFAULT 'UNKNOWN',
@@ -79,6 +83,10 @@ class JobStore:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
             if "state_json" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN state_json TEXT NOT NULL DEFAULT '{}'")
+            if "job_type" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'DIRECT_HIRE'")
+            if "max_submissions" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN max_submissions INTEGER NOT NULL DEFAULT 0")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)"
             )
@@ -109,6 +117,8 @@ class JobStore:
             "fee_bps": int(record.get("fee_bps", 200)),
             "min_score": int(record.get("min_score", 70)),
             "partial_floor": int(record.get("partial_floor", 40)),
+            "job_type": str(record.get("job_type") or "DIRECT_HIRE"),
+            "max_submissions": int(record.get("max_submissions") or 0),
             "client_address": str(record.get("client_address") or ""),
             "worker_address": str(record.get("worker_address") or ""),
             "lifecycle_status": str(record.get("lifecycle_status") or record.get("status") or "UNKNOWN"),

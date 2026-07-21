@@ -12,6 +12,15 @@ A normal escrow contract can hold funds and compare numbers, but it cannot decid
 
 Merit makes the agreement, evidence, evaluation reasoning, settlement rule, and transaction status inspectable. GenLayer is essential because its validators can retrieve public web evidence, apply contextual judgment, and reach consensus on a result that a deterministic smart contract cannot compute alone.
 
+## Direct Hire and Bounty mode
+
+Merit now supports two separate on-chain work models:
+
+- **Direct Hire** assigns one worker wallet. That worker accepts the requirements, submits one public deliverable, and receives a full or proportional payment when it qualifies.
+- **Bounty mode** opens one protected reward to up to five independent contributor wallets. Each wallet can submit once, the client cannot compete, and the client permanently closes the entry round before evaluation. GenLayer evaluates the full field under one shared rubric and records the highest-scoring result. Exact score ties favor the earlier on-chain entry. If the winning score reaches the published threshold, only that wallet is paid; otherwise the reward is refunded to the client.
+
+The models use different intelligent contracts and UI lifecycles. A Bounty is not presented as a pre-assigned worker job, and losing entrants never receive a misleading payout state.
+
 ## What is real
 
 - Every marketplace record points to a dedicated Bradbury intelligent contract.
@@ -154,7 +163,7 @@ Wallet writes use GenLayerJS, require Bradbury, wait for an accepted receipt, an
 python3 -m pytest tests/direct -q
 python3 -m pytest tests/backend -q
 python3 -m py_compile dashboard/api.py dashboard/store.py scripts/*.py
-genvm-lint contracts/freelance_escrow.py
+genvm-lint contracts/freelance_escrow.py contracts/bounty_escrow.py
 ```
 
 GenLayer executes external messages only when their parent transaction finalizes. See the official [value-transfer](https://docs.genlayer.com/developers/intelligent-contracts/features/value-transfers) and [message](https://docs.genlayer.com/developers/intelligent-contracts/features/messages) documentation.

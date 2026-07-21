@@ -16,7 +16,7 @@ export function JobCard({ job }: { job: JobRecord }) {
   const outcomeClass = view.status === "LEGACY_UNSAFE" ? "outcome-danger" : view.isPending ? "outcome-pending" : view.isFinalized ? view.decision === "REFUNDED" ? "outcome-refund" : "outcome-success" : "";
   return <article className={`job-card ${outcomeClass}`.trim()}>
     <div className="job-card-top"><MonoValue>{shortAddress(job.address, 8, 4)}</MonoValue><StatusPill tone={tone}>{view.label}</StatusPill></div>
-    <div><p className="card-kicker">Protected job</p><h2>{job.title || "Untitled job"}</h2><p className="job-spec">{job.spec || "Job requirements unavailable."}</p></div>
+    <div><p className="card-kicker">{job.job_type === "BOUNTY" ? `Bounty · ${job.submission_count || 0}/${job.max_submissions || 5} entries` : "Direct Hire"}</p><h2>{job.title || "Untitled job"}</h2><p className="job-spec">{job.spec || "Job requirements unavailable."}</p></div>
     {view.status === "LEGACY_UNSAFE" && <div className="inline-alert danger"><b>Legacy settlement contract — do not fund.</b><span>This immutable contract predates the safe EOA transfer patch and is read-only.</span></div>}
     {view.isPending && <div className="pending-proof">
       <b>Payment is processing</b><small>Technical status · Settlement pending</small>

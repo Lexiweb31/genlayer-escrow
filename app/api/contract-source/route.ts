@@ -4,9 +4,11 @@ import path from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   try {
-    const source = await readFile(path.join(process.cwd(), "contracts", "freelance_escrow.py"), "utf8");
+    const kind = new URL(request.url).searchParams.get("type");
+    const filename = kind === "bounty" ? "bounty_escrow.py" : "freelance_escrow.py";
+    const source = await readFile(path.join(process.cwd(), "contracts", filename), "utf8");
     return new Response(source, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

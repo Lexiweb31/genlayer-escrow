@@ -1,6 +1,7 @@
 export type JobStatus =
   | "UNFUNDED"
   | "OPEN"
+  | "CLOSED"
   | "AGREED"
   | "SUBMITTED"
   | "EVALUATED"
@@ -73,6 +74,12 @@ export interface JobRecord {
   worker?: string;
   client_address?: string;
   worker_address?: string;
+  job_type?: "DIRECT_HIRE" | "BOUNTY";
+  max_submissions?: number;
+  submission_count?: number;
+  submissions?: BountySubmission[];
+  winner?: string;
+  winning_url?: string;
   submission_url?: string;
   terms_agreed?: boolean;
   appeal_used?: boolean;
@@ -87,6 +94,14 @@ export interface JobRecord {
   error?: string;
 }
 
+export interface BountySubmission {
+  position: number;
+  submitter: string;
+  url: string;
+  score?: number;
+  reasoning?: string;
+}
+
 export interface EvaluationResult {
   status?: JobStatus;
   score?: number | null;
@@ -94,6 +109,8 @@ export interface EvaluationResult {
   min_score?: number;
   settlement_outcome?: string;
   transfer_status?: string;
+  winner?: string;
+  winning_url?: string;
 }
 
 export interface ContractAddresses {
@@ -159,12 +176,14 @@ export interface CreateJobInput {
   fee_bps: number;
   min_score: number;
   partial_floor: number;
+  job_type: "DIRECT_HIRE" | "BOUNTY";
+  max_submissions: number;
 }
 
 export interface RegisterWalletJobInput extends CreateJobInput {
   address: string;
   client_address: string;
-  worker_address: string;
+  worker_address?: string | null;
   deployment_tx: string;
 }
 

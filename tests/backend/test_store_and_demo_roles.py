@@ -45,6 +45,29 @@ def test_sqlite_jobs_survive_store_reopen(tmp_path):
     assert job["state_snapshot"]["amount"] == "1000"
 
 
+def test_bounty_registry_fields_survive_store_reopen(tmp_path):
+    first = JobStore(tmp_path)
+    first.add_job({
+        **_record("0xbounty"),
+        "job_type": "BOUNTY",
+        "max_submissions": 5,
+        "worker_address": "",
+    })
+    bounty = JobStore(tmp_path).get_job("0xbounty")
+    assert bounty is not None
+    assert bounty["job_type"] == "BOUNTY"
+    assert bounty["max_submissions"] == 5
+    assert bounty["worker_address"] == ""
+
+
+def test_bounty_state_machine_uses_open_submission_round():
+    assert api._expected_state("fund", "BOUNTY") == "UNFUNDED"
+    assert api._expected_state("submit_work", "BOUNTY") == "OPEN"
+    assert api._expected_state("close_submissions", "BOUNTY") == "OPEN"
+    assert api._expected_state("evaluate", "BOUNTY") == "CLOSED"
+    assert api._expected_state("finalize", "BOUNTY") == "EVALUATED"
+
+
 def test_background_reconciliation_reads_the_durable_registry(monkeypatch):
     records = [_record("0xbackground")]
     received = []

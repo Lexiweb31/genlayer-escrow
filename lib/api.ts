@@ -64,6 +64,7 @@ export const meritApi = {
     action(id, "fund", { amount_wei: amountWei }),
   acceptTerms: (id: string) => action(id, "accept_terms"),
   submit: (id: string, url: string) => action(id, "submit", { url }),
+  closeSubmissions: (id: string) => action(id, "close_submissions"),
   evaluate: (id: string) => action(id, "evaluate"),
   appeal: (id: string) => action(id, "appeal"),
   finalize: (id: string) => action(id, "finalize"),

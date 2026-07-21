@@ -15,6 +15,7 @@ describe("same-origin Merit proxy policy", () => {
     expect(isAllowedMeritApiRoute("GET", ["jobs"])).toBe(true);
     expect(isAllowedMeritApiRoute("GET", ["jobs", address])).toBe(true);
     expect(isAllowedMeritApiRoute("POST", ["jobs", address, "finalize"])).toBe(true);
+    expect(isAllowedMeritApiRoute("POST", ["jobs", address, "close_submissions"])).toBe(true);
     expect(isAllowedMeritApiRoute("POST", ["jobs", address, "register_settlement"])).toBe(true);
     expect(isAllowedMeritApiRoute("POST", ["jobs", "register"])).toBe(true);
     expect(isAllowedMeritApiRoute("GET", ["health"])).toBe(false);
