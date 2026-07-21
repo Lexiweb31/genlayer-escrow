@@ -43,6 +43,22 @@ Merit supports two clearly separated **Bradbury testnet-only** transaction paths
 
 The browser receives public role addresses and transaction evidence only. Private keys, environment values, database paths, and server signer configuration are never bundled into browser code or returned by the Next.js API layer.
 
+## Rendered evidence verification
+
+Merit does not ask an LLM to judge a URL string. During `evaluate` (or `evaluate_submission` in the standalone evaluator), every GenLayer validator independently calls:
+
+```python
+gl.nondet.web.render(
+    submission_url,
+    mode="text",
+    wait_after_loaded="3s",
+)
+```
+
+This loads the public proof page in GenLayer's web-rendering environment, waits briefly for JavaScript-driven content, and returns its rendered text. The contract treats that result as untrusted evidence, places it behind a prompt-injection guard, compares it with the immutable job requirements, and requests a structured score with evidence-based reasoning. A custom validator function independently repeats the render and evaluation, rejects materially divergent scores, and requires agreement on the binding outcome. Bounty mode renders every entry and additionally requires validator agreement on the winning position.
+
+This allows a GitHub page, X post, hosted application, or other public proof to be inspected as web evidence. The submitted URL must be publicly accessible without login, payment, or special browser permissions.
+
 ## Frontend architecture
 
 The production frontend uses Next.js, TypeScript, and the App Router. It is a normal Vercel deployment—not a static export and not a GitHub Pages application.
@@ -113,6 +129,14 @@ Create or link a Vercel project from this repository and configure these **serve
 
 Set `RENDER_API_BASE_URL` to the Render service origin, without a trailing slash. The browser never receives this value and never calls Render directly. `GENLAYER_NETWORK` is used server-side to reject an unexpected backend network. Explorer links first open a same-origin validation route, which redirects to the server-configured explorer. Vercel automatically detects Next.js; `vercel.json` declares the framework and does not define a static output directory.
 
+Deployment steps:
+
+1. Import this GitHub repository into Vercel.
+2. Keep the repository root as the project root and the detected framework as **Next.js**.
+3. Add the three server-only variables listed above to Production and Preview.
+4. Deploy and verify that the application can reach the configured Render service through its same-origin `/api/...` boundary.
+5. Open the [live application](https://genlayer-escrow.vercel.app/) and complete the production smoke test below.
+
 The Next.js API boundary deliberately:
 
 - allows only the Merit job/demo endpoints and methods used by the interface;
@@ -140,11 +164,22 @@ Only Render receives server secrets and durable-storage configuration:
 - `PLATFORM_FEE_ADDRESS` (public Bradbury recipient used by wallet-created escrows)
 - `PERSIST_DATA_DIR`
 
+The repository includes `render.yaml`. A Render Blueprint installs `requirements.txt`, starts `uvicorn dashboard.api:app --host 0.0.0.0 --port $PORT`, checks `/api/health`, and mounts the durable disk at `/var/data/merit`. After creating the Blueprint, provide the two distinct demo signer keys and `PLATFORM_FEE_ADDRESS` in Render's secret environment settings; never commit their values.
+
 Signer keys and any future database credentials remain solely in Render environment variables. They must not be added to Vercel, browser code, API responses, or committed environment files.
 
 On Render, attach a persistent disk and point `PERSIST_DATA_DIR` to its mount, currently `/var/data/merit`. Jobs are stored in SQLite so all browsers see the same registry and redeploys do not discard jobs when the disk is configured.
 
 The Render service also runs a lightweight contract-state reconciler every 30 seconds. It refreshes evaluation and settlement evidence into the durable registry even when no browser is open. Configure the interval with `MARKETPLACE_RECONCILE_SECONDS`; set `MARKETPLACE_RECONCILE_ENABLED=0` only for local debugging. Bradbury remains the source of truth, and transient read failures preserve the last verified snapshot rather than inventing a new state.
+
+## Production smoke test
+
+1. Open the live application and confirm the header reports **Bradbury**.
+2. Create either a Direct Hire job or Bounty with observable requirements and a publicly accessible proof URL.
+3. Fund the escrow with testnet GEN and complete the role-specific submission flow from a different wallet.
+4. Request evaluation and inspect its Bradbury transaction link.
+5. Confirm the evaluation page exposes the proof URL, validator consensus score, and reasoning.
+6. Finalize settlement and verify the recipient, amount, parent transaction, and outbound transfer evidence in the application and Bradbury explorer.
 
 ## Wallet Mode
 

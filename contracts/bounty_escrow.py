@@ -59,8 +59,13 @@ def _run_bounty_evaluation(spec: str, candidates):
     def leader_fn():
         combined = ""
         for candidate in candidates:
-            page = gl.nondet.web.get(candidate["url"])
-            content = page.body.decode("utf-8", errors="replace")
+            # Every entry is independently rendered by each validator. The
+            # ranking therefore uses observable page content, not URL text.
+            content = gl.nondet.web.render(
+                candidate["url"],
+                mode="text",
+                wait_after_loaded="3s",
+            )
             truncated = content[:9000]
             if len(content) > 9000:
                 truncated += "\n[...content truncated...]"

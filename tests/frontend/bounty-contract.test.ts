@@ -30,6 +30,13 @@ describe("Bounty contract safeguards", () => {
     expect(source).toContain("leader_winner == mine_winner");
   });
 
+  it("renders every public entry before the validators score it", () => {
+    expect(source).toContain("gl.nondet.web.render");
+    expect(source).toContain('mode="text"');
+    expect(source).toContain('wait_after_loaded="3s"');
+    expect(source).not.toContain("gl.nondet.web.get");
+  });
+
   it("queues either winner payout or client refund through the contract", () => {
     expect(source).toContain("BOUNTY_WINNER_PAYOUT");
     expect(source).toContain("self.settlement_winner_amount = payout");

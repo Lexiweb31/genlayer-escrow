@@ -70,8 +70,13 @@ Respond with JSON only — no markdown, no explanation outside the JSON:
 def _run_evaluation(spec: str, url: str) -> dict:
     """Run the leader/validator non-deterministic evaluation and return result dict."""
     def leader_fn():
-        page    = gl.nondet.web.get(url)
-        content = page.body.decode("utf-8", errors="replace")
+        # Evaluate the browser-rendered page, including content produced by
+        # client-side JavaScript, rather than trusting a submitted URL label.
+        content = gl.nondet.web.render(
+            url,
+            mode="text",
+            wait_after_loaded="3s",
+        )
         prompt  = _build_prompt(spec, content)
         response = gl.nondet.exec_prompt(prompt, response_format="json")
         data = response if isinstance(response, dict) else json.loads(response)
