@@ -354,7 +354,8 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
     transaction = {
         "status_name": "Activated",
         "recipient": job["address"],
-        "activator": job["client_address"],
+        "sender": job["client_address"],
+        "activator": "0x" + "8" * 40,
     }
     monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
     monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: transaction))
@@ -384,7 +385,8 @@ def test_wallet_settlement_registration_rejects_wrong_client(monkeypatch):
     monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
         "status_name": "Accepted",
         "recipient": job["address"],
-        "activator": "0x" + "3" * 40,
+        "sender": "0x" + "3" * 40,
+        "activator": job["client_address"],
     }))
 
     with pytest.raises(HTTPException) as exc:
@@ -394,6 +396,28 @@ def test_wallet_settlement_registration_rejects_wrong_client(monkeypatch):
         )
 
     assert exc.value.detail["code"] == "SETTLEMENT_SIGNER_MISMATCH"
+
+
+def test_wallet_settlement_registration_rejects_missing_wallet_signer(monkeypatch):
+    job = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+    }
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
+        "status_name": "Finalized",
+        "recipient": job["address"],
+        # A Bradbury activator is not evidence of the wallet that signed the
+        # transaction, so it must not be accepted as a signer fallback.
+        "activator": job["client_address"],
+    }))
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_settlement(
+            job["address"], api.RegisterWalletSettlementRequest(transaction_hash="0x" + "9" * 64),
+        )
+
+    assert exc.value.detail["code"] == "SETTLEMENT_SIGNER_UNAVAILABLE"
 
 
 def test_wait_tolerates_unknown_bradbury_intermediate_status(monkeypatch):

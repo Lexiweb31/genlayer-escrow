@@ -88,6 +88,7 @@ export function friendlyApiError(error: unknown): string {
     TESTNET_REJECTION: "Bradbury rejected the transaction. No success has been recorded.",
     SETTLEMENT_TX_NOT_READY: "Bradbury is still indexing this refund transaction. Merit saved the hash and will retry without sending another transaction.",
     SETTLEMENT_SIGNER_MISMATCH: "This settlement was not signed by the assigned client wallet.",
+    SETTLEMENT_SIGNER_UNAVAILABLE: "Bradbury did not return enough signer evidence for this transaction. Try checking Bradbury again shortly.",
     LEGACY_SETTLEMENT_CONTRACT: "Legacy settlement contract — read only and unsafe to fund.",
     DEMO_ROLES_UNAVAILABLE: "Live demo actions require two different server-side demo signers.",
   };

@@ -1183,10 +1183,15 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
     status = _status_name(transaction)
     execution = str(transaction.get("tx_execution_result_name") or "")
     recipient = str(transaction.get("recipient") or "")
-    activator = str(
-        transaction.get("activator")
-        or transaction.get("sender")
+    # ``activator`` is the Bradbury account that moves an intelligent
+    # transaction into execution. It is not necessarily the wallet that
+    # originally signed the transaction. The explorer exposes that signer as
+    # ``From`` and genlayer-py returns it as ``sender`` (or ``from`` in older
+    # response shapes). Never treat the activator as proof of wallet ownership.
+    signer = str(
+        transaction.get("sender")
         or transaction.get("from")
+        or transaction.get("from_address")
         or ""
     )
     failed_statuses = {
@@ -1215,7 +1220,12 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
             "code": "SETTLEMENT_CONTRACT_MISMATCH",
             "message": "This transaction does not belong to the selected escrow.",
         })
-    if activator and activator.lower() != str(job["client_address"]).lower():
+    if not signer:
+        raise HTTPException(status_code=422, detail={
+            "code": "SETTLEMENT_SIGNER_UNAVAILABLE",
+            "message": "Bradbury did not return the wallet signer for this settlement transaction.",
+        })
+    if signer.lower() != str(job["client_address"]).lower():
         raise HTTPException(status_code=422, detail={
             "code": "SETTLEMENT_SIGNER_MISMATCH",
             "message": "Only the assigned client wallet can register this settlement transaction.",
