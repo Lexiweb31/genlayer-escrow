@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  bountyContractSource,
+  freelanceContractSource,
+} from "@/lib/server/contract-sources.generated";
 
 const contractSources = [
   "evaluate_submission.py",
@@ -24,5 +28,7 @@ describe("rendered public evidence", () => {
   it("packages both escrow sources with the deployed contract-source endpoint", () => {
     expect(nextConfig).toContain('"./contracts/freelance_escrow.py"');
     expect(nextConfig).toContain('"./contracts/bounty_escrow.py"');
+    expect(freelanceContractSource).toBe(contractSources.find(({ name }) => name === "freelance_escrow.py")?.source);
+    expect(bountyContractSource).toBe(contractSources.find(({ name }) => name === "bounty_escrow.py")?.source);
   });
 });
