@@ -9,6 +9,7 @@ const contractSources = [
   name,
   source: readFileSync(new URL(`../../contracts/${name}`, import.meta.url), "utf8"),
 }));
+const nextConfig = readFileSync(new URL("../../next.config.ts", import.meta.url), "utf8");
 
 describe("rendered public evidence", () => {
   for (const contract of contractSources) {
@@ -19,4 +20,9 @@ describe("rendered public evidence", () => {
       expect(contract.source).not.toContain("gl.nondet.web.get");
     });
   }
+
+  it("packages both escrow sources with the deployed contract-source endpoint", () => {
+    expect(nextConfig).toContain('"./contracts/freelance_escrow.py"');
+    expect(nextConfig).toContain('"./contracts/bounty_escrow.py"');
+  });
 });

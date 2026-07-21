@@ -4,7 +4,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   outputFileTracingIncludes: {
-    "/api/contract-source": ["./contracts/freelance_escrow.py"],
+    "/api/contract-source": [
+      "./contracts/freelance_escrow.py",
+      "./contracts/bounty_escrow.py",
+    ],
   },
 };
 
