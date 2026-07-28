@@ -6,8 +6,9 @@ import { ActivityIcon, ArrowIcon, CheckIcon, ClockIcon, CodeIcon, ContractIcon, 
 import { EscrowCoreMark, EscrowProductVisual, StoryEscrowCore } from "@/components/escrow-core";
 import { JobCard } from "@/components/job-card";
 import { MonoValue, StatusPill } from "@/components/ui";
-import { formatWei } from "@/lib/amount";
+import { formatWei, formatWeiCompact } from "@/lib/amount";
 import { useJobs } from "@/lib/hooks";
+import { hasSubmittedWork } from "@/lib/job-presentation";
 import { displayEscrowAmountWei, hasConfirmedEvaluation, settlementPresentation } from "@/lib/settlement";
 import { relativeTime, shortAddress } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ export default function HomePage() {
   const latest = data?.jobs.slice(0, 3) || [];
   const featured = latest[0];
   const featuredView = featured ? settlementPresentation(featured) : null;
+  const featuredSubmitted = hasSubmittedWork(featured);
   const registryUnavailable = Boolean(error && !data);
 
   useEffect(() => {
@@ -68,9 +70,9 @@ export default function HomePage() {
 
     <section className="protocol-strip" aria-label="Live Merit protocol status">
       <div><span className={registryUnavailable ? "protocol-offline" : "protocol-live"}><i/> Network</span><strong>{registryUnavailable ? "Status unknown" : data?.stats.network || "Bradbury"}</strong></div>
-      <div><span>Active locked</span><strong>{registryUnavailable ? "—" : formatWei(data?.stats.locked_wei)}</strong></div>
-      <div><span>Payment processing</span><strong>{registryUnavailable ? "—" : formatWei(data?.stats.pending_settlement_wei)}</strong></div>
-      <div><span>Payments confirmed</span><strong>{registryUnavailable ? "—" : formatWei(data?.stats.finalized_settlement_wei)}</strong></div>
+      <div><span>Active locked</span><strong>{registryUnavailable ? "—" : formatWeiCompact(data?.stats.locked_wei)}</strong></div>
+      <div><span>Payment processing</span><strong>{registryUnavailable ? "—" : formatWeiCompact(data?.stats.pending_settlement_wei)}</strong></div>
+      <div><span>Payments confirmed</span><strong>{registryUnavailable ? "—" : formatWeiCompact(data?.stats.finalized_settlement_wei)}</strong></div>
       <div><span>Registry sync</span><strong>{data?.stats.generated_at ? relativeTime(data.stats.generated_at) : loading ? "Connecting…" : "Offline"}</strong></div>
     </section>
 
@@ -86,7 +88,7 @@ export default function HomePage() {
       <header className="showcase-copy"><p className="section-index">03 / One control room</p><h2>Track the work and payment in one place</h2><p>See what was agreed, what the worker submitted, how it was evaluated, and whether payment is processing or confirmed.</p><Link className="text-link" href={featured ? `/jobs/${encodeURIComponent(featured.address)}` : "/jobs"}>Open a live job <ArrowIcon/></Link></header>
       <div className="showcase-window">
         <div className="showcase-window-bar"><span className="window-dots"><i/><i/><i/></span><MonoValue>merit / escrow-control-room</MonoValue><StatusPill tone={featuredView?.isPending ? "warning" : featuredView?.isFinalized ? "success" : "info"}>{featuredView?.label || "Live registry"}</StatusPill></div>
-        {registryUnavailable ? <div className="showcase-registry-error"><EscrowCoreMark/><StatusPill tone="danger">Registry offline</StatusPill><h3>Live job data is unavailable</h3><p>This panel will not invent a contract, balance, work status, or payment state while the backend is unreachable.</p><button className="button secondary" onClick={refresh} disabled={loading}>Retry live data <ActivityIcon/></button></div> : <div className="showcase-window-body"><div className="showcase-balance"><span>{featuredView?.isFinalized ? "Settled value" : "Protected payment"}</span><strong>{formatWei(featured ? displayEscrowAmountWei(featured) : undefined)}</strong><small>{featuredView?.isPending ? "Payment transaction submitted · awaiting confirmation" : featuredView?.isFinalized ? "Original escrow value fully accounted for" : featured ? "Job is still active" : "No registered jobs yet"}</small></div><div className="showcase-facts"><div><span>Contract</span><MonoValue>{featured ? shortAddress(featured.address, 10, 7) : "No registered contract"}</MonoValue></div><div><span>Work</span><strong>{featured?.submission_url ? "Public work submitted" : featured ? "Waiting for submission" : "No job selected"}</strong></div><div><span>Evaluation</span><strong>{featured && hasConfirmedEvaluation(featured) ? `${featured.score}/100 confirmed` : featured ? "Not evaluated yet" : "No job selected"}</strong></div><div><span>Payment</span><strong>{featuredView?.label || (featured ? "Waiting for job activity" : "No job selected")}</strong></div></div><div className="showcase-timeline"><span className={featured ? "done" : "future"}><i/><b>Requirements</b></span><span className={featured?.submission_url ? "done" : featured ? "active" : "future"}><i/><b>Work</b></span><span className={featured && hasConfirmedEvaluation(featured) ? "done" : "future"}><i/><b>Evaluation</b></span><span className={featuredView?.isFinalized ? "done" : featuredView?.isPending ? "active" : "future"}><i/><b>Payment</b></span></div></div>}
+        {registryUnavailable ? <div className="showcase-registry-error"><EscrowCoreMark/><StatusPill tone="danger">Registry offline</StatusPill><h3>Live job data is unavailable</h3><p>This panel will not invent a contract, balance, work status, or payment state while the backend is unreachable.</p><button className="button secondary" onClick={refresh} disabled={loading}>Retry live data <ActivityIcon/></button></div> : <div className="showcase-window-body"><div className="showcase-balance"><span>{featuredView?.isFinalized ? "Settled value" : "Protected payment"}</span><strong>{formatWei(featured ? displayEscrowAmountWei(featured) : undefined)}</strong><small>{featuredView?.isPending ? "Payment transaction submitted · awaiting confirmation" : featuredView?.isFinalized ? "Original escrow value fully accounted for" : featured ? "Job is still active" : "No registered jobs yet"}</small></div><div className="showcase-facts"><div><span>Contract</span><MonoValue>{featured ? shortAddress(featured.address, 10, 7) : "No registered contract"}</MonoValue></div><div><span>Work</span><strong>{featuredSubmitted ? "Public work submitted" : featured ? "Waiting for submission" : "No job selected"}</strong></div><div><span>Evaluation</span><strong>{featured && hasConfirmedEvaluation(featured) ? `${featured.score}/100 confirmed` : featured ? "Not evaluated yet" : "No job selected"}</strong></div><div><span>Payment</span><strong>{featuredView?.label || (featured ? "Waiting for job activity" : "No job selected")}</strong></div></div><div className="showcase-timeline"><span className={featured ? "done" : "future"}><i/><b>Requirements</b></span><span className={featuredSubmitted ? "done" : featured ? "active" : "future"}><i/><b>Work</b></span><span className={featured && hasConfirmedEvaluation(featured) ? "done" : "future"}><i/><b>Evaluation</b></span><span className={featuredView?.isFinalized ? "done" : featuredView?.isPending ? "active" : "future"}><i/><b>Payment</b></span></div></div>}
       </div>
     </section>
 

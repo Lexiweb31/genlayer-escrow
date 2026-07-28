@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { PlusIcon, RefreshIcon } from "@/components/icons";
 import { JobCard } from "@/components/job-card";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
-import { formatWei, safeWei } from "@/lib/amount";
+import { formatWeiCompact, safeWei } from "@/lib/amount";
 import { useJobs } from "@/lib/hooks";
 
 export default function BrowseJobsPage() {
@@ -35,9 +35,9 @@ export default function BrowseJobsPage() {
   return <div className="page-container">
     <PageHeader eyebrow="Shared marketplace" title="Browse protected jobs" description="See the same shared job records, exact GEN values, evaluation results, and payment status in every browser." actions={<><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh</button><Link className="button primary" href="/jobs/new"><PlusIcon/> Post a job</Link></>}/>
     {data && <section className="stat-grid marketplace-stats" aria-label="Marketplace totals">
-      <article><span>GEN locked in active escrow</span><strong>{formatWei(data.stats.locked_wei)}</strong><small>Still held by active contracts</small></article>
-      <article className="pending"><span>Payments processing</span><strong>{formatWei(data.stats.pending_settlement_wei)}</strong><small>{data.stats.settlement_pending} payment{data.stats.settlement_pending === 1 ? "" : "s"} awaiting confirmation</small></article>
-      <article><span>Payments confirmed</span><strong>{formatWei(data.stats.finalized_settlement_wei)}</strong><small>{data.stats.finalized_settlements} verified payment{data.stats.finalized_settlements === 1 ? "" : "s"}</small></article>
+      <article><span>GEN locked in active escrow</span><strong>{formatWeiCompact(data.stats.locked_wei)}</strong><small>Still held by active contracts</small></article>
+      <article className="pending"><span>Payments processing</span><strong>{formatWeiCompact(data.stats.pending_settlement_wei)}</strong><small>{data.stats.settlement_pending} payment{data.stats.settlement_pending === 1 ? "" : "s"} awaiting confirmation</small></article>
+      <article><span>Payments confirmed</span><strong>{formatWeiCompact(data.stats.finalized_settlement_wei)}</strong><small>{data.stats.finalized_settlements} verified payment{data.stats.finalized_settlements === 1 ? "" : "s"}</small></article>
       <article><span>Shared registry</span><strong>{data.stats.total_jobs}</strong><small>{data.stats.legacy_jobs} legacy · {data.stats.degraded_jobs} degraded</small></article>
     </section>}
     <section className="market-toolbar" aria-label="Marketplace filters"><label className="search-field"><span>Search</span><input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Title, requirements, or address"/></label><label><span>Job type</span><select value={jobType} onChange={(event) => { setJobType(event.target.value); setPage(1); }}><option value="ALL">All types</option><option value="DIRECT_HIRE">Direct Hire</option><option value="BOUNTY">Bounty mode</option></select></label><label><span>Status</span><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="ALL">All jobs</option><option value="ACTIVE">In progress</option><option value="SETTLEMENT_PENDING">Payment processing</option><option value="FINALIZED">Payment confirmed</option><option value="LEGACY_UNSAFE">Legacy read-only</option></select></label><label><span>Sort</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="NEWEST">Newest first</option><option value="OLDEST">Oldest first</option><option value="VALUE_HIGH">Highest GEN value</option><option value="VALUE_LOW">Lowest GEN value</option></select></label></section>

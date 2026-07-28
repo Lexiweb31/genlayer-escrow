@@ -29,6 +29,13 @@ export function formatWei(value: string | number | bigint | null | undefined): s
   return `${sign}${whole}${fraction ? `.${fraction}` : ""} GEN`;
 }
 
+export function formatWeiCompact(value: string | number | bigint | null | undefined): string {
+  const wei = safeWei(value);
+  const absolute = wei < 0n ? -wei : wei;
+  if (absolute > 0n && absolute < 1_000_000_000_000n) return `${wei} wei`;
+  return formatWei(wei);
+}
+
 export function isAtLeastMinimumDemoAmount(value: string): boolean {
   try {
     return BigInt(genToWei(value)) >= MIN_DEMO_AMOUNT_WEI;

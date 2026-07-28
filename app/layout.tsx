@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 const themeScript = `(()=>{try{const s=localStorage.getItem('merit-theme');const t=s==='light'||s==='dark'?s:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t}catch{document.documentElement.dataset.theme='dark'}})()`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${dmMono.variable}`}>
+  return <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning className={`${manrope.variable} ${dmMono.variable}`}>
     <head><script dangerouslySetInnerHTML={{ __html: themeScript }}/></head>
     <body><Providers><AppShell>{children}</AppShell></Providers></body>
   </html>;

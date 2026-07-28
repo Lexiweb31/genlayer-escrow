@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatWei, genToWei, isAtLeastMinimumDemoAmount, MIN_DEMO_AMOUNT_WEI, safeWei } from "@/lib/amount";
+import { formatWei, formatWeiCompact, genToWei, isAtLeastMinimumDemoAmount, MIN_DEMO_AMOUNT_WEI, safeWei } from "@/lib/amount";
 
 describe("GEN and wei conversion", () => {
   it("converts decimal GEN without floating-point math", () => {
@@ -28,6 +28,13 @@ describe("GEN and wei conversion", () => {
     expect(formatWei("999")).toBe("0.000000000000000999 GEN");
     expect(formatWei("980000000000000")).toBe("0.00098 GEN");
     expect(formatWei("0")).toBe("0 GEN");
+  });
+
+  it("keeps tiny aggregate balances readable without pretending they are zero", () => {
+    expect(formatWeiCompact("1")).toBe("1 wei");
+    expect(formatWeiCompact("999")).toBe("999 wei");
+    expect(formatWeiCompact("1000000000000")).toBe("0.000001 GEN");
+    expect(formatWeiCompact("980000000000000")).toBe("0.00098 GEN");
   });
 
   it("treats a malformed backend amount as zero instead of crashing the page", () => {

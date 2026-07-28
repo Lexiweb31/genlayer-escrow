@@ -7,7 +7,7 @@ import { CloseIcon, ContractIcon, HomeIcon, JobsIcon, MenuIcon, MoonIcon, PlusIc
 import { DemoModeNotice } from "@/components/demo-mode-notice";
 import { NotificationCenter } from "@/components/notification-center";
 import { useWalletMode } from "@/components/providers";
-import { shortAddress } from "@/lib/utils";
+import { walletAccountPresentation } from "@/lib/wallet-presentation";
 
 const navigation = [
   { href: "/", label: "Home", icon: HomeIcon, exact: true },
@@ -22,6 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [marketingMenuOpen, setMarketingMenuOpen] = useState(false);
   const wallet = useWalletMode();
+  const account = walletAccountPresentation(wallet);
 
   useEffect(() => {
     const saved = localStorage.getItem("merit-theme");
@@ -53,6 +54,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const active = (href: string, exact?: boolean) => exact ? pathname === href : pathname.startsWith(href);
 
+  if (pathname === "/test-delivery" || pathname === "/profile-card") return <>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content" tabIndex={-1}>{children}</main>
+  </>;
+
   if (pathname === "/") return <div className="marketing-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="marketing-header">
@@ -74,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
       <div className="sidebar-spacer"/>
       <button className="judge-button" onClick={() => setJudgeOpen(true)}><SparkIcon/><span><b>Judge mode</b><small>Presentation overview</small></span><kbd>⌘J</kbd></button>
-      <div className={`account-card ${wallet.mode === "wallet" ? "wallet-account" : ""}`}>{wallet.mode === "wallet" ? <WalletIcon/> : <ShieldIcon/>}<div><b>{wallet.mode === "wallet" ? shortAddress(wallet.address) : "Demo account"}</b><span>{wallet.mode === "wallet" ? (wallet.onBradbury ? wallet.balance || "Bradbury connected" : "Wrong network") : "Bradbury testnet"}</span></div><i/></div>
+      <div className={`account-card ${wallet.mode === "wallet" ? "wallet-account" : ""}`}>{wallet.mode === "wallet" ? <WalletIcon/> : <ShieldIcon/>}<div><b>{account.title}</b><span>{account.subtitle}</span></div><i className={account.indicator}/></div>
     </aside>
 
     <div className="app-column">

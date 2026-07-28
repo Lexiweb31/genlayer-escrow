@@ -3,15 +3,23 @@
 import { ShieldIcon, WalletIcon } from "@/components/icons";
 import { useDemoMode, useWalletMode } from "@/components/providers";
 import { shortAddress } from "@/lib/utils";
+import { walletAccountPresentation } from "@/lib/wallet-presentation";
 
 export function DemoModeNotice({ compact = false }: { compact?: boolean }) {
   const { demo, loading, error } = useDemoMode();
   const wallet = useWalletMode();
   const ready = Boolean(demo?.live_actions_enabled);
+  const walletPresentation = walletAccountPresentation({
+    mode: wallet.mode,
+    providerAvailable: wallet.providerAvailable,
+    address: wallet.address,
+    onBradbury: wallet.onBradbury,
+    balance: wallet.balance,
+  });
   if (wallet.mode === "wallet") return <aside className="demo-notice wallet-notice" aria-label="Wallet mode notice">
     <div className="demo-icon"><WalletIcon/></div>
     <div className="demo-copy">
-      <div className="demo-heading"><strong>Wallet mode</strong><span>{wallet.onBradbury ? "Bradbury connected" : "Network action required"}</span></div>
+      <div className="demo-heading"><strong>Wallet mode</strong><span>{walletPresentation.notice}</span></div>
       <p>{wallet.address ? <>Connected as <b>{shortAddress(wallet.address)}</b>{wallet.balance ? ` · ${wallet.balance}` : ""}. Your wallet controls this account.</> : "Connect a browser wallet to use your own Bradbury account."}</p>
       <details className="demo-technical"><summary>Wallet Mode status</summary><div>Connected wallets sign supported actions only when their address matches the required client or worker role. New escrows require a separate worker address, on-chain deployment verification, and durable marketplace registration. If registration is interrupted, Restore deployed job retries registration without another deployment. The app never falls back to a demo signer in Wallet Mode.</div></details>
       {wallet.error && <div className="wallet-error" role="alert">{wallet.error}</div>}

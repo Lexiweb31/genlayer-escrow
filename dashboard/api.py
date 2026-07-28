@@ -11,6 +11,7 @@ import json
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Lock, Thread
 from pathlib import Path
@@ -602,7 +603,16 @@ def _public_state(meta: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
 
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
-app = FastAPI(title="Merit Escrow Marketplace")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    start_marketplace_reconciliation()
+    try:
+        yield
+    finally:
+        stop_marketplace_reconciliation()
+
+
+app = FastAPI(title="Merit Escrow Marketplace", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -775,7 +785,6 @@ def _reconcile_loop(stop: Event, interval_seconds: int) -> None:
         stop.wait(interval_seconds)
 
 
-@app.on_event("startup")
 def start_marketplace_reconciliation() -> None:
     global _reconcile_thread
     if os.getenv("MARKETPLACE_RECONCILE_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
@@ -796,7 +805,6 @@ def start_marketplace_reconciliation() -> None:
     _reconcile_thread.start()
 
 
-@app.on_event("shutdown")
 def stop_marketplace_reconciliation() -> None:
     _RECONCILE_STOP.set()
     if _reconcile_thread and _reconcile_thread.is_alive():
