@@ -13,9 +13,11 @@
 /artifacts/
 /contracts/*
 !/contracts/freelance_escrow.py
+!/contracts/bounty_escrow.py
 /dashboard/
 /docs/
-/scripts/
+/scripts/*
+!/scripts/generate-contract-sources.mjs
 /tests/
 /DEMO_SCRIPT.md
 /gltest.config.yaml
