@@ -40,3 +40,6 @@ coverage/
 .agents/
 
 .pytest_cache/
+
+# Isolated agent implementation worktrees
+.worktrees/
