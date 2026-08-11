@@ -62,3 +62,34 @@ Result: `1 file, 6 tests passed`.
 ## Commits
 
 - Implementation: `c4bab4295fea9690bd1f2ef10a5251cb65b6b759` (`feat: expose truthful reconciliation states`)
+
+## Review follow-up: truthful detail responses and rendered guidance
+
+### Requirements addressed
+
+- No-snapshot detail reads now classify failures with `_reconciliation_error_code` and return only the public code and generic message; raw SDK/network diagnostics are not exposed.
+- Detail read success and stale fallback paths now use the row returned by `store.update_job`, so callers receive current `CURRENT`/cleared metadata or current `BACKING_OFF`/error metadata alongside `stale: true`.
+- The manage view now renders `reconciliationPresentation` for pending payments. It shows state-specific wording, the safe transaction link when known, elapsed reconciliation context, stale-data context, and an explicit action label for refresh, recovery, reconnect, or finality.
+
+### RED
+
+`PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend/test_store_and_demo_roles.py -k 'detail_read'`
+
+Result: `3 failed, 47 deselected`. The no-snapshot route returned `TESTNET_READ_FAILED` plus the private RPC diagnostic; stale and recovery responses returned their pre-update `IDLE` and `BACKING_OFF` metadata.
+
+`npm test -- --run tests/frontend/manage-reconciliation.test.ts`
+
+Result: `1 failed`. Server-rendered manage output contained the old hard-coded acceptance copy and lacked the mapper's elapsed context, transaction action link, and finality action.
+
+### GREEN
+
+- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend/test_store_and_demo_roles.py -k 'detail_read'` — `3 passed, 47 deselected`.
+- `npm test -- --run tests/frontend/manage-reconciliation.test.ts` — `1 file, 1 test passed`.
+- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend` — `50 passed` (one pre-existing third-party `websockets.legacy` deprecation warning).
+- `npm test -- --run tests/frontend/job-presentation.test.ts tests/frontend/settlement.test.ts tests/frontend/manage-reconciliation.test.ts` — `3 files, 15 tests passed`.
+- `npm run typecheck` and `npm run lint` — passed.
+- `npm run build` — passed.
+
+### Review fix commit
+
+- `4a55b96202f8be295c47286caad2841c6e4aa435` (`fix: return truthful reconciliation detail`)
