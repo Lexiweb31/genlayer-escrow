@@ -1051,7 +1051,7 @@ def get_job(job_id: str):
     try:
         public = _public_state(meta, _job_state(meta["address"]))
         live_status = str(public["job"].get("status") or "UNKNOWN")
-        store.update_job(
+        updated_meta = store.update_job(
             meta["address"],
             lifecycle_status=live_status,
             settlement=public["job"].get("settlement") or {},
@@ -1068,16 +1068,17 @@ def get_job(job_id: str):
             reconcile_error_code="",
         )
         return {
-            "meta": meta,
+            "meta": updated_meta,
             "job": public["job"],
             "result": public["result"],
             "addresses": _addresses(meta["address"]),
             "demo": _demo_public_config(),
         }
     except Exception as exc:
+        updated_meta = meta
         if not meta.get("legacy_contract"):
             try:
-                store.update_job(
+                updated_meta = store.update_job(
                     meta["address"],
                     reconcile_state="BACKING_OFF",
                     reconcile_attempted_at=utc_now(),
@@ -1086,7 +1087,7 @@ def get_job(job_id: str):
             except Exception:
                 pass
         if isinstance(cached_job, dict) and isinstance(cached_result, dict):
-            stale_meta = {**meta, "stale": True}
+            stale_meta = {**updated_meta, "stale": True}
             return {
                 "meta": stale_meta,
                 "job": {**cached_job, "stale": True},
@@ -1107,9 +1108,8 @@ def get_job(job_id: str):
                 "demo": _demo_public_config(),
             }
         raise HTTPException(status_code=502, detail={
-            "code": "TESTNET_READ_FAILED",
+            "code": _reconciliation_error_code(exc),
             "message": "Bradbury job state could not be read.",
-            "testnet_detail": str(exc),
         })
 
 

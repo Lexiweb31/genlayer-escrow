@@ -201,6 +201,74 @@ def test_reconcile_never_attempts_a_verified_final_snapshot(monkeypatch):
     api._refresh_marketplace_snapshots([record])
 
 
+def test_detail_read_without_snapshot_classifies_and_suppresses_network_diagnostics(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job(_record("0xno-snapshot"))
+    monkeypatch.setattr(api, "store", durable_store)
+    secret = "https://private-rpc.example/internal-token"
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError(secret)))
+
+    with pytest.raises(HTTPException) as exc:
+        api.get_job("0xno-snapshot")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == {
+        "code": "TESTNET_UNAVAILABLE",
+        "message": "Bradbury job state could not be read.",
+    }
+    assert secret not in str(exc.value.detail)
+
+
+def test_detail_read_failure_returns_updated_stale_reconciliation_metadata(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xdetail-stale"),
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "settlement": {"parent_transaction": "0xparent", "transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING"},
+            "result": {"status": "SETTLEMENT_PENDING"},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError("network unavailable")))
+
+    response = api.get_job("0xdetail-stale")
+
+    assert response["meta"]["reconcile_state"] == "BACKING_OFF"
+    assert response["meta"]["reconcile_error_code"] == "TESTNET_UNAVAILABLE"
+    assert response["meta"]["stale"] is True
+    assert response["job"]["status"] == "SETTLEMENT_PENDING"
+
+
+def test_detail_read_recovery_returns_cleared_reconciliation_metadata(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xdetail-current"),
+        "reconcile_state": "BACKING_OFF",
+        "reconcile_attempted_at": "2020-01-01T00:00:00+00:00",
+        "reconcile_error_code": "TESTNET_UNAVAILABLE",
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "settlement": {"transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING"},
+            "result": {"status": "SETTLEMENT_PENDING"},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: {
+        "job": {"status": "OPEN", "amount": 1000, "settlement": {}},
+        "result": {"status": "OPEN"},
+    })
+
+    response = api.get_job("0xdetail-current")
+
+    assert response["meta"]["reconcile_state"] == "CURRENT"
+    assert response["meta"]["reconcile_error_code"] == ""
+    assert response["meta"].get("stale") is not True
+    assert response["job"]["status"] == "OPEN"
+
+
 def test_legacy_import_is_read_only_and_does_not_overwrite_new_record(tmp_path):
     store = JobStore(tmp_path)
     store.add_job(_record())
