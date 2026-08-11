@@ -3,3 +3,4 @@ genvm-linter
 fastapi
 uvicorn
 python-dotenv
+eth-account>=0.13,<0.14

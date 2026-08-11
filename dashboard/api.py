@@ -13,12 +13,16 @@ import re
 import time
 from contextlib import asynccontextmanager
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Event, Lock, Thread
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from eth_keys.exceptions import BadSignature
+from eth_utils.exceptions import ValidationError
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -46,6 +50,14 @@ EXPLORER_ADDRESS = EXPLORER + "/address/"
 EXPLORER_TX = EXPLORER + "/tx/"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 TX_PATTERN = re.compile(r"^0x[0-9a-fA-F]{64}$")
+OWNERSHIP_PREFIX = "Merit needs-funding access"
+OWNERSHIP_MAX_SECONDS = 15 * 60
+_OWNERSHIP_MESSAGE_PATTERN = re.compile(
+    r"^Merit needs-funding access\n"
+    r"Address: (0x[0-9a-f]{40})\n"
+    r"Network: testnet_bradbury\n"
+    r"Expires: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)$"
+)
 
 deployments_path = ROOT / "artifacts" / "deployments.json"
 deployments = json.loads(deployments_path.read_text()) if deployments_path.exists() else {}
@@ -120,6 +132,76 @@ def _demo_public_config() -> dict[str, Any]:
             else DEMO_CONFIG_ERROR
         ),
     }
+
+
+class OwnedJobsRequest(BaseModel):
+    address: str = ""
+    message: str = ""
+    signature: str = ""
+    demo_mode: bool = False
+
+
+def _ownership_message(address: str, expires_at: datetime) -> str:
+    """Build the exact personal-sign message accepted for client recovery."""
+    expires = expires_at.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return "\n".join([
+        OWNERSHIP_PREFIX,
+        f"Address: {address.lower()}",
+        "Network: testnet_bradbury",
+        f"Expires: {expires}",
+    ])
+
+
+def _parse_ownership_message(message: str) -> tuple[str, datetime]:
+    match = _OWNERSHIP_MESSAGE_PATTERN.fullmatch(message)
+    if not match:
+        raise HTTPException(status_code=403, detail={
+            "code": "OWNERSHIP_PROOF_EXPIRED",
+            "message": "Sign a fresh Merit recovery message.",
+        })
+    try:
+        expires_at = datetime.fromisoformat(match.group(2).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail={
+            "code": "OWNERSHIP_PROOF_EXPIRED",
+            "message": "Sign a fresh Merit recovery message.",
+        }) from exc
+    return match.group(1), expires_at
+
+
+def _verify_owned_jobs_request(req: OwnedJobsRequest) -> str:
+    if req.demo_mode:
+        _require_live_roles()
+        return str(demo_client_account.address).lower()
+    if not ADDRESS_PATTERN.fullmatch(req.address):
+        raise HTTPException(status_code=422, detail={
+            "code": "INVALID_ROLE_ADDRESS",
+            "message": "Invalid client address.",
+        })
+    address, expires_at = _parse_ownership_message(req.message)
+    now = datetime.now(timezone.utc)
+    if (
+        address.lower() != req.address.lower()
+        or expires_at <= now
+        or expires_at > now + timedelta(seconds=OWNERSHIP_MAX_SECONDS)
+    ):
+        raise HTTPException(status_code=403, detail={
+            "code": "OWNERSHIP_PROOF_EXPIRED",
+            "message": "Sign a fresh Merit recovery message.",
+        })
+    try:
+        recovered = Account.recover_message(encode_defunct(text=req.message), signature=req.signature)
+    except (BadSignature, IndexError, TypeError, ValidationError, ValueError):
+        raise HTTPException(status_code=403, detail={
+            "code": "OWNERSHIP_PROOF_INVALID",
+            "message": "The signature does not match this client wallet.",
+        }) from None
+    if recovered.lower() != req.address.lower():
+        raise HTTPException(status_code=403, detail={
+            "code": "OWNERSHIP_PROOF_INVALID",
+            "message": "The signature does not match this client wallet.",
+        })
+    return recovered.lower()
 
 
 # ── Durable job registry ──────────────────────────────────────────────────────
@@ -935,9 +1017,19 @@ def _marketplace_stats(
     }
 
 
+def _job_stats(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Calculate marketplace statistics from precisely the jobs being served."""
+    return _marketplace_stats(
+        jobs,
+        total_jobs=len(jobs),
+        degraded_jobs=sum(1 for job in jobs if job.get("stale")),
+        legacy_jobs=sum(1 for job in jobs if job.get("status") == "LEGACY_UNSAFE"),
+    )
+
+
 @app.get("/api/stats")
 def stats():
-    return _list_jobs_snapshot()["stats"]
+    return _public_jobs_snapshot()["stats"]
 
 
 def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
@@ -1096,12 +1188,30 @@ def _list_jobs_snapshot() -> dict[str, Any]:
     }
 
 
+def _public_jobs_snapshot() -> dict[str, Any]:
+    snapshot = _list_jobs_snapshot()
+    jobs = [job for job in snapshot["jobs"] if job.get("status") != "UNFUNDED"]
+    return {**snapshot, "jobs": jobs, "stats": _job_stats(jobs)}
+
+
 @app.get("/api/jobs")
 def list_jobs(background_tasks: BackgroundTasks):
-    response = _list_jobs_snapshot()
+    response = _public_jobs_snapshot()
     if time.monotonic() - _marketplace_last_refresh > 15:
         background_tasks.add_task(_refresh_marketplace_snapshots, store.list_jobs())
     return response
+
+
+@app.post("/api/jobs/owned")
+def owned_jobs(req: OwnedJobsRequest) -> dict[str, Any]:
+    proven_client = _verify_owned_jobs_request(req)
+    jobs = [
+        job
+        for job in _list_jobs_snapshot()["jobs"]
+        if job.get("status") == "UNFUNDED"
+        and str(job.get("client_address", "")).lower() == proven_client
+    ]
+    return {"jobs": jobs}
 
 
 @app.get("/api/jobs/{job_id}")

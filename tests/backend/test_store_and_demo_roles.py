@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from threading import Barrier, Lock, Thread
 
 import pytest
+from eth_account import Account
+from eth_account.messages import encode_defunct
 from fastapi import HTTPException
 
 from dashboard.store import JobStore
@@ -442,6 +444,85 @@ def test_marketplace_stats_separate_locked_pending_and_finalized():
     assert summary["settlement_pending"] == 1
     assert summary["finalized_settlements"] == 1
     assert summary["finalized_settlement_wei"] == "2000"
+
+
+def test_public_jobs_exclude_unfunded_direct_hire_and_bounty(monkeypatch):
+    monkeypatch.setattr(api.store, "list_jobs", lambda: [
+        {**_record("0xdirect"), "job_type": "DIRECT_HIRE"},
+        {**_record("0xbounty"), "job_type": "BOUNTY"},
+        {
+            **_record("0xopen"),
+            "lifecycle_status": "OPEN",
+            "state_snapshot": {"status": "OPEN", "amount": "1000"},
+        },
+    ])
+
+    response = api._public_jobs_snapshot()
+
+    assert [job["address"] for job in response["jobs"]] == ["0xopen"]
+    assert response["stats"]["total_jobs"] == 1
+
+
+def test_owned_jobs_requires_a_signature_matching_the_recorded_client(monkeypatch):
+    account = Account.create()
+    other = Account.create()
+    monkeypatch.setattr(
+        api.store,
+        "list_jobs",
+        lambda: [{**_record("0xmine"), "client_address": account.address}],
+    )
+    message = api._ownership_message(
+        account.address,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    signature = Account.sign_message(encode_defunct(text=message), account.key).signature.hex()
+
+    owned = api.owned_jobs(
+        api.OwnedJobsRequest(address=account.address, message=message, signature=signature)
+    )
+
+    assert [job["address"] for job in owned["jobs"]] == ["0xmine"]
+    with pytest.raises(HTTPException) as error:
+        api.owned_jobs(
+            api.OwnedJobsRequest(address=other.address, message=message, signature=signature)
+        )
+    assert error.value.status_code == 403
+
+
+def test_owned_jobs_rejects_a_malformed_signature():
+    account = Account.create()
+    message = api._ownership_message(
+        account.address,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        api._verify_owned_jobs_request(
+            api.OwnedJobsRequest(address=account.address, message=message, signature="0x")
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail["code"] == "OWNERSHIP_PROOF_INVALID"
+
+
+def test_owned_jobs_endpoint_rejects_an_invalid_65_byte_signature():
+    account = Account.create()
+    message = api._ownership_message(
+        account.address,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        api.owned_jobs(
+            api.OwnedJobsRequest(
+                address=account.address,
+                message=message,
+                signature="0x" + "00" * 65,
+            )
+        )
+
+    assert error.value.status_code == 403
+    assert error.value.detail["code"] == "OWNERSHIP_PROOF_INVALID"
 
 
 def test_submitted_job_is_not_reported_as_evaluated(monkeypatch):
