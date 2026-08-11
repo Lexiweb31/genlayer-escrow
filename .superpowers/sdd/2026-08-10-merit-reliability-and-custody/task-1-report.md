@@ -48,3 +48,32 @@ Result: 38 passed.
 ## Commit
 
 - Implementation: `98b33009ea107d633aff93c5e726e3c0d4b4c7d1` (`feat: add idempotent transaction journal`)
+
+## Review correction: SDK lifecycle and hash canonicalization
+
+- Inspected the installed `genlayer_py` 0.16.3 `TransactionStatus` enum and added every exposed Bradbury consensus state to the explicit monotonic rank map, including `PROPOSING`, `COMMITTING`, `REVEALING`, appeal phases, and `READY_TO_FINALIZE`.
+- Terminal journal states now match the SDK's resolved or unrecoverable outcomes: `FINALIZED`, `CANCELED`, `UNDETERMINED`, validator/leader timeouts, and retained legacy failure states. `CANCELLED` is accepted as an input alias and persisted/returned as the SDK spelling `CANCELED`.
+- Enum-valued status inputs use their SDK `.value`; hashes are lowercased at the store boundary and all journal lookups compare case-insensitively, preventing case-variant replay rows.
+- Added behavior coverage for a real `TransactionStatus.PROPOSING` transition, cancellation alias handling and terminal exclusion from pending reconciliation, and mixed-case hash idempotency.
+
+### RED
+
+`PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend/test_store_and_demo_roles.py -k transaction`
+
+Result: 2 failed, 5 passed, 33 deselected. The SDK-enum test raised `ValueError` for `TransactionStatus.PROPOSING`; the case-variant replay test persisted distinct IDs (`1 != 2`).
+
+### GREEN
+
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend/test_store_and_demo_roles.py -k transaction`
+
+Result: 7 passed, 33 deselected.
+
+### Full backend regression
+
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend`
+
+Result: 40 passed.
+
+### Review correction commit
+
+- `865b851bf08606b433a3ae6a684bb6c6f7ece0f8` (`fix: normalize journal transaction lifecycle`)
