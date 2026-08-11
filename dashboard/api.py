@@ -294,7 +294,10 @@ class _TransactionIdentityError(ValueError):
 
 
 def _verify_transaction_identity(
-    tx_hash: str, expected_from: str, expected_to: str | None
+    tx_hash: str,
+    expected_from: str,
+    expected_to: str | None,
+    expected_action: Literal["DEPLOYMENT", "FINALIZE"],
 ) -> dict[str, Any]:
     """Read a Bradbury transaction and prove it belongs to this wallet action."""
     try:
@@ -338,10 +341,27 @@ def _verify_transaction_identity(
         raise _TransactionIdentityError("NETWORK_MISMATCH")
 
     if expected_to:
-        created_contract = str((transaction.get("tx_data_decoded") or {}).get("contract_address") or "")
+        decoded = transaction.get("tx_data_decoded")
+        if not isinstance(decoded, dict):
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+        created_contract = str(decoded.get("contract_address") or "")
         recipient = str(transaction.get("recipient") or "")
         if expected_to.lower() not in {created_contract.lower(), recipient.lower()}:
             raise _TransactionIdentityError("RECIPIENT_MISMATCH")
+    else:
+        decoded = transaction.get("tx_data_decoded")
+        if not isinstance(decoded, dict):
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+
+    if expected_action == "DEPLOYMENT":
+        if decoded.get("type") != "deploy":
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+    elif (
+        decoded.get("type") != "call"
+        or not isinstance(decoded.get("call_data"), dict)
+        or decoded["call_data"].get("method") != "finalize"
+    ):
+        raise _TransactionIdentityError("ACTION_MISMATCH")
     return transaction
 
 
@@ -1066,7 +1086,7 @@ def register_wallet_job(req: RegisterWalletJobRequest):
     replayed = _transaction_replayed(req.deployment_tx, req.address, "DEPLOYMENT")
     try:
         deployment = _verify_transaction_identity(
-            req.deployment_tx, req.client_address, req.address
+            req.deployment_tx, req.client_address, req.address, "DEPLOYMENT"
         )
     except _TransactionIdentityError as exc:
         if exc.code == "NOT_FOUND":
@@ -1083,6 +1103,11 @@ def register_wallet_job(req: RegisterWalletJobRequest):
             raise HTTPException(status_code=422, detail={
                 "code": "DEPLOYMENT_ADDRESS_MISMATCH",
                 "message": "The deployment transaction did not create the submitted escrow address.",
+            }) from exc
+        if exc.code == "ACTION_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_ACTION_MISMATCH",
+                "message": "The submitted transaction is not an escrow deployment.",
             }) from exc
         raise HTTPException(status_code=422, detail={
             "code": "DEPLOYMENT_TRANSACTION_IDENTITY_MISMATCH",
@@ -1152,7 +1177,7 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": req.deployment_tx,
         "created_at": utc_now(),
-    })
+    }, ignore_existing=True)
     response = {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
     if replayed:
         response["replayed"] = True
@@ -1359,7 +1384,7 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
     replayed = _transaction_replayed(tx_hash, job["address"], "SETTLEMENT")
     try:
         transaction = _verify_transaction_identity(
-            tx_hash, str(job["client_address"]), str(job["address"])
+            tx_hash, str(job["client_address"]), str(job["address"]), "FINALIZE"
         )
     except _TransactionIdentityError as exc:
         if exc.code == "NOT_FOUND":
@@ -1381,6 +1406,11 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
             raise HTTPException(status_code=422, detail={
                 "code": "SETTLEMENT_CONTRACT_MISMATCH",
                 "message": "This transaction does not belong to the selected escrow.",
+            }) from exc
+        if exc.code == "ACTION_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_ACTION_MISMATCH",
+                "message": "The settlement transaction is not an escrow finalize call.",
             }) from exc
         if exc.code == "SIGNER_UNAVAILABLE":
             raise HTTPException(status_code=422, detail={
