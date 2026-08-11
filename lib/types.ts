@@ -171,6 +171,17 @@ export interface JobsResponse {
   demo: DemoConfig;
 }
 
+export interface OwnedJobsRequest {
+  address: string;
+  message: string;
+  signature: string;
+  demo_mode: false;
+}
+
+export interface OwnedJobsResponse {
+  jobs: JobRecord[];
+}
+
 export interface JobDetailResponse {
   meta: JobRecord;
   job: JobRecord;

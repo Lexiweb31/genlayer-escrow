@@ -5,6 +5,8 @@ import type {
   DemoConfig,
   JobDetailResponse,
   JobsResponse,
+  OwnedJobsRequest,
+  OwnedJobsResponse,
   RegisterWalletJobInput,
   TransactionResponse,
 } from "@/lib/types";
@@ -49,6 +51,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const meritApi = {
   demoMode: (signal?: AbortSignal) => request<DemoConfig>("/api/demo-mode", { signal }),
   jobs: (signal?: AbortSignal) => request<JobsResponse>("/api/jobs", { signal }),
+  ownedJobs: (input: OwnedJobsRequest) =>
+    request<OwnedJobsResponse>("/api/jobs/owned", { method: "POST", body: JSON.stringify(input) }),
   job: (id: string, signal?: AbortSignal) =>
     request<JobDetailResponse>(`/api/jobs/${encodeURIComponent(id)}`, { signal }),
   createJob: (input: CreateJobInput) =>
