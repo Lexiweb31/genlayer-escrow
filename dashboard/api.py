@@ -285,6 +285,101 @@ def _get_address(receipt: dict[str, Any]) -> Optional[str]:
     return td.get("contract_address") or receipt.get("recipient")
 
 
+class _TransactionIdentityError(ValueError):
+    """A transaction could not be tied to the wallet operation that submitted it."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+def _verify_transaction_identity(
+    tx_hash: str, expected_from: str, expected_to: str | None
+) -> dict[str, Any]:
+    """Read a Bradbury transaction and prove it belongs to this wallet action."""
+    try:
+        transaction = dict(network_client.get_transaction(tx_hash))
+    except Exception as exc:
+        raise _TransactionIdentityError("NOT_FOUND") from exc
+
+    status = _status_name(transaction)
+    execution = str(transaction.get("tx_execution_result_name") or "")
+    failed_statuses = {
+        "CANCELED",
+        "UNDETERMINED",
+        "VALIDATORS_TIMEOUT",
+        "LEADER_TIMEOUT",
+        "OUT_OF_FEE",
+        "OUTOFFEE",
+    }
+    if status in failed_statuses or "ERROR" in execution.upper():
+        raise _TransactionIdentityError("REJECTED")
+    if status == "UNKNOWN":
+        raise _TransactionIdentityError("NOT_READY")
+
+    sender = str(
+        transaction.get("sender")
+        or transaction.get("from")
+        or transaction.get("from_address")
+        or ""
+    )
+    if not sender:
+        raise _TransactionIdentityError("SIGNER_UNAVAILABLE")
+    if sender.lower() != expected_from.lower():
+        raise _TransactionIdentityError("SIGNER_MISMATCH")
+
+    reported_network = str(
+        transaction.get("network")
+        or transaction.get("network_name")
+        or transaction.get("chain")
+        or ""
+    )
+    if reported_network and reported_network.replace("-", "_").lower() != "testnet_bradbury":
+        raise _TransactionIdentityError("NETWORK_MISMATCH")
+
+    if expected_to:
+        created_contract = str((transaction.get("tx_data_decoded") or {}).get("contract_address") or "")
+        recipient = str(transaction.get("recipient") or "")
+        if expected_to.lower() not in {created_contract.lower(), recipient.lower()}:
+            raise _TransactionIdentityError("RECIPIENT_MISMATCH")
+    return transaction
+
+
+def _transaction_replayed(tx_hash: str, job_address: str, kind: str) -> bool:
+    existing = store.get_transaction("testnet_bradbury", tx_hash)
+    if existing is None:
+        return False
+    if (
+        str(existing["job_address"]).lower() != job_address.lower()
+        or str(existing["kind"]) != kind
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "TRANSACTION_IDENTITY_CONFLICT",
+            "message": "This transaction hash is already associated with another wallet operation.",
+        })
+    return True
+
+
+def _record_verified_transaction(
+    tx_hash: str, transaction: dict[str, Any], job_address: str, kind: str
+) -> None:
+    try:
+        store.record_transaction({
+            "network": "testnet_bradbury",
+            "tx_hash": tx_hash,
+            "job_address": job_address,
+            "kind": kind,
+            "status": _status_name(transaction),
+            "verified_at": utc_now(),
+            "transaction": _json_safe(transaction),
+        })
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "TRANSACTION_IDENTITY_CONFLICT",
+            "message": "This transaction hash is already associated with another wallet operation.",
+        }) from exc
+
+
 def _status_name(transaction: dict[str, Any]) -> str:
     raw = transaction.get("status_name") or transaction.get("status") or "UNKNOWN"
     value = str(getattr(raw, "value", raw)).upper()
@@ -968,22 +1063,41 @@ def register_wallet_job(req: RegisterWalletJobRequest):
             "message": "Wallet-created escrows are unavailable until a valid public Bradbury fee recipient is configured.",
         })
 
+    replayed = _transaction_replayed(req.deployment_tx, req.address, "DEPLOYMENT")
     try:
-        deployment = dict(network_client.get_transaction(req.deployment_tx))
-    except Exception:
+        deployment = _verify_transaction_identity(
+            req.deployment_tx, req.client_address, req.address
+        )
+    except _TransactionIdentityError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_TX_NOT_FOUND",
+                "message": "The deployment transaction could not be verified on Bradbury.",
+            }) from exc
+        if exc.code in {"REJECTED", "NOT_READY"}:
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_TX_REJECTED",
+                "message": "The deployment transaction has not completed successfully on Bradbury.",
+            }) from exc
+        if exc.code == "RECIPIENT_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_ADDRESS_MISMATCH",
+                "message": "The deployment transaction did not create the submitted escrow address.",
+            }) from exc
         raise HTTPException(status_code=422, detail={
-            "code": "DEPLOYMENT_TX_NOT_FOUND",
-            "message": "The deployment transaction could not be verified on Bradbury.",
-        })
+            "code": "DEPLOYMENT_TRANSACTION_IDENTITY_MISMATCH",
+            "message": "The deployment transaction does not match the connected client wallet or Bradbury network.",
+        }) from exc
+
     deployment_status = _status_name(deployment)
     deployment_execution = str(deployment.get("tx_execution_result_name") or "")
-    deployed_address = _get_address(deployment)
+    deployed_address = str((deployment.get("tx_data_decoded") or {}).get("contract_address") or "")
     if deployment_status not in {"ACCEPTED", "FINALIZED"} or "ERROR" in deployment_execution.upper():
         raise HTTPException(status_code=422, detail={
             "code": "DEPLOYMENT_TX_REJECTED",
             "message": "The deployment transaction has not completed successfully on Bradbury.",
         })
-    if not deployed_address or str(deployed_address).lower() != req.address.lower():
+    if not deployed_address or deployed_address.lower() != req.address.lower():
         raise HTTPException(status_code=422, detail={
             "code": "DEPLOYMENT_ADDRESS_MISMATCH",
             "message": "The deployment transaction did not create the submitted escrow address.",
@@ -992,7 +1106,9 @@ def register_wallet_job(req: RegisterWalletJobRequest):
     try:
         state = _job_state(req.address)["job"]
     except Exception:
-        raise HTTPException(status_code=422, detail={"code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."})
+        raise HTTPException(status_code=422, detail={
+            "code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."
+        })
     expected = {
         "client": req.client_address,
         "platform": platform_address,
@@ -1014,9 +1130,13 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         if not matches:
             raise HTTPException(status_code=422, detail={"code": "CONTRACT_METADATA_MISMATCH", "message": "The deployed contract does not match the submitted job details."})
 
+    _record_verified_transaction(req.deployment_tx, deployment, req.address, "DEPLOYMENT")
     existing = store.get_job(req.address)
     if existing:
-        return {"job": existing, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+        response = {"job": existing, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+        if replayed:
+            response["replayed"] = True
+        return response
     record = store.add_job({
         "id": req.address,
         "address": req.address,
@@ -1033,7 +1153,10 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         "deployment_tx": req.deployment_tx,
         "created_at": utc_now(),
     })
-    return {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+    response = {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+    if replayed:
+        response["replayed"] = True
+    return response
 
 
 @app.post("/api/jobs")
@@ -1233,62 +1356,56 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
             "code": "INVALID_SETTLEMENT_TX",
             "message": "Invalid settlement transaction hash.",
         })
+    replayed = _transaction_replayed(tx_hash, job["address"], "SETTLEMENT")
     try:
-        transaction = dict(network_client.get_transaction(tx_hash))
-    except Exception:
+        transaction = _verify_transaction_identity(
+            tx_hash, str(job["client_address"]), str(job["address"])
+        )
+    except _TransactionIdentityError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_NOT_FOUND",
+                "message": "The settlement transaction could not be verified on Bradbury.",
+            }) from exc
+        if exc.code == "REJECTED":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_REJECTED",
+                "message": "The settlement transaction failed on Bradbury.",
+            }) from exc
+        if exc.code == "NOT_READY":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_NOT_READY",
+                "message": "Bradbury has not indexed the settlement transaction yet. Merit will retry it from this browser.",
+            }) from exc
+        if exc.code == "RECIPIENT_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_CONTRACT_MISMATCH",
+                "message": "This transaction does not belong to the selected escrow.",
+            }) from exc
+        if exc.code == "SIGNER_UNAVAILABLE":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_SIGNER_UNAVAILABLE",
+                "message": "Bradbury did not return the wallet signer for this settlement transaction.",
+            }) from exc
+        if exc.code == "SIGNER_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_SIGNER_MISMATCH",
+                "message": "Only the assigned client wallet can register this settlement transaction.",
+            }) from exc
         raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_NOT_FOUND",
-            "message": "The settlement transaction could not be verified on Bradbury.",
-        })
+            "code": "SETTLEMENT_TRANSACTION_IDENTITY_MISMATCH",
+            "message": "The settlement transaction does not match the Bradbury network.",
+        }) from exc
+
     status = _status_name(transaction)
-    execution = str(transaction.get("tx_execution_result_name") or "")
     recipient = str(transaction.get("recipient") or "")
-    # ``activator`` is the Bradbury account that moves an intelligent
-    # transaction into execution. It is not necessarily the wallet that
-    # originally signed the transaction. The explorer exposes that signer as
-    # ``From`` and genlayer-py returns it as ``sender`` (or ``from`` in older
-    # response shapes). Never treat the activator as proof of wallet ownership.
-    signer = str(
-        transaction.get("sender")
-        or transaction.get("from")
-        or transaction.get("from_address")
-        or ""
-    )
-    failed_statuses = {
-        "CANCELED",
-        "UNDETERMINED",
-        "VALIDATORS_TIMEOUT",
-        "LEADER_TIMEOUT",
-        "OUT_OF_FEE",
-        "OUTOFFEE",
-    }
     # Wallet Mode reports the hash as soon as the browser broadcasts it. Save
     # that reference while Bradbury is still processing so a refresh, closed
     # tab, or short API timing race cannot orphan an otherwise valid refund.
-    if status in failed_statuses or "ERROR" in execution.upper():
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_REJECTED",
-            "message": "The settlement transaction failed on Bradbury.",
-        })
-    if status == "UNKNOWN":
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_NOT_READY",
-            "message": "Bradbury has not indexed the settlement transaction yet. Merit will retry it from this browser.",
-        })
     if recipient.lower() != str(job["address"]).lower():
         raise HTTPException(status_code=422, detail={
             "code": "SETTLEMENT_CONTRACT_MISMATCH",
             "message": "This transaction does not belong to the selected escrow.",
-        })
-    if not signer:
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_SIGNER_UNAVAILABLE",
-            "message": "Bradbury did not return the wallet signer for this settlement transaction.",
-        })
-    if signer.lower() != str(job["client_address"]).lower():
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_SIGNER_MISMATCH",
-            "message": "Only the assigned client wallet can register this settlement transaction.",
         })
     state = _job_state(job["address"])
     chain_job = state["job"]
@@ -1308,9 +1425,10 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
         "explorer": EXPLORER_TX + tx_hash,
         "submitted_at": (job.get("settlement") or {}).get("submitted_at") or utc_now(),
     }
+    _record_verified_transaction(tx_hash, transaction, job["address"], "SETTLEMENT")
     store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
     settlement = _refresh_settlement({**job, "settlement": settlement}, chain_job)
-    return {
+    response = {
         "tx": tx_hash,
         "status": settlement.get("transfer_status") or "PENDING_FINALIZATION",
         "settlement": _settlement_for_wire(settlement),
@@ -1318,3 +1436,6 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
         "signer_role": "connected Bradbury client wallet",
         "network": "testnet_bradbury",
     }
+    if replayed:
+        response["replayed"] = True
+    return response

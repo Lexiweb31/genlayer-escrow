@@ -383,6 +383,8 @@ def _configure_valid_wallet_registration(monkeypatch):
         SimpleNamespace(get_transaction=lambda _tx: {
             "status_name": TransactionStatus.ACCEPTED,
             "tx_execution_result_name": "SUCCESS",
+            "sender": request.client_address,
+            "network": "testnet_bradbury",
             "tx_data_decoded": {"contract_address": request.address},
         }),
     )
@@ -402,6 +404,8 @@ def _configure_valid_wallet_registration(monkeypatch):
 def test_wallet_registration_verifies_transaction_contract_and_platform(monkeypatch):
     request, _platform = _configure_valid_wallet_registration(monkeypatch)
     monkeypatch.setattr(api.store, "get_job", lambda _address: None)
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api.store, "record_transaction", lambda record: record)
     saved = {}
     monkeypatch.setattr(api.store, "add_job", lambda record: saved.update(record) or record)
     response = api.register_wallet_job(request)
@@ -409,6 +413,28 @@ def test_wallet_registration_verifies_transaction_contract_and_platform(monkeypa
     assert saved["client_address"] == request.client_address
     assert saved["worker_address"] == request.worker_address
     assert saved["deployment_tx"] == request.deployment_tx
+
+
+def test_wallet_registration_replay_returns_the_registered_job(monkeypatch, tmp_path):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(get_transaction=lambda _tx: {
+            "status_name": TransactionStatus.ACCEPTED,
+            "tx_execution_result_name": "SUCCESS",
+            "sender": request.client_address,
+            "network": "testnet_bradbury",
+            "tx_data_decoded": {"contract_address": request.address},
+        }),
+    )
+    monkeypatch.setattr(api, "store", JobStore(tmp_path))
+
+    first = api.register_wallet_job(request)
+    second = api.register_wallet_job(request)
+
+    assert second["job"]["address"] == first["job"]["address"]
+    assert second["replayed"] is True
 
 
 def test_wallet_registration_rejects_unverified_deployment_transaction(monkeypatch):
@@ -462,6 +488,8 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
     }})
     saved = {}
     monkeypatch.setattr(api.store, "update_job", lambda _address, **changes: saved.update(changes))
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api.store, "record_transaction", lambda record: record)
     monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
 
     response = api.register_wallet_settlement(
@@ -471,6 +499,46 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
     assert saved["settlement"]["parent_transaction"] == tx_hash
     assert saved["settlement"]["parent_status"] == "ACTIVATED"
     assert response["status"] == "PENDING_FINALIZATION"
+
+
+def test_settlement_transaction_identity_conflict_cannot_attach_to_another_job(monkeypatch, tmp_path):
+    job_a = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+        "settlement": {},
+    }
+    job_b = {
+        **_record("0x" + "3" * 40),
+        "client_address": job_a["client_address"],
+        "settlement": {},
+    }
+    tx_hash = "0x" + "9" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job_a)
+    journal.add_job(job_b)
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
+        "status_name": "Activated",
+        "recipient": job_a["address"],
+        "sender": job_a["client_address"],
+        "network": "testnet_bradbury",
+    }))
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "status": "SETTLEMENT_PENDING",
+        "settlement": {"outcome": "REFUNDED", "transfer_status": "PENDING_FINALIZATION"},
+    }})
+    monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
+
+    api.register_wallet_settlement(
+        job_a["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+    )
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_settlement(
+            job_b["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "TRANSACTION_IDENTITY_CONFLICT"
 
 
 def test_wallet_settlement_registration_rejects_wrong_client(monkeypatch):
