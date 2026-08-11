@@ -58,3 +58,10 @@
   broadcast, including hashes available before receipt polling.
 - Fixture URLs are parsed with `urlsplit` and reject malformed, credentialed,
   localhost, loopback, private, link-local, reserved, and unspecified hosts.
+
+## P2 follow-up
+
+- Literal fixture IPs must now be globally routable. Regression coverage rejects
+  CGNAT `100.64.0.1` and deprecated IPv6 site-local `fec0::1`; the latter has
+  an explicit guard because the current Python `ipaddress` classification marks
+  it global.

@@ -168,7 +168,9 @@ def validate_fixture_url(value: str, name: str) -> str:
         address = ipaddress.ip_address(normalized_host)
     except ValueError:
         address = None
-    if address and (address.is_private or address.is_loopback or address.is_link_local or address.is_unspecified or address.is_reserved):
+    # Python currently labels deprecated IPv6 site-local addresses as global,
+    # so retain the explicit site-local guard alongside the global requirement.
+    if address and (not address.is_global or address.is_site_local):
         raise ConfigurationError(f"{name} must use a public, non-local host.")
     if port is not None and not 1 <= port <= 65535:
         raise ConfigurationError(f"{name} must use a public http(s) fixture URL.")

@@ -85,6 +85,8 @@ def test_rpc_chain_identity_must_match_bradbury_before_live_execution():
     "https://[::1]/proof",
     "https://169.254.1.2/proof",
     "https://10.0.0.2/proof",
+    "https://100.64.0.1/proof",
+    "https://[fec0::1]/proof",
     "https://example.com@127.0.0.1/proof",
     "not-a-url",
 ])
