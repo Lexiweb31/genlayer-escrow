@@ -24,3 +24,5 @@ services:
         value: "1"
       - key: MARKETPLACE_RECONCILE_SECONDS
         value: "30"
+      - key: MERIT_RELEASE
+        sync: false

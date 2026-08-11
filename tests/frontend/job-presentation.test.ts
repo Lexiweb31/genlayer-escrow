@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasSubmittedWork } from "@/lib/job-presentation";
+import { hasSubmittedWork, reconciliationPresentation } from "@/lib/job-presentation";
 import type { JobRecord } from "@/lib/types";
 
 const job = (overrides: Partial<JobRecord>): JobRecord => ({
@@ -26,5 +26,38 @@ describe("job lifecycle presentation", () => {
       job_type: "BOUNTY",
       submissions: [{ position: 1, submitter: "0xworker", url: "https://example.com/entry" }],
     }))).toBe(true);
+  });
+
+  it("requires recovery when settlement is pending without a verified transaction hash", () => {
+    const view = reconciliationPresentation(job({
+      status: "SETTLEMENT_PENDING",
+      settlement: { transfer_status: "PENDING_FINALIZATION" },
+      reconcile_age_seconds: 45,
+    }));
+    expect(view.state).toBe("RECOVERY_REQUIRED");
+    expect(view.action).toBe("recover_by_hash");
+    expect(view.elapsed).toBe("45s ago");
+  });
+
+  it("does not present a cancelled settlement as indefinitely pending", () => {
+    const view = reconciliationPresentation(job({
+      status: "SETTLEMENT_PENDING",
+      settlement: { parent_transaction: "0xcancelled", parent_status: "CANCELED", transfer_status: "FAILED_FINALIZATION" },
+      reconcile_age_seconds: 90,
+    }));
+    expect(view.state).toBe("CANCELLED");
+    expect(view.transaction).toBe("0xcancelled");
+    expect(view.action).toBe("reconnect_correct_wallet");
+  });
+
+  it("keeps Bradbury acceptance distinct from transfer finality", () => {
+    const view = reconciliationPresentation(job({
+      status: "SETTLEMENT_PENDING",
+      settlement: { parent_transaction: "0xaccepted", parent_status: "ACCEPTED", transfer_status: "PENDING_FINALIZATION" },
+      reconcile_age_seconds: 12,
+    }));
+    expect(view.state).toBe("ACCEPTED_NOT_FINALIZED");
+    expect(view.transaction).toBe("0xaccepted");
+    expect(view.action).toBe("wait_for_finality");
   });
 });

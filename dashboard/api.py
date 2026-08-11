@@ -13,12 +13,13 @@ import re
 import time
 from contextlib import asynccontextmanager
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
 from threading import Event, Lock, Thread
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
@@ -36,6 +37,7 @@ from genlayer_py.types.calldata import CalldataAddress
 from genlayer_py.types.transactions import TransactionStatus
 
 from dashboard.store import JobStore, utc_now
+from dashboard.telemetry import log_event
 
 
 # ── Network and account configuration ─────────────────────────────────────────
@@ -285,6 +287,122 @@ def _get_address(receipt: dict[str, Any]) -> Optional[str]:
     return td.get("contract_address") or receipt.get("recipient")
 
 
+class _TransactionIdentityError(ValueError):
+    """A transaction could not be tied to the wallet operation that submitted it."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+def _verify_transaction_identity(
+    tx_hash: str,
+    expected_from: str,
+    expected_to: str | None,
+    expected_action: Literal["DEPLOYMENT", "FINALIZE"],
+) -> dict[str, Any]:
+    """Read a Bradbury transaction and prove it belongs to this wallet action."""
+    try:
+        transaction = dict(network_client.get_transaction(tx_hash))
+    except Exception as exc:
+        raise _TransactionIdentityError("NOT_FOUND") from exc
+
+    status = _status_name(transaction)
+    execution = str(transaction.get("tx_execution_result_name") or "")
+    failed_statuses = {
+        "CANCELED",
+        "UNDETERMINED",
+        "VALIDATORS_TIMEOUT",
+        "LEADER_TIMEOUT",
+        "OUT_OF_FEE",
+        "OUTOFFEE",
+    }
+    if status in failed_statuses or "ERROR" in execution.upper():
+        raise _TransactionIdentityError("REJECTED")
+    if status == "UNKNOWN":
+        raise _TransactionIdentityError("NOT_READY")
+
+    sender = str(
+        transaction.get("sender")
+        or transaction.get("from")
+        or transaction.get("from_address")
+        or ""
+    )
+    if not sender:
+        raise _TransactionIdentityError("SIGNER_UNAVAILABLE")
+    if sender.lower() != expected_from.lower():
+        raise _TransactionIdentityError("SIGNER_MISMATCH")
+
+    reported_network = str(
+        transaction.get("network")
+        or transaction.get("network_name")
+        or transaction.get("chain")
+        or ""
+    )
+    if reported_network and reported_network.replace("-", "_").lower() != "testnet_bradbury":
+        raise _TransactionIdentityError("NETWORK_MISMATCH")
+
+    if expected_to:
+        decoded = transaction.get("tx_data_decoded")
+        if not isinstance(decoded, dict):
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+        created_contract = str(decoded.get("contract_address") or "")
+        recipient = str(transaction.get("recipient") or "")
+        if expected_to.lower() not in {created_contract.lower(), recipient.lower()}:
+            raise _TransactionIdentityError("RECIPIENT_MISMATCH")
+    else:
+        decoded = transaction.get("tx_data_decoded")
+        if not isinstance(decoded, dict):
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+
+    if expected_action == "DEPLOYMENT":
+        if decoded.get("type") != "deploy":
+            raise _TransactionIdentityError("ACTION_MISMATCH")
+    elif (
+        decoded.get("type") != "call"
+        or not isinstance(decoded.get("call_data"), dict)
+        or decoded["call_data"].get("method") != "finalize"
+    ):
+        raise _TransactionIdentityError("ACTION_MISMATCH")
+    return transaction
+
+
+def _transaction_replayed(tx_hash: str, job_address: str, kind: str) -> bool:
+    existing = store.get_transaction("testnet_bradbury", tx_hash)
+    if existing is None:
+        return False
+    if (
+        str(existing["job_address"]).lower() != job_address.lower()
+        or str(existing["kind"]) != kind
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "TRANSACTION_IDENTITY_CONFLICT",
+            "message": "This transaction hash is already associated with another wallet operation.",
+        })
+    return True
+
+
+def _record_verified_transaction(
+    tx_hash: str, transaction: dict[str, Any], job_address: str, kind: str
+) -> None:
+    try:
+        store.record_transaction({
+            "network": "testnet_bradbury",
+            "tx_hash": tx_hash,
+            "job_address": job_address,
+            "kind": kind,
+            "status": _status_name(transaction),
+            "verified_at": utc_now(),
+            "transaction": _json_safe(transaction),
+        })
+        log_event("registry_write", job=job_address, tx_hash=tx_hash, action="verified_transaction")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "TRANSACTION_IDENTITY_CONFLICT",
+            "message": "This transaction hash is already associated with another wallet operation.",
+        }) from exc
+
+
 def _status_name(transaction: dict[str, Any]) -> str:
     raw = transaction.get("status_name") or transaction.get("status") or "UNKNOWN"
     value = str(getattr(raw, "value", raw)).upper()
@@ -403,6 +521,7 @@ def _preflight(job: dict[str, Any], method: str, role: str) -> dict[str, Any]:
 def _action_error(exc: Exception) -> HTTPException:
     if isinstance(exc, HTTPException):
         return exc
+    log_event("bradbury_failure", error_code="ACTION_FAILED")
     message = str(exc)
     lowered = message.lower()
     if "insufficient" in lowered or "balance" in lowered or "funds" in lowered:
@@ -535,7 +654,10 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
         # do not always produce a child GenLayer transaction ID. Confirm only
         # when every contract-recorded transfer matches a finalized message, or
         # when the network exposes an inspectable triggered transaction.
-        failed_statuses = {"CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"}
+        failed_statuses = {
+            "CANCELED", "CANCELLED", "UNDETERMINED", "VALIDATORS_TIMEOUT",
+            "LEADER_TIMEOUT", "FAILED", "REJECTED",
+        }
         if parent_status in failed_statuses:
             settlement["transfer_status"] = "FAILED_FINALIZATION"
             settlement["status_error"] = f"Bradbury settlement transaction ended with {parent_status}."
@@ -547,9 +669,28 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
         else:
             settlement["transfer_status"] = "PENDING_FINALIZATION"
         store.update_job(meta["address"], settlement=settlement)
+        log_event(
+            "registry_write",
+            job=meta["address"],
+            action="settlement_verification",
+            status=settlement.get("transfer_status"),
+        )
+        log_event(
+            "settlement_verification",
+            job=meta["address"],
+            tx_hash=parent_tx,
+            outcome=settlement.get("outcome"),
+            status=settlement.get("transfer_status"),
+        )
     except Exception as exc:
         settlement["transfer_status"] = settlement.get("transfer_status") or "PENDING_FINALIZATION"
         settlement["status_error"] = str(exc)
+        log_event(
+            "settlement_verification_failure",
+            job=meta["address"],
+            tx_hash=parent_tx,
+            error_code="VERIFICATION_FAILED",
+        )
     return settlement
 
 
@@ -626,6 +767,24 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def log_request_latency(request: Request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        log_event(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (Path(__file__).parent / "index.html").read_text()
@@ -640,6 +799,11 @@ def health():
         "storage": "sqlite",
         "persistent_data_dir_configured": bool(os.getenv("PERSIST_DATA_DIR")),
         "demo": _demo_public_config(),
+        "release": os.getenv("MERIT_RELEASE", "unknown"),
+        "registry": "sqlite",
+        "reconciler": _reconciler_health(),
+        "oldest_pending_seconds": _oldest_pending_seconds(),
+        "last_reconcile_at": _last_reconcile_at,
     }
 
 
@@ -657,6 +821,62 @@ _MARKETPLACE_REFRESH_LOCK = Lock()
 _marketplace_last_refresh = 0.0
 _RECONCILE_STOP = Event()
 _reconcile_thread: Thread | None = None
+_last_reconcile_at: str | None = None
+
+
+def _reconciliation_error_code(exc: Exception) -> str:
+    """Return a stable public category without persisting SDK diagnostics."""
+    message = str(exc).lower()
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
+        term in message for term in ("network", "connection", "timeout", "temporarily unavailable")
+    ):
+        return "TESTNET_UNAVAILABLE"
+    if "rate limit" in message or "too many requests" in message or "429" in message:
+        return "TESTNET_RATE_LIMITED"
+    if "not found" in message or "404" in message:
+        return "TESTNET_NOT_FOUND"
+    return "TESTNET_READ_FAILED"
+
+
+def _reconcile_backoff_seconds() -> int:
+    try:
+        return min(300, max(10, int(os.getenv("MARKETPLACE_RECONCILE_BACKOFF_SECONDS", "30"))))
+    except ValueError:
+        return 30
+
+
+def _is_verified_final_snapshot(record: dict[str, Any]) -> bool:
+    snapshot = record.get("state_snapshot") or {}
+    settlement = snapshot.get("settlement") or record.get("settlement") or {}
+    status = snapshot.get("status") or record.get("lifecycle_status")
+    return status in _FINAL_STATUSES and settlement.get("transfer_status") == "FINALIZED"
+
+
+def _is_reconcile_backing_off(record: dict[str, Any]) -> bool:
+    return (
+        record.get("reconcile_state") == "BACKING_OFF"
+        and isinstance(record.get("reconcile_age_seconds"), int)
+        and record["reconcile_age_seconds"] < _reconcile_backoff_seconds()
+    )
+
+
+def _oldest_pending_seconds() -> int | None:
+    created_at = store.oldest_pending_transaction_created_at()
+    if not created_at:
+        return None
+    try:
+        started = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _reconciler_health() -> str:
+    if os.getenv("MARKETPLACE_RECONCILE_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+        return "disabled"
+    return "running" if _reconcile_thread and _reconcile_thread.is_alive() else "stopped"
 
 
 def _wei_int(value: Any) -> int:
@@ -729,11 +949,8 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
             record
             for record in records
             if not record.get("legacy_contract")
-            and not (
-                isinstance((record.get("state_snapshot") or {}).get("job"), dict)
-                and (record.get("state_snapshot") or {}).get("status") in _FINAL_STATUSES
-                and ((record.get("state_snapshot") or {}).get("settlement") or {}).get("transfer_status") == "FINALIZED"
-            )
+            and not _is_verified_final_snapshot(record)
+            and not _is_reconcile_backing_off(record)
         ]
         worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
@@ -757,10 +974,36 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
                         lifecycle_status=str(snapshot["status"] or "UNKNOWN"),
                         settlement=snapshot["settlement"],
                         state_snapshot=snapshot,
+                        reconcile_state="CURRENT",
+                        reconcile_attempted_at=utc_now(),
+                        reconcile_error_code="",
                     )
-                except Exception:
+                    log_event(
+                        "registry_write",
+                        job=meta["address"],
+                        action="reconciliation",
+                        status="CURRENT",
+                    )
+                    log_event("reconciliation_succeeded", job=meta["address"], status=snapshot["status"])
+                except Exception as exc:
                     # Preserve the last known-good snapshot when Bradbury has a
-                    # transient read failure.
+                    # transient read failure. The durable backoff timestamp
+                    # prevents request-driven refreshes from retrying in a loop
+                    # after a process restart.
+                    store.update_job(
+                        meta["address"],
+                        reconcile_state="BACKING_OFF",
+                        reconcile_attempted_at=utc_now(),
+                        reconcile_error_code=_reconciliation_error_code(exc),
+                    )
+                    error_code = _reconciliation_error_code(exc)
+                    log_event(
+                        "registry_write",
+                        job=meta["address"],
+                        action="reconciliation",
+                        status="BACKING_OFF",
+                    )
+                    log_event("reconciliation_failure", job=meta["address"], error_code=error_code)
                     continue
         _marketplace_last_refresh = time.monotonic()
     finally:
@@ -769,7 +1012,15 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
 
 def _reconcile_once() -> None:
     """Persist current contract state without requiring an open browser."""
-    _refresh_marketplace_snapshots(store.list_jobs())
+    global _last_reconcile_at
+    try:
+        _refresh_marketplace_snapshots(store.list_jobs())
+        log_event("reconciliation_completed", outcome="completed")
+    except Exception:
+        log_event("reconciliation_failure", error_code="RECONCILE_FAILED")
+        raise
+    finally:
+        _last_reconcile_at = utc_now()
 
 
 def _reconcile_loop(stop: Event, interval_seconds: int) -> None:
@@ -829,6 +1080,7 @@ def _list_jobs_snapshot() -> dict[str, Any]:
             entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
             entry["score"] = snapshot.get("score") if entry["evaluation_complete"] else None
             entry["settlement"] = snapshot.get("settlement") or meta.get("settlement") or {}
+            entry["stale"] = bool(meta.get("reconcile_error_code"))
             if not snapshot:
                 degraded += 1
         output.append(entry)
@@ -877,10 +1129,18 @@ def get_job(job_id: str):
             "addresses": _addresses(meta["address"]),
             "demo": _demo_public_config(),
         }
+    if _is_reconcile_backing_off(meta) and isinstance(cached_job, dict) and isinstance(cached_result, dict):
+        return {
+            "meta": {**meta, "stale": True},
+            "job": {**cached_job, "stale": True},
+            "result": cached_result,
+            "addresses": _addresses(meta["address"]),
+            "demo": _demo_public_config(),
+        }
     try:
         public = _public_state(meta, _job_state(meta["address"]))
         live_status = str(public["job"].get("status") or "UNKNOWN")
-        store.update_job(
+        updated_meta = store.update_job(
             meta["address"],
             lifecycle_status=live_status,
             settlement=public["job"].get("settlement") or {},
@@ -892,15 +1152,50 @@ def get_job(job_id: str):
                 "job": public["job"],
                 "result": public["result"],
             },
+            reconcile_state="CURRENT",
+            reconcile_attempted_at=utc_now(),
+            reconcile_error_code="",
         )
+        log_event("registry_write", job=meta["address"], action="job_detail_refresh", status="CURRENT")
         return {
-            "meta": meta,
+            "meta": updated_meta,
             "job": public["job"],
             "result": public["result"],
             "addresses": _addresses(meta["address"]),
             "demo": _demo_public_config(),
         }
     except Exception as exc:
+        updated_meta = meta
+        if not meta.get("legacy_contract"):
+            try:
+                updated_meta = store.update_job(
+                    meta["address"],
+                    reconcile_state="BACKING_OFF",
+                    reconcile_attempted_at=utc_now(),
+                    reconcile_error_code=_reconciliation_error_code(exc),
+                )
+                log_event(
+                    "registry_write",
+                    job=meta["address"],
+                    action="job_detail_refresh",
+                    status="BACKING_OFF",
+                )
+                log_event(
+                    "bradbury_failure",
+                    job=meta["address"],
+                    error_code=_reconciliation_error_code(exc),
+                )
+            except Exception:
+                pass
+        if isinstance(cached_job, dict) and isinstance(cached_result, dict):
+            stale_meta = {**updated_meta, "stale": True}
+            return {
+                "meta": stale_meta,
+                "job": {**cached_job, "stale": True},
+                "result": cached_result,
+                "addresses": _addresses(meta["address"]),
+                "demo": _demo_public_config(),
+            }
         if meta.get("legacy_contract"):
             return {
                 "meta": {**meta, "legacy_warning": "Legacy settlement contract — do not fund"},
@@ -914,9 +1209,8 @@ def get_job(job_id: str):
                 "demo": _demo_public_config(),
             }
         raise HTTPException(status_code=502, detail={
-            "code": "TESTNET_READ_FAILED",
+            "code": _reconciliation_error_code(exc),
             "message": "Bradbury job state could not be read.",
-            "testnet_detail": str(exc),
         })
 
 
@@ -968,22 +1262,46 @@ def register_wallet_job(req: RegisterWalletJobRequest):
             "message": "Wallet-created escrows are unavailable until a valid public Bradbury fee recipient is configured.",
         })
 
+    replayed = _transaction_replayed(req.deployment_tx, req.address, "DEPLOYMENT")
     try:
-        deployment = dict(network_client.get_transaction(req.deployment_tx))
-    except Exception:
+        deployment = _verify_transaction_identity(
+            req.deployment_tx, req.client_address, req.address, "DEPLOYMENT"
+        )
+    except _TransactionIdentityError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_TX_NOT_FOUND",
+                "message": "The deployment transaction could not be verified on Bradbury.",
+            }) from exc
+        if exc.code in {"REJECTED", "NOT_READY"}:
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_TX_REJECTED",
+                "message": "The deployment transaction has not completed successfully on Bradbury.",
+            }) from exc
+        if exc.code == "RECIPIENT_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_ADDRESS_MISMATCH",
+                "message": "The deployment transaction did not create the submitted escrow address.",
+            }) from exc
+        if exc.code == "ACTION_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "DEPLOYMENT_ACTION_MISMATCH",
+                "message": "The submitted transaction is not an escrow deployment.",
+            }) from exc
         raise HTTPException(status_code=422, detail={
-            "code": "DEPLOYMENT_TX_NOT_FOUND",
-            "message": "The deployment transaction could not be verified on Bradbury.",
-        })
+            "code": "DEPLOYMENT_TRANSACTION_IDENTITY_MISMATCH",
+            "message": "The deployment transaction does not match the connected client wallet or Bradbury network.",
+        }) from exc
+
     deployment_status = _status_name(deployment)
     deployment_execution = str(deployment.get("tx_execution_result_name") or "")
-    deployed_address = _get_address(deployment)
+    deployed_address = str((deployment.get("tx_data_decoded") or {}).get("contract_address") or "")
     if deployment_status not in {"ACCEPTED", "FINALIZED"} or "ERROR" in deployment_execution.upper():
         raise HTTPException(status_code=422, detail={
             "code": "DEPLOYMENT_TX_REJECTED",
             "message": "The deployment transaction has not completed successfully on Bradbury.",
         })
-    if not deployed_address or str(deployed_address).lower() != req.address.lower():
+    if not deployed_address or deployed_address.lower() != req.address.lower():
         raise HTTPException(status_code=422, detail={
             "code": "DEPLOYMENT_ADDRESS_MISMATCH",
             "message": "The deployment transaction did not create the submitted escrow address.",
@@ -992,7 +1310,9 @@ def register_wallet_job(req: RegisterWalletJobRequest):
     try:
         state = _job_state(req.address)["job"]
     except Exception:
-        raise HTTPException(status_code=422, detail={"code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."})
+        raise HTTPException(status_code=422, detail={
+            "code": "CONTRACT_NOT_READABLE", "message": "The deployed escrow could not be verified on Bradbury."
+        })
     expected = {
         "client": req.client_address,
         "platform": platform_address,
@@ -1014,9 +1334,13 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         if not matches:
             raise HTTPException(status_code=422, detail={"code": "CONTRACT_METADATA_MISMATCH", "message": "The deployed contract does not match the submitted job details."})
 
+    _record_verified_transaction(req.deployment_tx, deployment, req.address, "DEPLOYMENT")
     existing = store.get_job(req.address)
     if existing:
-        return {"job": existing, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+        response = {"job": existing, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+        if replayed:
+            response["replayed"] = True
+        return response
     record = store.add_job({
         "id": req.address,
         "address": req.address,
@@ -1032,8 +1356,12 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": req.deployment_tx,
         "created_at": utc_now(),
-    })
-    return {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+    }, ignore_existing=True)
+    log_event("registry_write", job=record["address"], tx_hash=req.deployment_tx, action="register_job")
+    response = {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
+    if replayed:
+        response["replayed"] = True
+    return response
 
 
 @app.post("/api/jobs")
@@ -1093,6 +1421,7 @@ def create_job(req: CreateJobRequest):
         "deployment_tx": tx,
         "created_at": utc_now(),
     })
+    log_event("registry_write", job=record["address"], tx_hash=tx, action="create_job")
     return {
         "job": record,
         "tx": tx,
@@ -1130,6 +1459,13 @@ def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = No
         state = _job_state(job["address"])
         chain_status = state["job"].get("status")
         store.update_job(job["address"], lifecycle_status=str(chain_status or "UNKNOWN"))
+        log_event(
+            "registry_write",
+            job=job["address"],
+            tx_hash=tx,
+            action=method,
+            status=chain_status,
+        )
         return {
             "tx": tx,
             "status": receipt.get("status_name") or receipt.get("status"),
@@ -1205,6 +1541,13 @@ def finalize(job_id: str):
             "submitted_at": utc_now(),
         }
         store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
+        log_event(
+            "registry_write",
+            job=job["address"],
+            tx_hash=tx,
+            action="finalize",
+            status="SETTLEMENT_PENDING",
+        )
         return {
             "tx": tx,
             "status": "PENDING_FINALIZATION",
@@ -1233,62 +1576,61 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
             "code": "INVALID_SETTLEMENT_TX",
             "message": "Invalid settlement transaction hash.",
         })
+    replayed = _transaction_replayed(tx_hash, job["address"], "SETTLEMENT")
     try:
-        transaction = dict(network_client.get_transaction(tx_hash))
-    except Exception:
+        transaction = _verify_transaction_identity(
+            tx_hash, str(job["client_address"]), str(job["address"]), "FINALIZE"
+        )
+    except _TransactionIdentityError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_NOT_FOUND",
+                "message": "The settlement transaction could not be verified on Bradbury.",
+            }) from exc
+        if exc.code == "REJECTED":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_REJECTED",
+                "message": "The settlement transaction failed on Bradbury.",
+            }) from exc
+        if exc.code == "NOT_READY":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_TX_NOT_READY",
+                "message": "Bradbury has not indexed the settlement transaction yet. Merit will retry it from this browser.",
+            }) from exc
+        if exc.code == "RECIPIENT_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_CONTRACT_MISMATCH",
+                "message": "This transaction does not belong to the selected escrow.",
+            }) from exc
+        if exc.code == "ACTION_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_ACTION_MISMATCH",
+                "message": "The settlement transaction is not an escrow finalize call.",
+            }) from exc
+        if exc.code == "SIGNER_UNAVAILABLE":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_SIGNER_UNAVAILABLE",
+                "message": "Bradbury did not return the wallet signer for this settlement transaction.",
+            }) from exc
+        if exc.code == "SIGNER_MISMATCH":
+            raise HTTPException(status_code=422, detail={
+                "code": "SETTLEMENT_SIGNER_MISMATCH",
+                "message": "Only the assigned client wallet can register this settlement transaction.",
+            }) from exc
         raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_NOT_FOUND",
-            "message": "The settlement transaction could not be verified on Bradbury.",
-        })
+            "code": "SETTLEMENT_TRANSACTION_IDENTITY_MISMATCH",
+            "message": "The settlement transaction does not match the Bradbury network.",
+        }) from exc
+
     status = _status_name(transaction)
-    execution = str(transaction.get("tx_execution_result_name") or "")
     recipient = str(transaction.get("recipient") or "")
-    # ``activator`` is the Bradbury account that moves an intelligent
-    # transaction into execution. It is not necessarily the wallet that
-    # originally signed the transaction. The explorer exposes that signer as
-    # ``From`` and genlayer-py returns it as ``sender`` (or ``from`` in older
-    # response shapes). Never treat the activator as proof of wallet ownership.
-    signer = str(
-        transaction.get("sender")
-        or transaction.get("from")
-        or transaction.get("from_address")
-        or ""
-    )
-    failed_statuses = {
-        "CANCELED",
-        "UNDETERMINED",
-        "VALIDATORS_TIMEOUT",
-        "LEADER_TIMEOUT",
-        "OUT_OF_FEE",
-        "OUTOFFEE",
-    }
     # Wallet Mode reports the hash as soon as the browser broadcasts it. Save
     # that reference while Bradbury is still processing so a refresh, closed
     # tab, or short API timing race cannot orphan an otherwise valid refund.
-    if status in failed_statuses or "ERROR" in execution.upper():
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_REJECTED",
-            "message": "The settlement transaction failed on Bradbury.",
-        })
-    if status == "UNKNOWN":
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_TX_NOT_READY",
-            "message": "Bradbury has not indexed the settlement transaction yet. Merit will retry it from this browser.",
-        })
     if recipient.lower() != str(job["address"]).lower():
         raise HTTPException(status_code=422, detail={
             "code": "SETTLEMENT_CONTRACT_MISMATCH",
             "message": "This transaction does not belong to the selected escrow.",
-        })
-    if not signer:
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_SIGNER_UNAVAILABLE",
-            "message": "Bradbury did not return the wallet signer for this settlement transaction.",
-        })
-    if signer.lower() != str(job["client_address"]).lower():
-        raise HTTPException(status_code=422, detail={
-            "code": "SETTLEMENT_SIGNER_MISMATCH",
-            "message": "Only the assigned client wallet can register this settlement transaction.",
         })
     state = _job_state(job["address"])
     chain_job = state["job"]
@@ -1308,9 +1650,17 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
         "explorer": EXPLORER_TX + tx_hash,
         "submitted_at": (job.get("settlement") or {}).get("submitted_at") or utc_now(),
     }
+    _record_verified_transaction(tx_hash, transaction, job["address"], "SETTLEMENT")
     store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
+    log_event(
+        "registry_write",
+        job=job["address"],
+        tx_hash=tx_hash,
+        action="register_settlement",
+        status="SETTLEMENT_PENDING",
+    )
     settlement = _refresh_settlement({**job, "settlement": settlement}, chain_job)
-    return {
+    response = {
         "tx": tx_hash,
         "status": settlement.get("transfer_status") or "PENDING_FINALIZATION",
         "settlement": _settlement_for_wire(settlement),
@@ -1318,3 +1668,6 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
         "signer_role": "connected Bradbury client wallet",
         "network": "testnet_bradbury",
     }
+    if replayed:
+        response["replayed"] = True
+    return response

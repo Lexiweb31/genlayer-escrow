@@ -69,6 +69,32 @@ Show the job contract, distinct demo signers, settlement status, recipient, amou
 
 Finish on the evidence report or settlement receipt.
 
+## Custody reliability gate (run before a live Wallet Mode demo)
+
+The custody matrix uses funded **Bradbury testnet-only** wallets and never
+uses a presentation or production wallet. It is safe by default: both the
+ordinary command and `--dry-run` only validate public wallet addresses and
+funding, with zero transaction writes.
+
+```bash
+.venv/bin/python scripts/custody_matrix.py --dry-run
+```
+
+After supplying a third, distinct funded Bounty entrant wallet and the public
+fixture URLs documented in [`tests/live/README.md`](tests/live/README.md), an
+operator must explicitly acknowledge testnet writes:
+
+```bash
+.venv/bin/python scripts/custody_matrix.py \
+  --execute --confirm-testnet-custody \
+  --output /tmp/merit-custody-evidence.json
+```
+
+Do not put any wallet key in a command, evidence file, demo slide, or commit.
+The evidence report contains public job addresses, transaction hashes,
+state-transition and replay checks, recipient deltas, and settlement-finality
+proof only.
+
 ## Likely judge questions
 
 ### Why not use a normal oracle?

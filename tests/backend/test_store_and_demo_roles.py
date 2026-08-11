@@ -1,12 +1,20 @@
 from types import SimpleNamespace
 import time
+from datetime import datetime, timedelta, timezone
+from threading import Barrier, Lock, Thread
 
 import pytest
 from fastapi import HTTPException
 
 from dashboard.store import JobStore
+from dashboard.telemetry import log_event
 import dashboard.api as api
 from genlayer_py.types.transactions import TransactionStatus
+
+
+@pytest.fixture
+def store(tmp_path):
+    return JobStore(tmp_path)
 
 
 def _record(address: str = "0xabc") -> dict:
@@ -22,6 +30,132 @@ def _record(address: str = "0xabc") -> dict:
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": "0xdeploy",
     }
+
+
+def test_log_event_redacts_secret_fields(caplog):
+    """A caller adding a secret field must not expose it in production logs."""
+    log_event(
+        "wallet_error",
+        private_key="secret",
+        authorization="Bearer secret",
+        job="0xjob",
+    )
+
+    assert "secret" not in caplog.text
+    assert "0xjob" in caplog.text
+
+
+def test_health_reports_release_and_reconciliation_evidence(monkeypatch):
+    """Operators need non-secret evidence that the durable reconciler is healthy."""
+    monkeypatch.setenv("MERIT_RELEASE", "test-release")
+    monkeypatch.setattr(api, "_oldest_pending_seconds", lambda: 42, raising=False)
+    monkeypatch.setattr(api, "_last_reconcile_at", "2026-08-10T00:00:00+00:00", raising=False)
+    monkeypatch.setattr(api, "_reconciler_health", lambda: "running", raising=False)
+
+    response = api.health()
+
+    assert response["release"] == "test-release"
+    assert response["registry"] == "sqlite"
+    assert response["reconciler"] == "running"
+    assert response["oldest_pending_seconds"] == 42
+    assert response["last_reconcile_at"] == "2026-08-10T00:00:00+00:00"
+
+
+def test_health_uses_the_oldest_pending_transaction_creation_time(monkeypatch, tmp_path):
+    """Refreshing an old pending transaction must not make it appear younger."""
+    durable_store = JobStore(tmp_path)
+    oldest = "0xoldest"
+    newer = "0xnewer"
+    for tx_hash in (oldest, newer):
+        durable_store.record_transaction({
+            "network": "testnet_bradbury",
+            "tx_hash": tx_hash,
+            "job_address": "0xjob",
+            "kind": "SETTLEMENT",
+            "status": "PENDING",
+        })
+    now = datetime.now(timezone.utc)
+    with durable_store._connect() as conn:
+        conn.execute(
+            "UPDATE transactions SET created_at = ?, updated_at = ? WHERE tx_hash = ?",
+            ((now - timedelta(seconds=120)).isoformat(), now.isoformat(), oldest),
+        )
+        conn.execute(
+            "UPDATE transactions SET created_at = ?, updated_at = ? WHERE tx_hash = ?",
+            ((now - timedelta(seconds=60)).isoformat(), (now - timedelta(seconds=60)).isoformat(), newer),
+        )
+    monkeypatch.setattr(api, "store", durable_store)
+
+    assert api.health()["oldest_pending_seconds"] >= 110
+
+
+def test_transaction_hash_is_idempotent(store):
+    item = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xabc",
+        "job_address": "0xjob",
+        "kind": "DEPLOYMENT",
+        "status": "ACCEPTED",
+    }
+    first = store.record_transaction(item)
+    second = store.record_transaction(item)
+    assert first["id"] == second["id"]
+    assert len(store.list_pending_transactions()) == 1
+
+
+def test_transaction_status_can_advance_but_not_regress(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xdef",
+        "job_address": "0xjob",
+        "kind": "SETTLEMENT",
+        "status": "ACCEPTED",
+    }
+    store.record_transaction(base)
+    store.record_transaction({
+        **base,
+        "status": "FINALIZED",
+        "verified_at": "2026-08-10T00:00:00+00:00",
+    })
+    store.record_transaction(base)
+    assert store.get_transaction("testnet_bradbury", "0xdef")["status"] == "FINALIZED"
+
+
+def test_transaction_supports_sdk_intermediate_state_and_cancellation(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xlifecycle",
+        "job_address": "0xjob",
+        "kind": "SETTLEMENT",
+        "status": "PENDING",
+    }
+    store.record_transaction(base)
+    proposing = store.record_transaction({
+        **base,
+        "status": TransactionStatus.PROPOSING,
+    })
+    cancelled = store.record_transaction({**base, "status": "CANCELLED"})
+
+    assert proposing["status"] == "PROPOSING"
+    assert cancelled["status"] == "CANCELED"
+    assert store.list_pending_transactions() == []
+
+
+def test_transaction_hash_case_variants_are_idempotent(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xAbC",
+        "job_address": "0xjob",
+        "kind": "DEPLOYMENT",
+        "status": "PENDING",
+    }
+    first = store.record_transaction(base)
+    second = store.record_transaction({**base, "tx_hash": "0xabc"})
+
+    assert first["id"] == second["id"]
+    assert first["tx_hash"] == "0xabc"
+    assert store.get_transaction("testnet_bradbury", "0xABC")["id"] == first["id"]
+    assert len(store.list_pending_transactions()) == 1
 
 
 def test_sqlite_jobs_survive_store_reopen(tmp_path):
@@ -77,6 +211,121 @@ def test_background_reconciliation_reads_the_durable_registry(monkeypatch):
     api._reconcile_once()
 
     assert received == records
+
+
+def test_reconcile_failure_is_durable_and_serves_the_last_verified_snapshot(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xstale"),
+        "lifecycle_status": "SETTLEMENT_PENDING",
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "amount": "1000",
+            "score": 60,
+            "settlement": {"parent_transaction": "0xparent", "transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING", "amount": "1000"},
+            "result": {"status": "SETTLEMENT_PENDING", "score": 60},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError("network unavailable")))
+
+    api._refresh_marketplace_snapshots(durable_store.list_jobs())
+
+    restarted = JobStore(tmp_path).get_job("0xstale")
+    assert restarted is not None
+    assert restarted["state_snapshot"]["status"] == "SETTLEMENT_PENDING"
+    assert restarted["reconcile_state"] == "BACKING_OFF"
+    assert restarted["reconcile_error_code"] == "TESTNET_UNAVAILABLE"
+    assert restarted["reconcile_attempted_at"]
+    assert restarted["reconcile_age_seconds"] >= 0
+
+    response = api._list_jobs_snapshot()
+    assert response["jobs"][0]["status"] == "SETTLEMENT_PENDING"
+    assert response["jobs"][0]["stale"] is True
+
+
+def test_reconcile_never_attempts_a_verified_final_snapshot(monkeypatch):
+    record = {
+        **_record("0xfinal"),
+        "state_snapshot": {
+            "status": "ACCEPTED",
+            "settlement": {"transfer_status": "FINALIZED"},
+            "job": {"status": "ACCEPTED", "settlement": {"transfer_status": "FINALIZED"}},
+            "result": {"status": "ACCEPTED"},
+        },
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: pytest.fail("finalized snapshot should not be reconciled"))
+
+    api._refresh_marketplace_snapshots([record])
+
+
+def test_detail_read_without_snapshot_classifies_and_suppresses_network_diagnostics(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job(_record("0xno-snapshot"))
+    monkeypatch.setattr(api, "store", durable_store)
+    secret = "https://private-rpc.example/internal-token"
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError(secret)))
+
+    with pytest.raises(HTTPException) as exc:
+        api.get_job("0xno-snapshot")
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == {
+        "code": "TESTNET_UNAVAILABLE",
+        "message": "Bradbury job state could not be read.",
+    }
+    assert secret not in str(exc.value.detail)
+
+
+def test_detail_read_failure_returns_updated_stale_reconciliation_metadata(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xdetail-stale"),
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "settlement": {"parent_transaction": "0xparent", "transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING"},
+            "result": {"status": "SETTLEMENT_PENDING"},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError("network unavailable")))
+
+    response = api.get_job("0xdetail-stale")
+
+    assert response["meta"]["reconcile_state"] == "BACKING_OFF"
+    assert response["meta"]["reconcile_error_code"] == "TESTNET_UNAVAILABLE"
+    assert response["meta"]["stale"] is True
+    assert response["job"]["status"] == "SETTLEMENT_PENDING"
+
+
+def test_detail_read_recovery_returns_cleared_reconciliation_metadata(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xdetail-current"),
+        "reconcile_state": "BACKING_OFF",
+        "reconcile_attempted_at": "2020-01-01T00:00:00+00:00",
+        "reconcile_error_code": "TESTNET_UNAVAILABLE",
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "settlement": {"transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING"},
+            "result": {"status": "SETTLEMENT_PENDING"},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: {
+        "job": {"status": "OPEN", "amount": 1000, "settlement": {}},
+        "result": {"status": "OPEN"},
+    })
+
+    response = api.get_job("0xdetail-current")
+
+    assert response["meta"]["reconcile_state"] == "CURRENT"
+    assert response["meta"]["reconcile_error_code"] == ""
+    assert response["meta"].get("stale") is not True
+    assert response["job"]["status"] == "OPEN"
 
 
 def test_legacy_import_is_read_only_and_does_not_overwrite_new_record(tmp_path):
@@ -309,7 +558,9 @@ def _configure_valid_wallet_registration(monkeypatch):
         SimpleNamespace(get_transaction=lambda _tx: {
             "status_name": TransactionStatus.ACCEPTED,
             "tx_execution_result_name": "SUCCESS",
-            "tx_data_decoded": {"contract_address": request.address},
+            "sender": request.client_address,
+            "network": "testnet_bradbury",
+            "tx_data_decoded": {"type": "deploy", "contract_address": request.address},
         }),
     )
     monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
@@ -328,13 +579,104 @@ def _configure_valid_wallet_registration(monkeypatch):
 def test_wallet_registration_verifies_transaction_contract_and_platform(monkeypatch):
     request, _platform = _configure_valid_wallet_registration(monkeypatch)
     monkeypatch.setattr(api.store, "get_job", lambda _address: None)
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api.store, "record_transaction", lambda record: record)
     saved = {}
-    monkeypatch.setattr(api.store, "add_job", lambda record: saved.update(record) or record)
+    monkeypatch.setattr(api.store, "add_job", lambda record, **_kwargs: saved.update(record) or record)
     response = api.register_wallet_job(request)
     assert response["job"]["address"] == request.address
     assert saved["client_address"] == request.client_address
     assert saved["worker_address"] == request.worker_address
     assert saved["deployment_tx"] == request.deployment_tx
+
+
+def test_wallet_registration_replay_returns_the_registered_job(monkeypatch, tmp_path):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(get_transaction=lambda _tx: {
+            "status_name": TransactionStatus.ACCEPTED,
+            "tx_execution_result_name": "SUCCESS",
+            "sender": request.client_address,
+            "network": "testnet_bradbury",
+            "tx_data_decoded": {"type": "deploy", "contract_address": request.address},
+        }),
+    )
+    monkeypatch.setattr(api, "store", JobStore(tmp_path))
+
+    first = api.register_wallet_job(request)
+    second = api.register_wallet_job(request)
+
+    assert second["job"]["address"] == first["job"]["address"]
+    assert second["replayed"] is True
+
+
+def test_wallet_registration_rejects_non_deployment_action(monkeypatch):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(get_transaction=lambda _tx: {
+            "status_name": TransactionStatus.ACCEPTED,
+            "tx_execution_result_name": "SUCCESS",
+            "sender": request.client_address,
+            "network": "testnet_bradbury",
+            "tx_data_decoded": {
+                "type": "call",
+                "contract_address": request.address,
+                "call_data": {"method": "evaluate"},
+            },
+        }),
+    )
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_job(request)
+
+    assert exc.value.detail["code"] == "DEPLOYMENT_ACTION_MISMATCH"
+
+
+def test_concurrent_wallet_registration_retries_return_the_registered_job(monkeypatch, tmp_path):
+    request, _platform = _configure_valid_wallet_registration(monkeypatch)
+    journal = JobStore(tmp_path)
+    original_get_job = journal.get_job
+    concurrent_reads = Barrier(2)
+    read_lock = Lock()
+    reads = 0
+
+    def synchronized_get_job(job_id):
+        nonlocal reads
+        with read_lock:
+            synchronize = str(job_id).lower() == request.address.lower() and reads < 2
+            reads += int(synchronize)
+        if synchronize:
+            concurrent_reads.wait(timeout=2)
+        return original_get_job(job_id)
+
+    monkeypatch.setattr(journal, "get_job", synchronized_get_job)
+    monkeypatch.setattr(api, "store", journal)
+    responses = []
+    errors = []
+
+    def register():
+        try:
+            responses.append(api.register_wallet_job(request))
+        except Exception as exc:
+            errors.append(exc)
+
+    first = Thread(target=register)
+    second = Thread(target=register)
+    first.start()
+    second.start()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not first.is_alive() and not second.is_alive()
+    assert errors == []
+    assert len(responses) == 2
+    assert {response["job"]["address"] for response in responses} == {request.address}
+    assert len(journal.list_jobs()) == 1
 
 
 def test_wallet_registration_rejects_unverified_deployment_transaction(monkeypatch):
@@ -379,6 +721,7 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
         "recipient": job["address"],
         "sender": job["client_address"],
         "activator": "0x" + "8" * 40,
+        "tx_data_decoded": {"type": "call", "call_data": {"method": "finalize"}},
     }
     monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
     monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: transaction))
@@ -388,6 +731,8 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
     }})
     saved = {}
     monkeypatch.setattr(api.store, "update_job", lambda _address, **changes: saved.update(changes))
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api.store, "record_transaction", lambda record: record)
     monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
 
     response = api.register_wallet_settlement(
@@ -397,6 +742,79 @@ def test_wallet_settlement_registration_persists_activated_transaction(monkeypat
     assert saved["settlement"]["parent_transaction"] == tx_hash
     assert saved["settlement"]["parent_status"] == "ACTIVATED"
     assert response["status"] == "PENDING_FINALIZATION"
+
+
+def test_wallet_settlement_registration_rejects_non_finalize_action(monkeypatch):
+    tx_hash = "0x" + "8" * 64
+    job = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+        "settlement": {},
+    }
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api.store, "record_transaction", lambda record: record)
+    monkeypatch.setattr(api.store, "update_job", lambda *_args, **_kwargs: job)
+    monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "status": "SETTLEMENT_PENDING",
+        "settlement": {"outcome": "REFUNDED", "transfer_status": "PENDING_FINALIZATION"},
+    }})
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
+        "status_name": "Activated",
+        "recipient": job["address"],
+        "sender": job["client_address"],
+        "network": "testnet_bradbury",
+        "tx_data_decoded": {"type": "call", "call_data": {"method": "evaluate"}},
+    }))
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_settlement(
+            job["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+        )
+
+    assert exc.value.detail["code"] == "SETTLEMENT_ACTION_MISMATCH"
+
+
+def test_settlement_transaction_identity_conflict_cannot_attach_to_another_job(monkeypatch, tmp_path):
+    job_a = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+        "settlement": {},
+    }
+    job_b = {
+        **_record("0x" + "3" * 40),
+        "client_address": job_a["client_address"],
+        "settlement": {},
+    }
+    tx_hash = "0x" + "9" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job_a)
+    journal.add_job(job_b)
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: {
+        "status_name": "Activated",
+        "recipient": job_a["address"],
+        "sender": job_a["client_address"],
+        "network": "testnet_bradbury",
+        "tx_data_decoded": {"type": "call", "call_data": {"method": "finalize"}},
+    }))
+    monkeypatch.setattr(api, "_job_state", lambda _address: {"job": {
+        "status": "SETTLEMENT_PENDING",
+        "settlement": {"outcome": "REFUNDED", "transfer_status": "PENDING_FINALIZATION"},
+    }})
+    monkeypatch.setattr(api, "_refresh_settlement", lambda meta, _chain_job: meta["settlement"])
+
+    api.register_wallet_settlement(
+        job_a["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+    )
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_settlement(
+            job_b["address"], api.RegisterWalletSettlementRequest(transaction_hash=tx_hash)
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "TRANSACTION_IDENTITY_CONFLICT"
 
 
 def test_wallet_settlement_registration_rejects_wrong_client(monkeypatch):

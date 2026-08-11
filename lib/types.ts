@@ -19,6 +19,8 @@ export type SettlementStatus =
   | "LEGACY_UNSAFE"
   | string;
 
+export type ReconciliationState = "IDLE" | "CURRENT" | "BACKING_OFF" | string;
+
 export interface DemoConfig {
   mode: "server-signed-demo" | "simulated-walkthrough" | string;
   network: string;
@@ -87,6 +89,11 @@ export interface JobRecord {
   evaluation_complete?: boolean;
   settlement?: SettlementRecord;
   deployment_tx?: string;
+  reconcile_state?: ReconciliationState;
+  reconcile_attempted_at?: string | null;
+  reconcile_error_code?: string;
+  reconcile_age_seconds?: number | null;
+  stale?: boolean;
   legacy_contract?: boolean;
   legacy_warning?: string;
   created_at?: string;
