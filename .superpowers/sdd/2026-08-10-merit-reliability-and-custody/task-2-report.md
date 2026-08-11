@@ -54,3 +54,48 @@ The same focused command passed: `2 passed, 40 deselected`.
 ## Commit
 
 - Implementation: `f271f00f717f8da2dae736ab7e93aa1b784dd141` (`fix: make wallet registration retry safe`)
+
+## Review follow-up: action proof and concurrent registration
+
+### Requirements addressed
+
+- Deployment registration now fails closed unless GenLayer decoded data reports `type: "deploy"` and identifies the created contract.
+- Settlement registration now fails closed unless decoded data reports `type: "call"` and `call_data.method: "finalize"`; another client-to-escrow call such as `evaluate` cannot be recorded as settlement.
+- The shared identity verifier receives the expected action explicitly, so action evidence is verified before the journal write.
+- Job registration now uses the store's `ignore_existing=True` insertion path and re-reads the durable row, so simultaneous identical deployments deterministically return one job rather than leaking a SQLite uniqueness error.
+
+### Files changed
+
+- `dashboard/api.py` — added fail-closed decoded-action checks, route-specific action mismatch errors, and race-safe job insertion.
+- `tests/backend/test_store_and_demo_roles.py` — added GenLayer-shaped negative action tests, updated successful decoded fixtures, and added a synchronized two-thread deployment retry regression.
+
+### RED evidence
+
+Command:
+
+```sh
+PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q tests/backend/test_store_and_demo_roles.py -k 'action or concurrent'
+```
+
+Result: `3 failed, 12 passed, 30 deselected`.
+
+- A decoded `type: "call"` deployment payload was accepted instead of producing `DEPLOYMENT_ACTION_MISMATCH`.
+- A decoded `call_data.method: "evaluate"` settlement payload was accepted instead of producing `SETTLEMENT_ACTION_MISMATCH`.
+- Two synchronized identical deployment registrations produced `IntegrityError: UNIQUE constraint failed: jobs.address`.
+
+### GREEN evidence
+
+- The same focused command passed: `15 passed, 30 deselected`.
+- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q tests/backend/test_store_and_demo_roles.py` — `45 passed`.
+- `npm test -- --run tests/frontend/transaction-state.test.ts tests/frontend/wallet.test.ts` — `2 files, 5 tests passed`.
+- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m py_compile dashboard/api.py` — passed.
+
+### Commit hashes
+
+- Original retry-safety implementation: `f271f00f717f8da2dae736ab7e93aa1b784dd141`.
+- Original task report: `aaf9a07`.
+- Review follow-up implementation: `f8a4c68114efee5ee14e9757784121632cfedb9f` (`fix: verify wallet transaction actions`).
+
+### Residual concern
+
+- The broader direct-contract test suites remain unavailable under the required `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` setting because their external GenLayer fixtures are disabled; the full backend route regression and relevant frontend recovery suites pass.
