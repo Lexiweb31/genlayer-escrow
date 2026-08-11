@@ -13,12 +13,13 @@ import re
 import time
 from contextlib import asynccontextmanager
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
 from threading import Event, Lock, Thread
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
@@ -36,6 +37,7 @@ from genlayer_py.types.calldata import CalldataAddress
 from genlayer_py.types.transactions import TransactionStatus
 
 from dashboard.store import JobStore, utc_now
+from dashboard.telemetry import log_event
 
 
 # ── Network and account configuration ─────────────────────────────────────────
@@ -393,6 +395,7 @@ def _record_verified_transaction(
             "verified_at": utc_now(),
             "transaction": _json_safe(transaction),
         })
+        log_event("registry_write", job=job_address, tx_hash=tx_hash, action="verified_transaction")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail={
             "code": "TRANSACTION_IDENTITY_CONFLICT",
@@ -518,6 +521,7 @@ def _preflight(job: dict[str, Any], method: str, role: str) -> dict[str, Any]:
 def _action_error(exc: Exception) -> HTTPException:
     if isinstance(exc, HTTPException):
         return exc
+    log_event("bradbury_failure", error_code="ACTION_FAILED")
     message = str(exc)
     lowered = message.lower()
     if "insufficient" in lowered or "balance" in lowered or "funds" in lowered:
@@ -665,9 +669,28 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
         else:
             settlement["transfer_status"] = "PENDING_FINALIZATION"
         store.update_job(meta["address"], settlement=settlement)
+        log_event(
+            "registry_write",
+            job=meta["address"],
+            action="settlement_verification",
+            status=settlement.get("transfer_status"),
+        )
+        log_event(
+            "settlement_verification",
+            job=meta["address"],
+            tx_hash=parent_tx,
+            outcome=settlement.get("outcome"),
+            status=settlement.get("transfer_status"),
+        )
     except Exception as exc:
         settlement["transfer_status"] = settlement.get("transfer_status") or "PENDING_FINALIZATION"
         settlement["status_error"] = str(exc)
+        log_event(
+            "settlement_verification_failure",
+            job=meta["address"],
+            tx_hash=parent_tx,
+            error_code="VERIFICATION_FAILED",
+        )
     return settlement
 
 
@@ -744,6 +767,24 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def log_request_latency(request: Request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        log_event(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (Path(__file__).parent / "index.html").read_text()
@@ -758,6 +799,11 @@ def health():
         "storage": "sqlite",
         "persistent_data_dir_configured": bool(os.getenv("PERSIST_DATA_DIR")),
         "demo": _demo_public_config(),
+        "release": os.getenv("MERIT_RELEASE", "unknown"),
+        "registry": "sqlite",
+        "reconciler": _reconciler_health(),
+        "oldest_pending_seconds": _oldest_pending_seconds(),
+        "last_reconcile_at": _last_reconcile_at,
     }
 
 
@@ -775,6 +821,7 @@ _MARKETPLACE_REFRESH_LOCK = Lock()
 _marketplace_last_refresh = 0.0
 _RECONCILE_STOP = Event()
 _reconcile_thread: Thread | None = None
+_last_reconcile_at: str | None = None
 
 
 def _reconciliation_error_code(exc: Exception) -> str:
@@ -811,6 +858,25 @@ def _is_reconcile_backing_off(record: dict[str, Any]) -> bool:
         and isinstance(record.get("reconcile_age_seconds"), int)
         and record["reconcile_age_seconds"] < _reconcile_backoff_seconds()
     )
+
+
+def _oldest_pending_seconds() -> int | None:
+    pending = store.list_pending_transactions(limit=1)
+    if not pending:
+        return None
+    try:
+        started = datetime.fromisoformat(str(pending[0]["created_at"]).replace("Z", "+00:00"))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        return max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _reconciler_health() -> str:
+    if os.getenv("MARKETPLACE_RECONCILE_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+        return "disabled"
+    return "running" if _reconcile_thread and _reconcile_thread.is_alive() else "stopped"
 
 
 def _wei_int(value: Any) -> int:
@@ -912,6 +978,13 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
                         reconcile_attempted_at=utc_now(),
                         reconcile_error_code="",
                     )
+                    log_event(
+                        "registry_write",
+                        job=meta["address"],
+                        action="reconciliation",
+                        status="CURRENT",
+                    )
+                    log_event("reconciliation_succeeded", job=meta["address"], status=snapshot["status"])
                 except Exception as exc:
                     # Preserve the last known-good snapshot when Bradbury has a
                     # transient read failure. The durable backoff timestamp
@@ -923,6 +996,14 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
                         reconcile_attempted_at=utc_now(),
                         reconcile_error_code=_reconciliation_error_code(exc),
                     )
+                    error_code = _reconciliation_error_code(exc)
+                    log_event(
+                        "registry_write",
+                        job=meta["address"],
+                        action="reconciliation",
+                        status="BACKING_OFF",
+                    )
+                    log_event("reconciliation_failure", job=meta["address"], error_code=error_code)
                     continue
         _marketplace_last_refresh = time.monotonic()
     finally:
@@ -931,7 +1012,15 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
 
 def _reconcile_once() -> None:
     """Persist current contract state without requiring an open browser."""
-    _refresh_marketplace_snapshots(store.list_jobs())
+    global _last_reconcile_at
+    try:
+        _refresh_marketplace_snapshots(store.list_jobs())
+        log_event("reconciliation_completed", outcome="completed")
+    except Exception:
+        log_event("reconciliation_failure", error_code="RECONCILE_FAILED")
+        raise
+    finally:
+        _last_reconcile_at = utc_now()
 
 
 def _reconcile_loop(stop: Event, interval_seconds: int) -> None:
@@ -1067,6 +1156,7 @@ def get_job(job_id: str):
             reconcile_attempted_at=utc_now(),
             reconcile_error_code="",
         )
+        log_event("registry_write", job=meta["address"], action="job_detail_refresh", status="CURRENT")
         return {
             "meta": updated_meta,
             "job": public["job"],
@@ -1083,6 +1173,17 @@ def get_job(job_id: str):
                     reconcile_state="BACKING_OFF",
                     reconcile_attempted_at=utc_now(),
                     reconcile_error_code=_reconciliation_error_code(exc),
+                )
+                log_event(
+                    "registry_write",
+                    job=meta["address"],
+                    action="job_detail_refresh",
+                    status="BACKING_OFF",
+                )
+                log_event(
+                    "bradbury_failure",
+                    job=meta["address"],
+                    error_code=_reconciliation_error_code(exc),
                 )
             except Exception:
                 pass
@@ -1256,6 +1357,7 @@ def register_wallet_job(req: RegisterWalletJobRequest):
         "deployment_tx": req.deployment_tx,
         "created_at": utc_now(),
     }, ignore_existing=True)
+    log_event("registry_write", job=record["address"], tx_hash=req.deployment_tx, action="register_job")
     response = {"job": record, "tx": req.deployment_tx, "transaction_type": "wallet-signed transaction", "signer_role": "connected Bradbury client wallet", "network": "testnet_bradbury"}
     if replayed:
         response["replayed"] = True
@@ -1319,6 +1421,7 @@ def create_job(req: CreateJobRequest):
         "deployment_tx": tx,
         "created_at": utc_now(),
     })
+    log_event("registry_write", job=record["address"], tx_hash=tx, action="create_job")
     return {
         "job": record,
         "tx": tx,
@@ -1356,6 +1459,13 @@ def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = No
         state = _job_state(job["address"])
         chain_status = state["job"].get("status")
         store.update_job(job["address"], lifecycle_status=str(chain_status or "UNKNOWN"))
+        log_event(
+            "registry_write",
+            job=job["address"],
+            tx_hash=tx,
+            action=method,
+            status=chain_status,
+        )
         return {
             "tx": tx,
             "status": receipt.get("status_name") or receipt.get("status"),
@@ -1431,6 +1541,13 @@ def finalize(job_id: str):
             "submitted_at": utc_now(),
         }
         store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
+        log_event(
+            "registry_write",
+            job=job["address"],
+            tx_hash=tx,
+            action="finalize",
+            status="SETTLEMENT_PENDING",
+        )
         return {
             "tx": tx,
             "status": "PENDING_FINALIZATION",
@@ -1535,6 +1652,13 @@ def register_wallet_settlement(job_id: str, req: RegisterWalletSettlementRequest
     }
     _record_verified_transaction(tx_hash, transaction, job["address"], "SETTLEMENT")
     store.update_job(job["address"], lifecycle_status="SETTLEMENT_PENDING", settlement=settlement)
+    log_event(
+        "registry_write",
+        job=job["address"],
+        tx_hash=tx_hash,
+        action="register_settlement",
+        status="SETTLEMENT_PENDING",
+    )
     settlement = _refresh_settlement({**job, "settlement": settlement}, chain_job)
     response = {
         "tx": tx_hash,

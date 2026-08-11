@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from dashboard.store import JobStore
+from dashboard.telemetry import log_event
 import dashboard.api as api
 from genlayer_py.types.transactions import TransactionStatus
 
@@ -28,6 +29,35 @@ def _record(address: str = "0xabc") -> dict:
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": "0xdeploy",
     }
+
+
+def test_log_event_redacts_secret_fields(caplog):
+    """A caller adding a secret field must not expose it in production logs."""
+    log_event(
+        "wallet_error",
+        private_key="secret",
+        authorization="Bearer secret",
+        job="0xjob",
+    )
+
+    assert "secret" not in caplog.text
+    assert "0xjob" in caplog.text
+
+
+def test_health_reports_release_and_reconciliation_evidence(monkeypatch):
+    """Operators need non-secret evidence that the durable reconciler is healthy."""
+    monkeypatch.setenv("MERIT_RELEASE", "test-release")
+    monkeypatch.setattr(api, "_oldest_pending_seconds", lambda: 42, raising=False)
+    monkeypatch.setattr(api, "_last_reconcile_at", "2026-08-10T00:00:00+00:00", raising=False)
+    monkeypatch.setattr(api, "_reconciler_health", lambda: "running", raising=False)
+
+    response = api.health()
+
+    assert response["release"] == "test-release"
+    assert response["registry"] == "sqlite"
+    assert response["reconciler"] == "running"
+    assert response["oldest_pending_seconds"] == 42
+    assert response["last_reconcile_at"] == "2026-08-10T00:00:00+00:00"
 
 
 def test_transaction_hash_is_idempotent(store):
