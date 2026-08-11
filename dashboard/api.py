@@ -861,11 +861,11 @@ def _is_reconcile_backing_off(record: dict[str, Any]) -> bool:
 
 
 def _oldest_pending_seconds() -> int | None:
-    pending = store.list_pending_transactions(limit=1)
-    if not pending:
+    created_at = store.oldest_pending_transaction_created_at()
+    if not created_at:
         return None
     try:
-        started = datetime.fromisoformat(str(pending[0]["created_at"]).replace("Z", "+00:00"))
+        started = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
         if started.tzinfo is None:
             started = started.replace(tzinfo=timezone.utc)
         return max(0, int((datetime.now(timezone.utc) - started).total_seconds()))

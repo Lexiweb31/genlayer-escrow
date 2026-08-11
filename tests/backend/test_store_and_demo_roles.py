@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import time
+from datetime import datetime, timedelta, timezone
 from threading import Barrier, Lock, Thread
 
 import pytest
@@ -58,6 +59,34 @@ def test_health_reports_release_and_reconciliation_evidence(monkeypatch):
     assert response["reconciler"] == "running"
     assert response["oldest_pending_seconds"] == 42
     assert response["last_reconcile_at"] == "2026-08-10T00:00:00+00:00"
+
+
+def test_health_uses_the_oldest_pending_transaction_creation_time(monkeypatch, tmp_path):
+    """Refreshing an old pending transaction must not make it appear younger."""
+    durable_store = JobStore(tmp_path)
+    oldest = "0xoldest"
+    newer = "0xnewer"
+    for tx_hash in (oldest, newer):
+        durable_store.record_transaction({
+            "network": "testnet_bradbury",
+            "tx_hash": tx_hash,
+            "job_address": "0xjob",
+            "kind": "SETTLEMENT",
+            "status": "PENDING",
+        })
+    now = datetime.now(timezone.utc)
+    with durable_store._connect() as conn:
+        conn.execute(
+            "UPDATE transactions SET created_at = ?, updated_at = ? WHERE tx_hash = ?",
+            ((now - timedelta(seconds=120)).isoformat(), now.isoformat(), oldest),
+        )
+        conn.execute(
+            "UPDATE transactions SET created_at = ?, updated_at = ? WHERE tx_hash = ?",
+            ((now - timedelta(seconds=60)).isoformat(), (now - timedelta(seconds=60)).isoformat(), newer),
+        )
+    monkeypatch.setattr(api, "store", durable_store)
+
+    assert api.health()["oldest_pending_seconds"] >= 110
 
 
 def test_transaction_hash_is_idempotent(store):

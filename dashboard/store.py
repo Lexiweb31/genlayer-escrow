@@ -388,3 +388,19 @@ class JobStore:
                 (*terminal_statuses, limit),
             ).fetchall()
         return [self._transaction_row(row) for row in rows]
+
+    def oldest_pending_transaction_created_at(self) -> Optional[str]:
+        """Return the creation timestamp for the oldest non-terminal transaction."""
+        terminal_statuses = tuple(self._TERMINAL_TRANSACTION_STATUSES)
+        placeholders = ", ".join("?" for _ in terminal_statuses)
+        with self._connect() as conn:
+            row = conn.execute(
+                f"""
+                SELECT created_at FROM transactions
+                WHERE status NOT IN ({placeholders})
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                terminal_statuses,
+            ).fetchone()
+        return str(row["created_at"]) if row else None

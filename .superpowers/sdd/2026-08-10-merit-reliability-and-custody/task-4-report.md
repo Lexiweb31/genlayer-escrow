@@ -23,6 +23,11 @@ The public API remains unchanged except for the approved additional fields on
    failed with `KeyError: 'release'` from `/api/health`.
 3. GREEN: both new tests passed after the smallest telemetry and health
    implementation.
+4. Follow-up RED: a refreshed 120-second-old pending transaction was reported
+   as 60 seconds old because selection used `updated_at` but age used
+   `created_at`.
+5. Follow-up GREEN: the durable store now selects the oldest non-terminal
+   transaction by `created_at`; the divergent-order regression passes.
 
 ## Decisions
 
@@ -33,7 +38,8 @@ The public API remains unchanged except for the approved additional fields on
 - `MERIT_RELEASE` defaults to `unknown` locally and is supplied by Render as a
   secret-style deployment setting.
 - `oldest_pending_seconds` is derived from the oldest non-terminal durable
-  transaction; `last_reconcile_at` records the latest reconciliation attempt.
+  transaction's `created_at`, never its refresh time; `last_reconcile_at`
+  records the latest reconciliation attempt.
 
 ## Verification
 
@@ -42,6 +48,8 @@ The public API remains unchanged except for the approved additional fields on
 - `.venv/bin/python -m py_compile dashboard/api.py dashboard/store.py dashboard/telemetry.py` — passed.
 - `npm run lint` — passed.
 - `git diff --check` — passed.
+- Follow-up regression (`-k oldest_pending`) — 1 passed.
+- Follow-up full backend suite — 53 passed.
 
 The repository-local pytest invocation requires `DEPLOYER_PRIVATE_KEY` because
 the installed `gltest` plugin initializes before these backend tests collect.
