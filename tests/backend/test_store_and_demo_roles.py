@@ -61,6 +61,43 @@ def test_transaction_status_can_advance_but_not_regress(store):
     assert store.get_transaction("testnet_bradbury", "0xdef")["status"] == "FINALIZED"
 
 
+def test_transaction_supports_sdk_intermediate_state_and_cancellation(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xlifecycle",
+        "job_address": "0xjob",
+        "kind": "SETTLEMENT",
+        "status": "PENDING",
+    }
+    store.record_transaction(base)
+    proposing = store.record_transaction({
+        **base,
+        "status": TransactionStatus.PROPOSING,
+    })
+    cancelled = store.record_transaction({**base, "status": "CANCELLED"})
+
+    assert proposing["status"] == "PROPOSING"
+    assert cancelled["status"] == "CANCELED"
+    assert store.list_pending_transactions() == []
+
+
+def test_transaction_hash_case_variants_are_idempotent(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xAbC",
+        "job_address": "0xjob",
+        "kind": "DEPLOYMENT",
+        "status": "PENDING",
+    }
+    first = store.record_transaction(base)
+    second = store.record_transaction({**base, "tx_hash": "0xabc"})
+
+    assert first["id"] == second["id"]
+    assert first["tx_hash"] == "0xabc"
+    assert store.get_transaction("testnet_bradbury", "0xABC")["id"] == first["id"]
+    assert len(store.list_pending_transactions()) == 1
+
+
 def test_sqlite_jobs_survive_store_reopen(tmp_path):
     first = JobStore(tmp_path)
     first.add_job(_record())

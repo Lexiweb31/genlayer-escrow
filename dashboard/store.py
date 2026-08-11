@@ -27,15 +27,33 @@ class JobStore:
 
     _TRANSACTION_STATUS_RANKS = {
         "PENDING": 0,
+        "UNINITIALIZED": 0,
         "SUBMITTED": 0,
         "ACTIVATED": 1,
-        "ACCEPTED": 2,
-        "FINALIZED": 3,
-        "FAILED": 3,
-        "REJECTED": 3,
-        "CANCELLED": 3,
+        "PROPOSING": 1,
+        "COMMITTING": 2,
+        "REVEALING": 3,
+        "ACCEPTED": 4,
+        "APPEAL_COMMITTING": 5,
+        "APPEAL_REVEALING": 6,
+        "READY_TO_FINALIZE": 7,
+        "FINALIZED": 8,
+        "CANCELED": 8,
+        "UNDETERMINED": 8,
+        "VALIDATORS_TIMEOUT": 8,
+        "LEADER_TIMEOUT": 8,
+        "FAILED": 8,
+        "REJECTED": 8,
     }
-    _TERMINAL_TRANSACTION_STATUSES = {"FINALIZED", "FAILED", "REJECTED", "CANCELLED"}
+    _TERMINAL_TRANSACTION_STATUSES = {
+        "FINALIZED",
+        "CANCELED",
+        "UNDETERMINED",
+        "VALIDATORS_TIMEOUT",
+        "LEADER_TIMEOUT",
+        "FAILED",
+        "REJECTED",
+    }
 
     _UPDATABLE = {
         "title",
@@ -237,6 +255,7 @@ class JobStore:
     @staticmethod
     def _transaction_row(row: sqlite3.Row) -> dict[str, Any]:
         item = dict(row)
+        item["tx_hash"] = item["tx_hash"].lower()
         try:
             item["payload"] = json.loads(item.pop("payload_json") or "{}")
         except json.JSONDecodeError:
@@ -249,14 +268,17 @@ class JobStore:
         missing = [field for field in required if not str(record.get(field) or "").strip()]
         if missing:
             raise ValueError(f"Missing transaction fields: {missing}")
-        status = str(record["status"]).upper()
+        status_value = getattr(record["status"], "value", record["status"])
+        status = str(status_value).upper()
+        if status == "CANCELLED":
+            status = "CANCELED"
         try:
             status_rank = cls._TRANSACTION_STATUS_RANKS[status]
         except KeyError as exc:
             raise ValueError(f"Unsupported transaction status: {status}") from exc
         return {
             "network": str(record["network"]),
-            "tx_hash": str(record["tx_hash"]),
+            "tx_hash": str(record["tx_hash"]).lower(),
             "job_address": str(record["job_address"]),
             "kind": str(record["kind"]),
             "status": status,
@@ -272,7 +294,7 @@ class JobStore:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             existing = conn.execute(
-                "SELECT * FROM transactions WHERE network = ? AND tx_hash = ?",
+                "SELECT * FROM transactions WHERE network = ? AND lower(tx_hash) = ?",
                 (values["network"], values["tx_hash"]),
             ).fetchone()
             if existing is None:
@@ -309,7 +331,7 @@ class JobStore:
                         ),
                     )
             row = conn.execute(
-                "SELECT * FROM transactions WHERE network = ? AND tx_hash = ?",
+                "SELECT * FROM transactions WHERE network = ? AND lower(tx_hash) = ?",
                 (values["network"], values["tx_hash"]),
             ).fetchone()
         if row is None:
@@ -319,8 +341,8 @@ class JobStore:
     def get_transaction(self, network: str, tx_hash: str) -> Optional[dict[str, Any]]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM transactions WHERE network = ? AND tx_hash = ?",
-                (network, tx_hash),
+                "SELECT * FROM transactions WHERE network = ? AND lower(tx_hash) = ?",
+                (network, str(tx_hash).lower()),
             ).fetchone()
         return self._transaction_row(row) if row else None
 
