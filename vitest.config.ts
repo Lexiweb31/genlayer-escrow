@@ -7,6 +7,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    environmentOptions: {
+      jsdom: { url: "http://localhost/" },
+    },
     include: ["tests/frontend/**/*.test.ts"],
   },
 });
