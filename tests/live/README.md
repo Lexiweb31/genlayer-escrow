@@ -56,6 +56,13 @@ test invocation from spending testnet GEN. The runner validates all fixture
 URLs and all three funded, distinct wallets before its first deployment, so a
 missing Bounty input cannot leave a partial run behind.
 
+Before a write, the runner asks the exact `BRADBURY_RPC_URL` for `eth_chainId`
+and requires chain `4221`; neither a URL name nor the separate Render API URL
+can satisfy that check. `--timeout-seconds` must be between 1 and 3600. Live
+execution requires `--output`: it atomically updates a redacted recovery file
+immediately after every transaction broadcast, so an interrupted run retains
+submitted transaction hashes.
+
 The fixtures must be public and stable under GenLayer rendering. The full-pay
 and Bounty-winner scenarios use a zero threshold to make their successful
 settlement deterministic. The split and refund scenarios require fixtures that
@@ -71,6 +78,11 @@ Each settlement parent must reach Bradbury `FINALIZED`; after finalization
 submission, the runner waits through the public registry rather than locally
 polling chain state. Repeating settlement registration must return
 `replayed: true`.
+
+Every lifecycle transaction is followed by a fresh contract read. The evidence
+stores the observed state and its originating transaction hash, rather than a
+prewritten lifecycle array. A second settlement registration that is not
+explicitly marked `replayed: true` fails the gate.
 
 For recipients that do not sign `finalize`, the observed balance delta must
 equal the finalized contract transfer exactly. The client may be a refund

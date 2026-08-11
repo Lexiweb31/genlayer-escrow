@@ -68,3 +68,79 @@ def test_live_mode_requires_an_explicit_execution_switch():
 
     assert runner.execution_requested([]) is False
     assert runner.execution_requested(["--execute"]) is True
+
+
+def test_rpc_chain_identity_must_match_bradbury_before_live_execution():
+    """Changing the chain check to trust a URL must make this test fail."""
+    runner = load_runner()
+
+    assert runner.validate_bradbury_chain(lambda method, params: "0x107d") == 4221
+    with pytest.raises(runner.ConfigurationError, match="Bradbury"):
+        runner.validate_bradbury_chain(lambda method, params: "0x1")
+
+
+@pytest.mark.parametrize("url", [
+    "http://localhost/proof",
+    "https://127.0.0.1/proof",
+    "https://[::1]/proof",
+    "https://169.254.1.2/proof",
+    "https://10.0.0.2/proof",
+    "https://example.com@127.0.0.1/proof",
+    "not-a-url",
+])
+def test_fixture_urls_reject_non_public_hosts(url):
+    """Removing strict host parsing would let evaluators request private network URLs."""
+    runner = load_runner()
+
+    with pytest.raises(runner.ConfigurationError, match="public"):
+        runner.validate_fixture_url(url, "FIXTURE")
+
+
+def test_fixture_urls_preserve_a_public_https_url():
+    """Rejecting all URLs would make the live matrix unusable for public evidence."""
+    runner = load_runner()
+
+    assert runner.validate_fixture_url("https://evidence.example/path?q=1", "FIXTURE") == "https://evidence.example/path?q=1"
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 3601])
+def test_live_timeout_must_be_positive_and_bounded(timeout):
+    """Removing timeout validation could leave a post-broadcast runner unrecoverably stuck."""
+    runner = load_runner()
+
+    with pytest.raises(runner.ConfigurationError, match="timeout"):
+        runner.validate_timeout(timeout)
+
+
+def test_observed_transition_includes_the_lifecycle_transaction(monkeypatch):
+    """Replacing contract observation with hard-coded states must break this evidence check."""
+    runner = load_runner()
+    monkeypatch.setattr(runner, "_read_contract", lambda *_args: {"status": "OPEN"})
+
+    observation = runner.observe_state(object(), "0xescrow", "0xsender", "OPEN", "0xfund")
+
+    assert observation["state"] == "OPEN"
+    assert observation["transaction"] == "0xfund"
+    with pytest.raises(runner.VerificationError, match="expected AGREED"):
+        runner.observe_state(object(), "0xescrow", "0xsender", "AGREED", "0xaccept")
+
+
+def test_second_settlement_registration_must_be_marked_replayed():
+    """Dropping the replay assertion would allow idempotency regressions to pass the gate."""
+    runner = load_runner()
+
+    assert runner.require_replay({"replayed": True}) is True
+    with pytest.raises(runner.VerificationError, match="replayed"):
+        runner.require_replay({"replayed": False})
+
+
+def test_evidence_recorder_persists_a_submitted_hash_before_a_wait_failure(tmp_path):
+    """Moving persistence after receipt polling would lose recovery evidence on interruption."""
+    runner = load_runner()
+    path = tmp_path / "evidence.json"
+    recorder = runner.EvidenceRecorder(path, {"mode": "live-testnet"})
+
+    recorder.record_transaction("direct-full", "fund", "0xsubmitted")
+
+    evidence = __import__("json").loads(path.read_text())
+    assert evidence["scenarios"]["direct-full"]["transactions"]["fund"] == "0xsubmitted"

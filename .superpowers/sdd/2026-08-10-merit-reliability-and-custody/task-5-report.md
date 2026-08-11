@@ -43,3 +43,18 @@
   includes that parent transaction fee. The evidence marks it as
   `fee_adjusted_recipient`; non-finalizer recipient deltas must match finalized
   transfer evidence exactly.
+
+## Review follow-up
+
+- The runner now proves the exact signing RPC reports immutable Bradbury chain
+  ID `4221` before the SDK is created or a write can be broadcast.
+- Lifecycle evidence now comes from asserted post-transaction contract reads,
+  with each observed state tied to its transaction hash; no hard-coded state
+  array remains.
+- Settlement replay is now a gate: the second registration must return
+  `replayed: true` for a scenario to verify.
+- Timeouts are bounded to 1–3600 seconds. Live runs require an output path and
+  atomically persist redacted incremental recovery evidence after every
+  broadcast, including hashes available before receipt polling.
+- Fixture URLs are parsed with `urlsplit` and reject malformed, credentialed,
+  localhost, loopback, private, link-local, reserved, and unspecified hosts.

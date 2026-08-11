@@ -10,15 +10,18 @@ printed and persisted evidence.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from eth_account import Account
@@ -28,6 +31,8 @@ ROOT = Path(__file__).parents[1]
 WEI_PER_GEN = 10**18
 MIN_FUNDED_WEI = 1
 DEFAULT_ESCROW_WEI = 10**15  # 0.001 testnet GEN
+BRADBURY_CHAIN_ID = 4221
+MAX_TIMEOUT_SECONDS = 3600
 REQUIRED_ENV = (
     "MERIT_API_URL",
     "BRADBURY_RPC_URL",
@@ -57,6 +62,38 @@ class MatrixConfiguration:
     rpc_url: str
     client: Wallet
     worker: Wallet
+
+
+class EvidenceRecorder:
+    """Write recovery-safe, public evidence as soon as a transaction broadcasts."""
+
+    def __init__(self, path: Path, initial: dict[str, Any]):
+        self.path = path
+        self.evidence = {**initial, "scenarios": {}}
+        self.persist()
+
+    def persist(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", dir=self.path.parent, delete=False) as handle:
+            json.dump(self.evidence, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            temporary = Path(handle.name)
+        temporary.replace(self.path)
+
+    def record_transaction(self, scenario: str, action: str, tx_hash: str) -> None:
+        item = self.evidence["scenarios"].setdefault(scenario, {"transactions": {}, "state_transitions": []})
+        item["transactions"][action] = tx_hash
+        self.evidence["writes_sent"] = sum(len(entry["transactions"]) for entry in self.evidence["scenarios"].values())
+        self.persist()
+
+    def record_transition(self, scenario: str, observation: dict[str, Any]) -> None:
+        item = self.evidence["scenarios"].setdefault(scenario, {"transactions": {}, "state_transitions": []})
+        item["state_transitions"].append(observation)
+        self.persist()
+
+    def record_failure(self, message: str) -> None:
+        self.evidence["failure"] = message
+        self.persist()
 
 
 def utc_now() -> str:
@@ -95,6 +132,47 @@ def rpc_balance(rpc_url: str, address: str) -> int:
         return int(str(value), 16)
     except (TypeError, ValueError) as exc:
         raise ConfigurationError("Bradbury RPC returned an invalid wallet balance.") from exc
+
+
+def validate_bradbury_chain(call: Callable[[str, list[Any]], Any]) -> int:
+    """Prove the exact RPC endpoint is Bradbury; never infer this from its URL."""
+    try:
+        chain_id = int(str(call("eth_chainId", [])), 16)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError("Bradbury RPC returned an invalid chain identity.") from exc
+    if chain_id != BRADBURY_CHAIN_ID:
+        raise ConfigurationError("BRADBURY_RPC_URL is not the Bradbury testnet (chain 4221).")
+    return chain_id
+
+
+def validate_timeout(timeout_seconds: int) -> int:
+    if not 1 <= timeout_seconds <= MAX_TIMEOUT_SECONDS:
+        raise ConfigurationError(f"timeout must be between 1 and {MAX_TIMEOUT_SECONDS} seconds.")
+    return timeout_seconds
+
+
+def validate_fixture_url(value: str, name: str) -> str:
+    """Allow only a syntactically valid public http(s) evidence location."""
+    try:
+        parsed = urlsplit(value.strip())
+        host = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be a public http(s) fixture URL.") from exc
+    if parsed.scheme not in {"http", "https"} or not host or parsed.username or parsed.password:
+        raise ConfigurationError(f"{name} must be a public http(s) fixture URL.")
+    normalized_host = host.rstrip(".").lower()
+    if normalized_host == "localhost" or normalized_host.endswith(".localhost"):
+        raise ConfigurationError(f"{name} must use a public, non-local host.")
+    try:
+        address = ipaddress.ip_address(normalized_host)
+    except ValueError:
+        address = None
+    if address and (address.is_private or address.is_loopback or address.is_link_local or address.is_unspecified or address.is_reserved):
+        raise ConfigurationError(f"{name} must use a public, non-local host.")
+    if port is not None and not 1 <= port <= 65535:
+        raise ConfigurationError(f"{name} must use a public http(s) fixture URL.")
+    return value.strip()
 
 
 def load_configuration(
@@ -211,14 +289,22 @@ def _read_contract(client: Any, address: str, sender: str, method: str) -> dict[
     return json.loads(calldata_decode(eth_utils.hexadecimal.decode_hex("0x" + text)))
 
 
-def _write(client: Any, account: Any, address: str, method: str, *, args: list[Any] | None = None, value: int = 0, timeout_seconds: int) -> str:
+def _write(
+    client: Any, account: Any, address: str, method: str, *, args: list[Any] | None = None,
+    value: int = 0, timeout_seconds: int, recorder: EvidenceRecorder, scenario: str, action: str,
+) -> str:
     tx_hash = str(client.write_contract(address=address, function_name=method, account=account, args=args or [], value=value))
+    recorder.record_transaction(scenario, action, tx_hash)
     _wait_for_status(client, tx_hash, timeout_seconds=timeout_seconds, final=False)
     return tx_hash
 
 
-def _deploy(client: Any, account: Any, code: str, args: list[Any], *, timeout_seconds: int) -> tuple[str, str]:
+def _deploy(
+    client: Any, account: Any, code: str, args: list[Any], *, timeout_seconds: int,
+    recorder: EvidenceRecorder, scenario: str,
+) -> tuple[str, str]:
     tx_hash = str(client.deploy_contract(code, account=account, args=args))
+    recorder.record_transaction(scenario, "deployment", tx_hash)
     receipt = _wait_for_status(client, tx_hash, timeout_seconds=timeout_seconds, final=False)
     decoded = receipt.get("tx_data_decoded") or {}
     address = str(decoded.get("contract_address") or receipt.get("recipient") or "")
@@ -245,6 +331,21 @@ def _registry_final(config: MatrixConfiguration, address: str, *, timeout_second
             return payload
         time.sleep(10)
     raise VerificationError("Registry did not confirm settlement finalization before timeout.")
+
+
+def observe_state(client: Any, address: str, sender: str, expected_state: str, tx_hash: str) -> dict[str, Any]:
+    """Assert a freshly read contract state and attach it to its write evidence."""
+    job = _read_contract(client, address, sender, "get_job")
+    actual = str(job.get("status") or "UNKNOWN")
+    if actual != expected_state:
+        raise VerificationError(f"Transaction {tx_hash} expected {expected_state}, observed {actual}.")
+    return {"transaction": tx_hash, "state": actual, "observed_at": utc_now()}
+
+
+def require_replay(response: dict[str, Any]) -> bool:
+    if response.get("replayed") is not True:
+        raise VerificationError("Second settlement registration was not marked replayed.")
+    return True
 
 
 def _recipient_balances(config: MatrixConfiguration, addresses: list[str]) -> dict[str, int]:
@@ -278,21 +379,20 @@ def _settlement_delta_evidence(
 
 def _require_fixture(environ: Mapping[str, str], name: str) -> str:
     value = str(environ.get(name, "")).strip()
-    if not value.startswith("http"):
-        raise ConfigurationError(f"{name} must be a public http(s) fixture URL for live execution.")
-    return value
+    return validate_fixture_url(value, name)
 
 
 def _direct_scenario(
     config: MatrixConfiguration, client: Any, accounts: dict[str, Any], platform: str, *, name: str,
     submission_url: str, min_score: int, partial_floor: int, expected_outcome: str, timeout_seconds: int,
+    recorder: EvidenceRecorder,
 ) -> dict[str, Any]:
     from genlayer_py.types.calldata import CalldataAddress
 
     deployment_tx, address = _deploy(
         client, accounts["client"], (ROOT / "contracts" / "freelance_escrow.py").read_text(),
         [f"Custody matrix {name}: evaluate the public fixture against this explicit requirement.", CalldataAddress(accounts["worker"].address), CalldataAddress(platform), 200, min_score, partial_floor],
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=timeout_seconds, recorder=recorder, scenario=name,
     )
     registration = _register_job(config, {
         "address": address, "client_address": str(accounts["client"].address), "worker_address": str(accounts["worker"].address),
@@ -303,34 +403,47 @@ def _direct_scenario(
     if str((registration.get("job") or {}).get("address", "")).lower() != address.lower():
         raise VerificationError("Deployment registration did not return the deployed escrow.")
     transactions = {"deployment": deployment_tx}
-    transactions["fund"] = _write(client, accounts["client"], address, "fund", value=DEFAULT_ESCROW_WEI, timeout_seconds=timeout_seconds)
-    transactions["accept_terms"] = _write(client, accounts["worker"], address, "accept_terms", timeout_seconds=timeout_seconds)
-    transactions["submit_work"] = _write(client, accounts["worker"], address, "submit_work", args=[submission_url], timeout_seconds=timeout_seconds)
-    transactions["evaluate"] = _write(client, accounts["client"], address, "evaluate", timeout_seconds=timeout_seconds)
-    evaluated = _read_contract(client, address, str(accounts["client"].address), "get_job")
+    observations = []
+    def observe(expected: str, tx_hash: str) -> None:
+        observation = observe_state(client, address, str(accounts["client"].address), expected, tx_hash)
+        observations.append(observation)
+        recorder.record_transition(name, observation)
+    observe("UNFUNDED", deployment_tx)
+    transactions["fund"] = _write(client, accounts["client"], address, "fund", value=DEFAULT_ESCROW_WEI, timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="fund")
+    observe("OPEN", transactions["fund"])
+    transactions["accept_terms"] = _write(client, accounts["worker"], address, "accept_terms", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="accept_terms")
+    observe("AGREED", transactions["accept_terms"])
+    transactions["submit_work"] = _write(client, accounts["worker"], address, "submit_work", args=[submission_url], timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="submit_work")
+    observe("SUBMITTED", transactions["submit_work"])
+    transactions["evaluate"] = _write(client, accounts["client"], address, "evaluate", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="evaluate")
+    observe("EVALUATED", transactions["evaluate"])
+    evaluated = _read_contract(client, address, str(accounts["client"].address), "get_result")
     tracked = [str(accounts["client"].address), str(accounts["worker"].address), platform]
     before = _recipient_balances(config, tracked)
-    transactions["finalize"] = _write(client, accounts["client"], address, "finalize", timeout_seconds=timeout_seconds)
+    transactions["finalize"] = _write(client, accounts["client"], address, "finalize", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="finalize")
+    observe("SETTLEMENT_PENDING", transactions["finalize"])
     _register_settlement(config, address, transactions["finalize"])
     registry = _registry_final(config, address, timeout_seconds=timeout_seconds)
     replay = _register_settlement(config, address, transactions["finalize"])
+    replayed = require_replay(replay)
     after = _recipient_balances(config, tracked)
     settlement = ((registry.get("job") or {}).get("settlement") or {})
     if settlement.get("outcome") != expected_outcome:
         raise VerificationError(f"{name} expected {expected_outcome}, got {settlement.get('outcome')}.")
     deltas = _settlement_delta_evidence(before, after, settlement, fee_payer=str(accounts["client"].address))
     return {
-        "name": name, "job_address": address, "job_type": "DIRECT_HIRE", "verified": not bool(deltas["mismatches"]),
-        "transactions": transactions, "state_transitions": ["UNFUNDED", "OPEN", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING", settlement.get("outcome")],
+        "name": name, "job_address": address, "job_type": "DIRECT_HIRE", "verified": replayed and not bool(deltas["mismatches"]),
+        "transactions": transactions, "state_transitions": observations,
         "evaluation": {"score": evaluated.get("score"), "status": evaluated.get("status")}, "settlement": settlement,
         "balances": {"starting_wei": before, "ending_wei": after, "recipient_deltas": deltas},
-        "replay": {"settlement_replayed": bool(replay.get("replayed"))},
+        "replay": {"settlement_replayed": replayed},
     }
 
 
 def _bounty_scenario(
     config: MatrixConfiguration, client: Any, accounts: dict[str, Any], platform: str, *, name: str,
     first_url: str, second_url: str, min_score: int, expected_outcome: str, timeout_seconds: int,
+    recorder: EvidenceRecorder,
 ) -> dict[str, Any]:
     """Run two distinct entries and prove that only the recorded winner can be paid."""
     from genlayer_py.types.calldata import CalldataAddress
@@ -338,7 +451,7 @@ def _bounty_scenario(
     spec = f"Custody matrix {name}: evaluate two public fixtures under one shared observable rubric."
     deployment_tx, address = _deploy(
         client, accounts["client"], (ROOT / "contracts" / "bounty_escrow.py").read_text(),
-        [spec, CalldataAddress(platform), 200, min_score, 2], timeout_seconds=timeout_seconds,
+        [spec, CalldataAddress(platform), 200, min_score, 2], timeout_seconds=timeout_seconds, recorder=recorder, scenario=name,
     )
     registration = _register_job(config, {
         "address": address, "client_address": str(accounts["client"].address), "deployment_tx": deployment_tx,
@@ -348,11 +461,22 @@ def _bounty_scenario(
     if str((registration.get("job") or {}).get("address", "")).lower() != address.lower():
         raise VerificationError("Bounty deployment registration did not return the deployed escrow.")
     transactions = {"deployment": deployment_tx}
-    transactions["fund"] = _write(client, accounts["client"], address, "fund", value=DEFAULT_ESCROW_WEI, timeout_seconds=timeout_seconds)
-    transactions["submit_first"] = _write(client, accounts["worker"], address, "submit_work", args=[first_url], timeout_seconds=timeout_seconds)
-    transactions["submit_second"] = _write(client, accounts["bounty_worker"], address, "submit_work", args=[second_url], timeout_seconds=timeout_seconds)
-    transactions["close_submissions"] = _write(client, accounts["client"], address, "close_submissions", timeout_seconds=timeout_seconds)
-    transactions["evaluate"] = _write(client, accounts["client"], address, "evaluate", timeout_seconds=timeout_seconds)
+    observations = []
+    def observe(expected: str, tx_hash: str) -> None:
+        observation = observe_state(client, address, str(accounts["client"].address), expected, tx_hash)
+        observations.append(observation)
+        recorder.record_transition(name, observation)
+    observe("UNFUNDED", deployment_tx)
+    transactions["fund"] = _write(client, accounts["client"], address, "fund", value=DEFAULT_ESCROW_WEI, timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="fund")
+    observe("OPEN", transactions["fund"])
+    transactions["submit_first"] = _write(client, accounts["worker"], address, "submit_work", args=[first_url], timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="submit_first")
+    observe("OPEN", transactions["submit_first"])
+    transactions["submit_second"] = _write(client, accounts["bounty_worker"], address, "submit_work", args=[second_url], timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="submit_second")
+    observe("OPEN", transactions["submit_second"])
+    transactions["close_submissions"] = _write(client, accounts["client"], address, "close_submissions", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="close_submissions")
+    observe("CLOSED", transactions["close_submissions"])
+    transactions["evaluate"] = _write(client, accounts["client"], address, "evaluate", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="evaluate")
+    observe("EVALUATED", transactions["evaluate"])
     evaluated = _read_contract(client, address, str(accounts["client"].address), "get_job")
     submissions = evaluated.get("submissions") or []
     winner = str(evaluated.get("winner") or "").lower()
@@ -361,10 +485,12 @@ def _bounty_scenario(
         raise VerificationError("Bounty evaluation did not record one of the submitted wallets as winner.")
     tracked = [str(accounts["client"].address), str(accounts["worker"].address), str(accounts["bounty_worker"].address), platform]
     before = _recipient_balances(config, tracked)
-    transactions["finalize"] = _write(client, accounts["client"], address, "finalize", timeout_seconds=timeout_seconds)
+    transactions["finalize"] = _write(client, accounts["client"], address, "finalize", timeout_seconds=timeout_seconds, recorder=recorder, scenario=name, action="finalize")
+    observe("SETTLEMENT_PENDING", transactions["finalize"])
     _register_settlement(config, address, transactions["finalize"])
     registry = _registry_final(config, address, timeout_seconds=timeout_seconds)
     replay = _register_settlement(config, address, transactions["finalize"])
+    replayed = require_replay(replay)
     after = _recipient_balances(config, tracked)
     settlement = ((registry.get("job") or {}).get("settlement") or {})
     if settlement.get("outcome") != expected_outcome:
@@ -377,17 +503,24 @@ def _bounty_scenario(
         raise VerificationError("Below-threshold Bounty refund paid an entrant.")
     deltas = _settlement_delta_evidence(before, after, settlement, fee_payer=str(accounts["client"].address))
     return {
-        "name": name, "job_address": address, "job_type": "BOUNTY", "verified": not bool(deltas["mismatches"]),
+        "name": name, "job_address": address, "job_type": "BOUNTY", "verified": replayed and not bool(deltas["mismatches"]),
         "transactions": transactions,
-        "state_transitions": ["UNFUNDED", "OPEN", "CLOSED", "EVALUATED", "SETTLEMENT_PENDING", settlement.get("outcome")],
+        "state_transitions": observations,
         "winner": winner, "submissions": submissions, "settlement": settlement,
         "balances": {"starting_wei": before, "ending_wei": after, "recipient_deltas": deltas},
-        "replay": {"settlement_replayed": bool(replay.get("replayed"))},
+        "replay": {"settlement_replayed": replayed},
     }
 
 
-def run_live_matrix(config: MatrixConfiguration, environ: Mapping[str, str], *, timeout_seconds: int) -> dict[str, Any]:
+def run_live_matrix(
+    config: MatrixConfiguration, environ: Mapping[str, str], *, timeout_seconds: int, output_path: Path,
+) -> dict[str, Any]:
     """Execute the live matrix only after CLI confirmation has passed."""
+    validate_timeout(timeout_seconds)
+    recorder = EvidenceRecorder(output_path, {
+        "mode": "live-testnet", "network": "testnet_bradbury", "generated_at": utc_now(),
+        "writes_sent": 0,
+    })
     # Validate every external fixture and all required wallets before the first
     # deploy.  This prevents a partially executed matrix from a typo.
     fixtures = {name: _require_fixture(environ, name) for name in (
@@ -403,19 +536,26 @@ def run_live_matrix(config: MatrixConfiguration, environ: Mapping[str, str], *, 
     if rpc_balance(config.rpc_url, bounty_wallet.address) < MIN_FUNDED_WEI:
         raise ConfigurationError("Bounty second worker testnet wallet must be funded.")
 
-    platform = public_api_preflight(config)
-    client, create_account = _sdk(config)
-    accounts = {
-        "client": create_account(config.client.private_key), "worker": create_account(config.worker.private_key),
-        "bounty_worker": create_account(bounty_wallet.private_key),
-    }
-    scenarios = [
-        _direct_scenario(config, client, accounts, platform, name="direct-full", submission_url=fixtures["MERIT_FULL_FIXTURE_URL"], min_score=0, partial_floor=0, expected_outcome="ACCEPTED", timeout_seconds=timeout_seconds),
-        _direct_scenario(config, client, accounts, platform, name="direct-split", submission_url=fixtures["MERIT_SPLIT_FIXTURE_URL"], min_score=100, partial_floor=0, expected_outcome="PARTIAL", timeout_seconds=timeout_seconds),
-        _direct_scenario(config, client, accounts, platform, name="direct-refund", submission_url=fixtures["MERIT_REFUND_FIXTURE_URL"], min_score=100, partial_floor=100, expected_outcome="REFUNDED", timeout_seconds=timeout_seconds),
-        _bounty_scenario(config, client, accounts, platform, name="bounty-winner", first_url=fixtures["MERIT_BOUNTY_WINNER_URL"], second_url=fixtures["MERIT_BOUNTY_LOSER_URL"], min_score=0, expected_outcome="ACCEPTED", timeout_seconds=timeout_seconds),
-        _bounty_scenario(config, client, accounts, platform, name="bounty-refund", first_url=fixtures["MERIT_BOUNTY_REFUND_FIRST_URL"], second_url=fixtures["MERIT_BOUNTY_REFUND_SECOND_URL"], min_score=100, expected_outcome="REFUNDED", timeout_seconds=timeout_seconds),
-    ]
+    # This identity check uses the exact RPC endpoint that later signs and
+    # broadcasts transactions; API configuration cannot substitute for it.
+    validate_bradbury_chain(lambda method, params: rpc_call(config.rpc_url, method, params))
+    try:
+        platform = public_api_preflight(config)
+        client, create_account = _sdk(config)
+        accounts = {
+            "client": create_account(config.client.private_key), "worker": create_account(config.worker.private_key),
+            "bounty_worker": create_account(bounty_wallet.private_key),
+        }
+        scenarios = [
+            _direct_scenario(config, client, accounts, platform, name="direct-full", submission_url=fixtures["MERIT_FULL_FIXTURE_URL"], min_score=0, partial_floor=0, expected_outcome="ACCEPTED", timeout_seconds=timeout_seconds, recorder=recorder),
+            _direct_scenario(config, client, accounts, platform, name="direct-split", submission_url=fixtures["MERIT_SPLIT_FIXTURE_URL"], min_score=100, partial_floor=0, expected_outcome="PARTIAL", timeout_seconds=timeout_seconds, recorder=recorder),
+            _direct_scenario(config, client, accounts, platform, name="direct-refund", submission_url=fixtures["MERIT_REFUND_FIXTURE_URL"], min_score=100, partial_floor=100, expected_outcome="REFUNDED", timeout_seconds=timeout_seconds, recorder=recorder),
+            _bounty_scenario(config, client, accounts, platform, name="bounty-winner", first_url=fixtures["MERIT_BOUNTY_WINNER_URL"], second_url=fixtures["MERIT_BOUNTY_LOSER_URL"], min_score=0, expected_outcome="ACCEPTED", timeout_seconds=timeout_seconds, recorder=recorder),
+            _bounty_scenario(config, client, accounts, platform, name="bounty-refund", first_url=fixtures["MERIT_BOUNTY_REFUND_FIRST_URL"], second_url=fixtures["MERIT_BOUNTY_REFUND_SECOND_URL"], min_score=100, expected_outcome="REFUNDED", timeout_seconds=timeout_seconds, recorder=recorder),
+        ]
+    except Exception as exc:
+        recorder.record_failure("Live matrix stopped after a recoverable verification failure.")
+        raise
     return {"mode": "live-testnet", "network": "testnet_bradbury", "generated_at": utc_now(), "scenarios": scenarios}
 
 
@@ -450,7 +590,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not args.confirm_testnet_custody:
         raise ConfigurationError("Live writes require --confirm-testnet-custody in addition to --execute.")
-    evidence = run_live_matrix(config, os.environ, timeout_seconds=args.timeout_seconds)
+    validate_timeout(args.timeout_seconds)
+    if not args.output:
+        raise ConfigurationError("Live execution requires --output so submitted transaction hashes are recoverable.")
+    evidence = run_live_matrix(config, os.environ, timeout_seconds=args.timeout_seconds, output_path=Path(args.output))
     write_evidence(args.output, evidence)
     return 0 if all(item.get("verified") for item in evidence.get("scenarios", [])) else 1
 
