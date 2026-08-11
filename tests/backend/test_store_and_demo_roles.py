@@ -455,12 +455,33 @@ def test_public_jobs_exclude_unfunded_direct_hire_and_bounty(monkeypatch):
             "lifecycle_status": "OPEN",
             "state_snapshot": {"status": "OPEN", "amount": "1000"},
         },
+        {**_record("0xdegraded"), "lifecycle_status": "OPEN"},
+        {**_record("0xlegacy"), "legacy_contract": True},
     ])
 
     response = api._public_jobs_snapshot()
 
-    assert [job["address"] for job in response["jobs"]] == ["0xopen"]
-    assert response["stats"]["total_jobs"] == 1
+    assert [job["address"] for job in response["jobs"]] == [
+        "0xopen",
+        "0xdegraded",
+        "0xlegacy",
+    ]
+    assert {key: value for key, value in response["stats"].items() if key != "generated_at"} == {
+        "network": "testnet_bradbury",
+        "total_jobs": 3,
+        "active_jobs": 2,
+        "open_opportunities": 2,
+        "locked_wei": "1000",
+        "pending_settlement_wei": "0",
+        "protected_wei": "1000",
+        "settlement_pending": 0,
+        "finalized_settlements": 0,
+        "finalized_settlement_wei": "0",
+        "escrow_wei": "1000",
+        "escrow_gen": 1000 / 10**18,
+        "degraded_jobs": 1,
+        "legacy_jobs": 1,
+    }
 
 
 def test_owned_jobs_requires_a_signature_matching_the_recorded_client(monkeypatch):

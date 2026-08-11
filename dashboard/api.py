@@ -1022,7 +1022,7 @@ def _job_stats(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     return _marketplace_stats(
         jobs,
         total_jobs=len(jobs),
-        degraded_jobs=sum(1 for job in jobs if job.get("stale")),
+        degraded_jobs=sum(1 for job in jobs if job.get("_missing_state_snapshot")),
         legacy_jobs=sum(1 for job in jobs if job.get("status") == "LEGACY_UNSAFE"),
     )
 
@@ -1173,6 +1173,7 @@ def _list_jobs_snapshot() -> dict[str, Any]:
             entry["score"] = snapshot.get("score") if entry["evaluation_complete"] else None
             entry["settlement"] = snapshot.get("settlement") or meta.get("settlement") or {}
             entry["stale"] = bool(meta.get("reconcile_error_code"))
+            entry["_missing_state_snapshot"] = not bool(snapshot)
             if not snapshot:
                 degraded += 1
         output.append(entry)
@@ -1191,7 +1192,11 @@ def _list_jobs_snapshot() -> dict[str, Any]:
 def _public_jobs_snapshot() -> dict[str, Any]:
     snapshot = _list_jobs_snapshot()
     jobs = [job for job in snapshot["jobs"] if job.get("status") != "UNFUNDED"]
-    return {**snapshot, "jobs": jobs, "stats": _job_stats(jobs)}
+    return {
+        **snapshot,
+        "jobs": [{key: value for key, value in job.items() if key != "_missing_state_snapshot"} for job in jobs],
+        "stats": _job_stats(jobs),
+    }
 
 
 @app.get("/api/jobs")
@@ -1211,7 +1216,12 @@ def owned_jobs(req: OwnedJobsRequest) -> dict[str, Any]:
         if job.get("status") == "UNFUNDED"
         and str(job.get("client_address", "")).lower() == proven_client
     ]
-    return {"jobs": jobs}
+    return {
+        "jobs": [
+            {key: value for key, value in job.items() if key != "_missing_state_snapshot"}
+            for job in jobs
+        ]
+    }
 
 
 @app.get("/api/jobs/{job_id}")
