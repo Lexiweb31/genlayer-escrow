@@ -93,3 +93,26 @@ Result: `1 failed`. Server-rendered manage output contained the old hard-coded a
 ### Review fix commit
 
 - `4a55b96202f8be295c47286caad2841c6e4aa435` (`fix: return truthful reconciliation detail`)
+
+## Re-review follow-up: visitor pending-payment guidance
+
+### Requirement addressed
+
+- Pending-payment visitors now bypass the generic public-observer fallback and render the same reconciliation-aware payment panel as other observers. They can inspect the state-specific message, elapsed reconciliation age, and known transaction link, and safely refresh; recovery controls remain restricted to the assigned wallet.
+
+### RED
+
+`npm test -- --run tests/frontend/manage-reconciliation.test.ts`
+
+Result: `1 failed, 1 passed`. The visitor render still showed `Public job status` and omitted the reconciliation message, age, safe explorer link, and finality action.
+
+### GREEN
+
+- `npm test -- --run tests/frontend/manage-reconciliation.test.ts` — `2 tests passed`.
+- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q tests/backend` — `50 passed` (one pre-existing third-party `websockets.legacy` deprecation warning).
+- `npm test` — `14 files, 57 tests passed` after allowing the suite's temporary localhost listener.
+- `npm run typecheck`, `npm run lint`, and `npm run build` — passed.
+
+### Re-review fix commit
+
+- `0a2fe94c7bbe7e14e94485ac0041f56990344114` (`fix: show pending reconciliation to visitors`)
