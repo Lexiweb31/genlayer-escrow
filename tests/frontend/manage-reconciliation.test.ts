@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 const useJob = vi.hoisted(() => vi.fn());
+const walletMode = vi.hoisted(() => ({
+  current: { mode: "wallet", address: "0xclient", onBradbury: true, balance: "1 GEN" },
+}));
 
 vi.mock("next/link", () => ({ default: "a" }));
 vi.mock("next/navigation", () => ({
@@ -11,7 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/components/providers", () => ({
   useDemoMode: () => ({ demo: { live_actions_enabled: true } }),
-  useWalletMode: () => ({ mode: "wallet", address: "0xclient", onBradbury: true, balance: "1 GEN" }),
+  useWalletMode: () => walletMode.current,
 }));
 vi.mock("@/lib/hooks", () => ({ useJob }));
 vi.mock("@/lib/api", () => ({
@@ -28,7 +31,13 @@ vi.mock("@/lib/wallet-client", () => ({
 
 import ManageJobPage from "@/app/jobs/[id]/manage/page";
 
-function renderPendingSettlement(settlement: Record<string, string>) {
+function renderPendingSettlement(settlement: Record<string, string>, visitor = false) {
+  walletMode.current = {
+    mode: "wallet",
+    address: visitor ? "0xvisitor" : "0xclient",
+    onBradbury: true,
+    balance: "1 GEN",
+  };
   useJob.mockReturnValue({
     data: {
       meta: {
@@ -69,5 +78,21 @@ describe("manage settlement reconciliation guidance", () => {
     expect(markup).toContain("View settlement transaction");
     expect(markup).toContain(`/api/explorer/tx/${transaction}`);
     expect(markup).toContain("Check finality");
+  });
+
+  it("renders reconciliation evidence instead of generic visitor copy for a pending payment", () => {
+    const transaction = `0x${"b".repeat(64)}`;
+    const markup = renderPendingSettlement({
+      parent_transaction: transaction,
+      parent_status: "ACCEPTED",
+      transfer_status: "PENDING_FINALIZATION",
+    }, true);
+
+    expect(markup).toContain("Bradbury accepted the transaction; wait for transfer finality.");
+    expect(markup).toContain("Last reconciliation · 1m ago");
+    expect(markup).toContain(`/api/explorer/tx/${transaction}`);
+    expect(markup).toContain("Check finality");
+    expect(markup).not.toContain("Public job status");
+    expect(markup).not.toContain("Verify and recover payment");
   });
 });
