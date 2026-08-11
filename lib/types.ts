@@ -101,6 +101,25 @@ export interface JobRecord {
   error?: string;
 }
 
+export interface FundingTransactionRecord {
+  tx_hash: string;
+  status: string;
+  kind?: "FUNDING";
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PendingWalletAction {
+  stage: "awaiting_wallet" | "submitted" | "confirming";
+  hash?: string;
+}
+
+export interface FundingActivationInput {
+  job: Pick<JobRecord, "status">;
+  fundingTransaction?: FundingTransactionRecord | null;
+  pendingAction?: PendingWalletAction | null;
+}
+
 export interface BountySubmission {
   position: number;
   submitter: string;
