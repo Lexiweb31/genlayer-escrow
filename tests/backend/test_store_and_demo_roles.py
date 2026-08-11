@@ -160,6 +160,43 @@ def test_transaction_hash_case_variants_are_idempotent(store):
     assert len(store.list_pending_transactions()) == 1
 
 
+def test_latest_funding_transaction_is_scoped_to_job_and_kind(store):
+    store.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0xold",
+        "job_address": "0xjob",
+        "kind": "FUNDING",
+        "status": "CANCELED",
+    })
+    store.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0xsettlement",
+        "job_address": "0xjob",
+        "kind": "SETTLEMENT",
+        "status": "ACCEPTED",
+    })
+    store.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0xnew",
+        "job_address": "0xjob",
+        "kind": "FUNDING",
+        "status": "ACCEPTED",
+    })
+    store.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0xother",
+        "job_address": "0xother-job",
+        "kind": "FUNDING",
+        "status": "FINALIZED",
+    })
+
+    latest = store.latest_transaction_for_job("0xJOB", "FUNDING")
+
+    assert latest is not None
+    assert latest["tx_hash"] == "0xnew"
+    assert store.get_transaction("testnet_bradbury", "0xold")["status"] == "CANCELED"
+
+
 def test_sqlite_jobs_survive_store_reopen(tmp_path):
     first = JobStore(tmp_path)
     first.add_job(_record())
@@ -411,6 +448,38 @@ def test_fund_rejects_below_demo_minimum_before_chain_call():
     assert exc.value.status_code == 422
     assert exc.value.detail["code"] == "BELOW_MINIMUM_DEMO_AMOUNT"
     assert exc.value.detail["minimum_wei"] == "1000000000000000"
+
+
+def test_demo_fund_rejects_duplicate_while_verified_transaction_is_nonterminal(monkeypatch, tmp_path):
+    job = {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+    }
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    journal.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0x" + "a" * 64,
+        "job_address": job["address"],
+        "kind": "FUNDING",
+        "status": "ACCEPTED",
+    })
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "_job_state", lambda _address: {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    })
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    })
+    monkeypatch.setattr(api, "_call_write", lambda *_args, **_kwargs: pytest.fail("duplicate funding submitted"))
+
+    with pytest.raises(HTTPException) as exc:
+        api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "FUNDING_ALREADY_PENDING"
 
 
 def test_marketplace_stats_separate_locked_pending_and_finalized():
@@ -809,6 +878,123 @@ def test_wallet_registration_rejects_wrong_platform_recipient(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         api.register_wallet_job(request)
     assert exc.value.detail["code"] == "CONTRACT_METADATA_MISMATCH"
+
+
+def _wallet_funding_job() -> dict:
+    return {
+        **_record("0x" + "1" * 40),
+        "client_address": "0x" + "2" * 40,
+        "state_snapshot": {"status": "UNFUNDED"},
+    }
+
+
+def _accepted_funding_transaction(job: dict) -> dict:
+    return {
+        "status_name": "Accepted",
+        "tx_execution_result_name": "SUCCESS",
+        "recipient": job["address"],
+        "sender": job["client_address"],
+        "network": "testnet_bradbury",
+        "tx_data_decoded": {"type": "call", "call_data": {"method": "fund"}},
+    }
+
+
+def test_register_wallet_funding_persists_verified_hash_and_returns_refreshed_open_status(monkeypatch, tmp_path):
+    job = _wallet_funding_job()
+    tx_hash = "0x" + "9" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(
+        get_transaction=lambda _tx: _accepted_funding_transaction(job)
+    ))
+    monkeypatch.setattr(api, "_job_state", lambda _address: {
+        "job": {"status": "OPEN", "client": job["client_address"], "amount": 10**15},
+        "result": {"status": "OPEN"},
+    })
+
+    response = api.register_wallet_funding(
+        job["address"], api.RegisterWalletFundingRequest(transaction_hash=tx_hash)
+    )
+
+    assert response["tx"] == tx_hash
+    assert response["job_status"] == "OPEN"
+    assert journal.get_job(job["address"])["lifecycle_status"] == "OPEN"
+    assert journal.latest_transaction_for_job(job["address"], "FUNDING")["tx_hash"] == tx_hash
+
+
+def test_register_wallet_funding_keeps_finalized_hash_confirming_when_snapshot_is_unfunded(monkeypatch, tmp_path):
+    job = _wallet_funding_job()
+    tx_hash = "0x" + "8" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    transaction = {**_accepted_funding_transaction(job), "status_name": "Finalized"}
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: transaction))
+    monkeypatch.setattr(api, "_job_state", lambda _address: {
+        "job": {"status": "UNFUNDED", "client": job["client_address"], "amount": 0},
+        "result": {"status": "UNFUNDED"},
+    })
+
+    response = api.register_wallet_funding(
+        job["address"], api.RegisterWalletFundingRequest(transaction_hash=tx_hash)
+    )
+
+    assert response["job_status"] == "UNFUNDED"
+    assert journal.latest_transaction_for_job(job["address"], "FUNDING")["status"] == "FINALIZED"
+    assert journal.get_job(job["address"])["lifecycle_status"] == "UNFUNDED"
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected_code"),
+    [
+        ({"sender": "0x" + "3" * 40}, "FUNDING_SIGNER_MISMATCH"),
+        ({"recipient": "0x" + "4" * 40}, "FUNDING_CONTRACT_MISMATCH"),
+        ({"network": "testnet_asimov"}, "FUNDING_NETWORK_MISMATCH"),
+        ({"tx_data_decoded": {"type": "call", "call_data": {"method": "evaluate"}}}, "FUNDING_ACTION_MISMATCH"),
+        ({"tx_execution_result_name": "FINISHED_WITH_ERROR"}, "FUNDING_TX_REJECTED"),
+    ],
+)
+def test_register_wallet_funding_rejects_untrusted_transaction_identity(monkeypatch, changes, expected_code):
+    job = _wallet_funding_job()
+    transaction = {**_accepted_funding_transaction(job), **changes}
+    monkeypatch.setattr(api, "_find_job", lambda _job_id: job)
+    monkeypatch.setattr(api.store, "get_transaction", lambda *_args: None)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(get_transaction=lambda _tx: transaction))
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_funding(
+            job["address"],
+            api.RegisterWalletFundingRequest(transaction_hash="0x" + "7" * 64),
+        )
+
+    assert exc.value.detail["code"] == expected_code
+
+
+def test_register_wallet_funding_rejects_hash_attached_to_another_operation(monkeypatch, tmp_path):
+    job = _wallet_funding_job()
+    tx_hash = "0x" + "6" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    journal.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": tx_hash,
+        "job_address": job["address"],
+        "kind": "SETTLEMENT",
+        "status": "ACCEPTED",
+    })
+    monkeypatch.setattr(api, "store", journal)
+    monkeypatch.setattr(api, "network_client", SimpleNamespace(
+        get_transaction=lambda _tx: _accepted_funding_transaction(job)
+    ))
+
+    with pytest.raises(HTTPException) as exc:
+        api.register_wallet_funding(
+            job["address"], api.RegisterWalletFundingRequest(transaction_hash=tx_hash)
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "TRANSACTION_IDENTITY_CONFLICT"
 
 
 def test_wallet_settlement_registration_persists_activated_transaction(monkeypatch):

@@ -64,6 +64,11 @@ export const meritApi = {
       method: "POST",
       body: JSON.stringify({ transaction_hash: transactionHash }),
     }),
+  registerWalletFunding: (id: string, transactionHash: string) =>
+    request<TransactionResponse>(`/api/jobs/${encodeURIComponent(id)}/register_funding`, {
+      method: "POST",
+      body: JSON.stringify({ transaction_hash: transactionHash }),
+    }),
   fund: (id: string, amountWei: string) =>
     action(id, "fund", { amount_wei: amountWei }),
   acceptTerms: (id: string) => action(id, "accept_terms"),
@@ -94,6 +99,8 @@ export function friendlyApiError(error: unknown): string {
     SETTLEMENT_TX_NOT_READY: "Bradbury is still indexing this refund transaction. Merit saved the hash and will retry without sending another transaction.",
     SETTLEMENT_SIGNER_MISMATCH: "This settlement was not signed by the assigned client wallet.",
     SETTLEMENT_SIGNER_UNAVAILABLE: "Bradbury did not return enough signer evidence for this transaction. Try checking Bradbury again shortly.",
+    FUNDING_TX_NOT_READY: "Bradbury is still indexing this funding transaction. Merit will retry without sending another transaction.",
+    FUNDING_ALREADY_PENDING: "A funding transaction is already confirming on Bradbury. Do not submit another one.",
     LEGACY_SETTLEMENT_CONTRACT: "Legacy settlement contract — read only and unsafe to fund.",
     DEMO_ROLES_UNAVAILABLE: "Live demo actions require two different server-side demo signers.",
   };

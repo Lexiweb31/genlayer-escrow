@@ -381,7 +381,7 @@ def _verify_transaction_identity(
     tx_hash: str,
     expected_from: str,
     expected_to: str | None,
-    expected_action: Literal["DEPLOYMENT", "FINALIZE"],
+    expected_action: Literal["DEPLOYMENT", "FUND", "FINALIZE"],
 ) -> dict[str, Any]:
     """Read a Bradbury transaction and prove it belongs to this wallet action."""
     try:
@@ -440,10 +440,10 @@ def _verify_transaction_identity(
     if expected_action == "DEPLOYMENT":
         if decoded.get("type") != "deploy":
             raise _TransactionIdentityError("ACTION_MISMATCH")
-    elif (
+    elif expected_action in {"FUND", "FINALIZE"} and (
         decoded.get("type") != "call"
         or not isinstance(decoded.get("call_data"), dict)
-        or decoded["call_data"].get("method") != "finalize"
+        or decoded["call_data"].get("method") != expected_action.lower()
     ):
         raise _TransactionIdentityError("ACTION_MISMATCH")
     return transaction
@@ -1224,6 +1224,19 @@ def owned_jobs(req: OwnedJobsRequest) -> dict[str, Any]:
     }
 
 
+def _job_detail_payload(
+    meta: dict[str, Any], job: dict[str, Any], result: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "meta": meta,
+        "job": job,
+        "result": result,
+        "funding_transaction": store.latest_transaction_for_job(meta["address"], "FUNDING"),
+        "addresses": _addresses(meta["address"]),
+        "demo": _demo_public_config(),
+    }
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     meta = _find_job(job_id)
@@ -1242,21 +1255,11 @@ def get_job(job_id: str):
         and isinstance(cached_settlement, dict)
         and cached_settlement.get("transfer_status") == "FINALIZED"
     ):
-        return {
-            "meta": meta,
-            "job": cached_job,
-            "result": cached_result,
-            "addresses": _addresses(meta["address"]),
-            "demo": _demo_public_config(),
-        }
+        return _job_detail_payload(meta, cached_job, cached_result)
     if _is_reconcile_backing_off(meta) and isinstance(cached_job, dict) and isinstance(cached_result, dict):
-        return {
-            "meta": {**meta, "stale": True},
-            "job": {**cached_job, "stale": True},
-            "result": cached_result,
-            "addresses": _addresses(meta["address"]),
-            "demo": _demo_public_config(),
-        }
+        return _job_detail_payload(
+            {**meta, "stale": True}, {**cached_job, "stale": True}, cached_result
+        )
     try:
         public = _public_state(meta, _job_state(meta["address"]))
         live_status = str(public["job"].get("status") or "UNKNOWN")
@@ -1277,13 +1280,7 @@ def get_job(job_id: str):
             reconcile_error_code="",
         )
         log_event("registry_write", job=meta["address"], action="job_detail_refresh", status="CURRENT")
-        return {
-            "meta": updated_meta,
-            "job": public["job"],
-            "result": public["result"],
-            "addresses": _addresses(meta["address"]),
-            "demo": _demo_public_config(),
-        }
+        return _job_detail_payload(updated_meta, public["job"], public["result"])
     except Exception as exc:
         updated_meta = meta
         if not meta.get("legacy_contract"):
@@ -1309,25 +1306,19 @@ def get_job(job_id: str):
                 pass
         if isinstance(cached_job, dict) and isinstance(cached_result, dict):
             stale_meta = {**updated_meta, "stale": True}
-            return {
-                "meta": stale_meta,
-                "job": {**cached_job, "stale": True},
-                "result": cached_result,
-                "addresses": _addresses(meta["address"]),
-                "demo": _demo_public_config(),
-            }
+            return _job_detail_payload(
+                stale_meta, {**cached_job, "stale": True}, cached_result
+            )
         if meta.get("legacy_contract"):
-            return {
-                "meta": {**meta, "legacy_warning": "Legacy settlement contract — do not fund"},
-                "job": {
+            return _job_detail_payload(
+                {**meta, "legacy_warning": "Legacy settlement contract — do not fund"},
+                {
                     "status": "LEGACY_UNSAFE",
                     "legacy_contract": True,
                     "legacy_warning": "Legacy settlement contract — do not fund",
                 },
-                "result": {"status": "LEGACY_UNSAFE"},
-                "addresses": _addresses(meta["address"]),
-                "demo": _demo_public_config(),
-            }
+                {"status": "LEGACY_UNSAFE"},
+            )
         raise HTTPException(status_code=502, detail={
             "code": _reconciliation_error_code(exc),
             "message": "Bradbury job state could not be read.",
@@ -1353,6 +1344,10 @@ class RegisterWalletJobRequest(CreateJobRequest):
 
 
 class RegisterWalletSettlementRequest(BaseModel):
+    transaction_hash: str
+
+
+class RegisterWalletFundingRequest(BaseModel):
     transaction_hash: str
 
 
@@ -1576,6 +1571,8 @@ def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = No
         _preflight(job, method, role)
         tx = _call_write(job["address"], method, role, args=args, value=value)
         receipt = _wait(tx)
+        if method == "fund":
+            _record_verified_transaction(tx, receipt, job["address"], "FUNDING")
         state = _job_state(job["address"])
         chain_status = state["job"].get("status")
         store.update_job(job["address"], lifecycle_status=str(chain_status or "UNKNOWN"))
@@ -1606,6 +1603,19 @@ def fund(job_id: str, req: FundRequest):
             "message": "Minimum demo deposit is 0.001 GEN.",
             "minimum_wei": str(MIN_DEMO_AMOUNT_WEI),
         })
+    job = _find_job(job_id)
+    latest_funding = store.latest_transaction_for_job(job["address"], "FUNDING")
+    if latest_funding:
+        live_status = str(_job_state(job["address"])["job"].get("status") or "UNKNOWN")
+        failed_statuses = {
+            "CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "FAILED", "REJECTED",
+        }
+        if live_status == "UNFUNDED" and str(latest_funding["status"]).upper() not in failed_statuses:
+            raise HTTPException(status_code=409, detail={
+                "code": "FUNDING_ALREADY_PENDING",
+                "message": "A verified funding transaction is still reconciling for this escrow.",
+                "action": "Wait for Bradbury confirmation or inspect the existing transaction before retrying.",
+            })
     return _run_action(job_id, "fund", "client", value=amount_wei)
 
 
@@ -1678,6 +1688,88 @@ def finalize(job_id: str):
         }
     except Exception as exc:
         raise _action_error(exc)
+
+
+@app.post("/api/jobs/{job_id}/register_funding")
+def register_wallet_funding(job_id: str, req: RegisterWalletFundingRequest):
+    """Persist a wallet-signed funding call and reconcile its contract state."""
+    job = _find_job(job_id)
+    _require_safe_job(job)
+    tx_hash = req.transaction_hash.strip()
+    if not TX_PATTERN.fullmatch(tx_hash):
+        raise HTTPException(status_code=422, detail={
+            "code": "INVALID_FUNDING_TX",
+            "message": "Invalid funding transaction hash.",
+        })
+    replayed = _transaction_replayed(tx_hash, job["address"], "FUNDING")
+    try:
+        transaction = _verify_transaction_identity(
+            tx_hash, str(job["client_address"]), str(job["address"]), "FUND"
+        )
+    except _TransactionIdentityError as exc:
+        codes = {
+            "NOT_FOUND": ("FUNDING_TX_NOT_FOUND", "The funding transaction could not be verified on Bradbury."),
+            "NOT_READY": ("FUNDING_TX_NOT_READY", "Bradbury has not indexed the funding transaction yet."),
+            "REJECTED": ("FUNDING_TX_REJECTED", "The funding transaction failed on Bradbury."),
+            "RECIPIENT_MISMATCH": ("FUNDING_CONTRACT_MISMATCH", "This funding transaction does not belong to the selected escrow."),
+            "ACTION_MISMATCH": ("FUNDING_ACTION_MISMATCH", "The transaction is not an escrow fund call."),
+            "SIGNER_UNAVAILABLE": ("FUNDING_SIGNER_UNAVAILABLE", "Bradbury did not return the wallet signer for this funding transaction."),
+            "SIGNER_MISMATCH": ("FUNDING_SIGNER_MISMATCH", "Only the assigned client wallet can register this funding transaction."),
+            "NETWORK_MISMATCH": ("FUNDING_NETWORK_MISMATCH", "The funding transaction is not on Bradbury."),
+        }
+        code, message = codes.get(exc.code, (
+            "FUNDING_TRANSACTION_IDENTITY_MISMATCH",
+            "The funding transaction identity could not be verified.",
+        ))
+        raise HTTPException(status_code=422, detail={"code": code, "message": message}) from exc
+
+    status = _status_name(transaction)
+    execution = str(transaction.get("tx_execution_result_name") or "").upper()
+    result = str(transaction.get("result_name") or transaction.get("result") or "").upper()
+    successful_execution = execution == "SUCCESS" or execution.endswith("FINISHED_WITH_RETURN")
+    if status not in {"ACCEPTED", "FINALIZED"} or not successful_execution or "FAIL" in result:
+        raise HTTPException(status_code=422, detail={
+            "code": "FUNDING_TX_REJECTED",
+            "message": "The funding transaction has not completed successfully on Bradbury.",
+        })
+    if str(transaction.get("recipient") or "").lower() != str(job["address"]).lower():
+        raise HTTPException(status_code=422, detail={
+            "code": "FUNDING_CONTRACT_MISMATCH",
+            "message": "This funding transaction does not belong to the selected escrow.",
+        })
+
+    _record_verified_transaction(tx_hash, transaction, job["address"], "FUNDING")
+    state = _job_state(job["address"])
+    chain_job = state["job"]
+    chain_status = str(chain_job.get("status") or "UNKNOWN")
+    store.update_job(
+        job["address"],
+        lifecycle_status=chain_status,
+        state_snapshot={
+            "status": chain_status,
+            "amount": chain_job.get("amount"),
+            "job": chain_job,
+            "result": state.get("result") or {"status": chain_status},
+        },
+    )
+    log_event(
+        "registry_write",
+        job=job["address"],
+        tx_hash=tx_hash,
+        action="register_funding",
+        status=chain_status,
+    )
+    response = {
+        "tx": tx_hash,
+        "status": status,
+        "job_status": chain_status,
+        "transaction_type": "wallet-signed transaction",
+        "signer_role": "connected Bradbury client wallet",
+        "network": "testnet_bradbury",
+    }
+    if replayed:
+        response["replayed"] = True
+    return response
 
 
 @app.post("/api/jobs/{job_id}/register_settlement")

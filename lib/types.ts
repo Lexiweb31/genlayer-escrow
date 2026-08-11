@@ -185,6 +185,7 @@ export interface JobDetailResponse {
   meta: JobRecord;
   job: JobRecord;
   result: EvaluationResult;
+  funding_transaction?: FundingTransactionRecord | null;
   addresses: ContractAddresses;
   demo: DemoConfig;
 }

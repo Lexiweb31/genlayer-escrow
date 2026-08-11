@@ -17,11 +17,19 @@ import { fundingActivationState } from "@/lib/funding-activation";
 import { useJob } from "@/lib/hooks";
 import { reconciliationPresentation } from "@/lib/job-presentation";
 import { settlementPresentation } from "@/lib/settlement";
-import type { JobRecord } from "@/lib/types";
+import type { FundingTransactionRecord, JobRecord } from "@/lib/types";
 import { shortAddress } from "@/lib/utils";
-import { sameAddress, writeWalletContract, type WalletWriteStage } from "@/lib/wallet-client";
+import { readBradburyTransaction, sameAddress, writeWalletContract, type WalletWriteStage } from "@/lib/wallet-client";
 
 interface PendingWalletAction { label: string; hash: string; startingStatus: string; }
+
+const FUNDING_ACTIVE_STATUSES = new Set([
+  "OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED",
+]);
+
+function isFundingActivatedStatus(status?: string) {
+  return Boolean(status && FUNDING_ACTIVE_STATUSES.has(status));
+}
 
 export default function ManageJobPage() {
   const params = useParams<{ id: string }>();
@@ -50,6 +58,7 @@ export default function ManageJobPage() {
   });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
+  const [recoveredFundingTransaction, setRecoveredFundingTransaction] = useState<FundingTransactionRecord | null>(null);
   const automaticRecoveryJob: JobRecord | null = data ? { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status } : null;
   const automaticRecoveryView = automaticRecoveryJob ? settlementPresentation(automaticRecoveryJob, data?.result) : null;
   useEffect(() => {
@@ -73,6 +82,41 @@ export default function ManageJobPage() {
     void registerSavedSettlement();
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [automaticRecoveryView?.hasTransactionReference, automaticRecoveryView?.isPending, id, recoveryTx, refresh, settlementRecoveryKey]);
+  useEffect(() => {
+    const fundingHash = pendingAction?.label === "Funding escrow" ? pendingAction.hash : "";
+    if (data?.job.status !== "UNFUNDED" || !/^0x[0-9a-fA-F]{64}$/.test(fundingHash)) return;
+    let cancelled = false;
+    const recoverFunding = async () => {
+      try {
+        const receipt = await readBradburyTransaction(fundingHash);
+        if (cancelled) return;
+        setRecoveredFundingTransaction({ tx_hash: fundingHash, status: receipt.status, kind: "FUNDING" });
+        if (receipt.failed) {
+          localStorage.removeItem(pendingActionKey);
+          setPendingAction(null);
+          setMessage({ tone: "error", text: "Funding failed on Bradbury. Review the saved transaction before retrying." });
+          return;
+        }
+        if (!receipt.confirmed) return;
+        const registration = await meritApi.registerWalletFunding(id, fundingHash);
+        if (cancelled) return;
+        await refresh();
+        if (isFundingActivatedStatus(registration.job_status)) {
+          localStorage.removeItem(pendingActionKey);
+          setPendingAction(null);
+          setRecoveredFundingTransaction(null);
+          setMessage({ tone: "success", text: "Funding verified from the refreshed escrow state." });
+        } else {
+          setMessage({ tone: "info", text: "Transaction submitted — confirming on Bradbury. Do not submit another funding transaction." });
+        }
+      } catch {
+        // Keep the durable local hash. Bradbury or the backend may still be
+        // indexing it, and a later page load can retry without another send.
+      }
+    };
+    void recoverFunding();
+    return () => { cancelled = true; };
+  }, [data?.job.status, id, pendingAction?.hash, pendingAction?.label, pendingActionKey, refresh]);
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash !== "#funding" || data?.job.status !== "UNFUNDED") return;
     const frame = window.requestAnimationFrame(() => fundingHeadingRef.current?.focus());
@@ -116,6 +160,7 @@ export default function ManageJobPage() {
   const visiblePendingAction = pendingAction?.startingStatus === job.status ? pendingAction : null;
   const fundingState = fundingActivationState({
     job,
+    fundingTransaction: recoveredFundingTransaction || data.funding_transaction,
     pendingAction: visiblePendingAction?.label === "Funding escrow" ? { stage: "confirming", hash: visiblePendingAction.hash } : null,
   });
   const highValueFunding = Number.isFinite(Number(amount)) && Number(amount) >= 1;
@@ -141,7 +186,21 @@ export default function ManageJobPage() {
       setMessage({ tone: "info", text: stageMessages[stage] });
     };
     setBusy(true); setMessage({ tone: "info", text: wallet.mode === "wallet" ? `${label}. Preparing the Bradbury transaction…` : `${label} with the correct Bradbury demo role…` });
-    try { await (wallet.mode === "wallet" ? walletAction(onStage) : demoAction()); localStorage.removeItem(pendingActionKey); setPendingAction(null); setMessage({ tone: "success", text: `${label} accepted by Bradbury. Refreshing shared state…` }); await refresh(); }
+    try {
+      await (wallet.mode === "wallet" ? walletAction(onStage) : demoAction());
+      if (wallet.mode === "wallet" && label === "Funding escrow" && submittedHash) {
+        const registration = await meritApi.registerWalletFunding(id, submittedHash);
+        await refresh();
+        if (!isFundingActivatedStatus(registration.job_status)) {
+          setMessage({ tone: "info", text: "Transaction submitted — confirming on Bradbury. Do not submit another funding transaction." });
+          return;
+        }
+      }
+      localStorage.removeItem(pendingActionKey);
+      setPendingAction(null);
+      setMessage({ tone: "success", text: `${label} accepted by Bradbury. Refreshing shared state…` });
+      await refresh();
+    }
     catch (nextError) { setMessage({ tone: submittedHash ? "info" : "error", text: submittedHash ? `${label} was submitted but confirmation is still pending. Do not submit again; refresh the job status later.` : friendlyApiError(nextError) }); }
     finally { setBusy(false); }
   };
@@ -193,6 +252,7 @@ export default function ManageJobPage() {
     if (job.status === "UNFUNDED" && viewerRole === "worker") return <div className="action-copy"><StatusPill tone="warning">Worker workspace</StatusPill><h2>Waiting for protected payment</h2><p>The client must fund the escrow before you can accept the requirements. Do not begin work until funding is confirmed.</p></div>;
     if (job.status === "UNFUNDED" && viewerRole === "visitor") return <div className="action-copy"><StatusPill>Funding required</StatusPill><h2>This job is awaiting client funding</h2><p>The agreement is not active or ready for worker actions yet.</p></div>;
     if (job.status === "UNFUNDED" && !canFundAsClient) return <div className="action-copy"><StatusPill tone="warning">Funding required</StatusPill><h2>This job is awaiting client funding</h2><p>Only the recorded client wallet can activate this agreement.</p></div>;
+    if (job.status === "UNFUNDED" && fundingState.kind === "CONFIRMING") return <div className="action-copy"><StatusPill tone="warning"><ClockIcon size={14}/> Confirming</StatusPill><h2>{fundingState.label}</h2><p>{fundingState.detail}</p>{fundingState.transactionHash && <a className="button secondary large" href={explorerRedirectPath("tx", fundingState.transactionHash) || "#"} target="_blank" rel="noreferrer">View funding transaction</a>}<button className="button secondary large" disabled={loading} onClick={refresh}><RefreshIcon/> Refresh job</button></div>;
     if (isBounty && job.status === "UNFUNDED") return <form onSubmit={fund}><p className="step-label">Bounty step 1 · Client</p><h2 id="funding" tabIndex={-1} ref={fundingHeadingRef}>Fund and activate job</h2><p>Lock the reward before independent contributors begin work.</p><label><span>Reward amount (GEN)</span><input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal"/><small>Minimum 0.001 GEN · held by the Bounty contract</small></label><button className="button primary large" disabled={busy || !live}>{busy ? "Awaiting Bradbury…" : `Open ${amount} GEN Bounty`}<ArrowIcon/></button></form>;
     if (isBounty && job.status === "OPEN" && viewerRole === "client") return <div className="action-copy"><StatusPill tone="info">{submissions.length}/{job.max_submissions || 5} entries</StatusPill><h2>Submissions are open</h2><p>Close the round when enough work has arrived. Closing is permanent and prevents new entries.</p><div className="bounty-entry-list">{submissions.map((entry) => <a key={entry.position} href={entry.url} target="_blank" rel="noreferrer"><b>Entry {entry.position}</b><span>{shortAddress(entry.submitter)} · Inspect public work</span></a>)}</div><button className="button primary large" disabled={busy || submissions.length === 0} onClick={() => runAction("Closing Bounty submissions", () => meritApi.closeSubmissions(id), (onStage) => writeWalletContract({ account: wallet.address!, address: id, functionName: "close_submissions", onStage }), isClient)}>Close submissions <ArrowIcon/></button></div>;
     if (isBounty && job.status === "OPEN" && hasSubmitted) return <div className="action-copy"><StatusPill tone="success"><CheckIcon/> Entry recorded</StatusPill><h2>Your Bounty entry is on-chain</h2><p>One entry is allowed per wallet. The client will close the round before GenLayer evaluates every candidate.</p><a className="button secondary large" href={submissions.find((entry) => sameAddress(entry.submitter, wallet.address))?.url} target="_blank" rel="noreferrer">Inspect your entry <ArrowIcon/></a></div>;
@@ -217,6 +277,7 @@ export default function ManageJobPage() {
     <JobNavigation id={id}/><PageHeader eyebrow={viewerRole === "client" ? "Client workspace" : viewerRole === "worker" ? "Worker workspace" : viewerRole === "visitor" ? "Public job viewer" : "Manage protected job"} title={data.meta.title || "Protected job"} description={viewerRole === "worker" ? "Accept assigned requirements, submit public work, and track only your evaluation and payout." : viewerRole === "client" ? "Fund the agreement, request evaluation, and finalize settlement from the assigned client wallet." : viewerRole === "visitor" ? "Inspect public agreement and settlement facts. Private role actions require the assigned wallet." : "Complete only the action assigned to the correct demo signer."} actions={<StatusPill tone={visiblePendingAction || view.isPending ? "warning" : view.isFinalized ? "success" : "info"}>{visiblePendingAction ? "Transaction processing" : view.label}</StatusPill>}/>
     {isBounty ? <section className="role-lanes bounty-lanes" aria-label="Bounty client and contributor roles"><article className={viewerRole === "client" || clientLaneActive ? "active" : ""}><span><UserIcon/></span><div><small>Bounty client</small><b>Fund · close · evaluate · finalize</b><p title={clientAddress}>{clientAddress}</p></div>{viewerRole === "client" ? <StatusPill tone="info">You</StatusPill> : <StatusPill>Client</StatusPill>}</article><div className="role-divider"><LockIcon/><span>Open, contract-enforced competition</span></div><article className={viewerRole === "entrant" || viewerRole === "worker" || workerLaneActive ? "active" : ""}><span><UserIcon/></span><div><small>Independent contributors</small><b>Submit one public entry per wallet</b><p>{submissions.length}/{job.max_submissions || 5} entries recorded</p></div>{isWorker ? <StatusPill tone="success">Winner</StatusPill> : hasSubmitted ? <StatusPill tone="success">Entered</StatusPill> : <StatusPill>Open pool</StatusPill>}</article></section> : <section className="role-lanes" aria-label="Contract-separated client and worker roles"><article className={viewerRole === "client" || clientLaneActive ? "active" : ""}><span><UserIcon/></span><div><small>{wallet.mode === "wallet" ? "Client wallet" : "Demo client lane"}</small><b>Deploy · fund · evaluate · finalize</b><p title={clientAddress}>{clientAddress || "Client address unavailable"}</p></div>{viewerRole === "client" ? <StatusPill tone="info">You</StatusPill> : clientLaneActive ? <StatusPill tone={clientCanSign ? "info" : "warning"}>{clientCanSign ? "Active" : "Client action"}</StatusPill> : <StatusPill>Client</StatusPill>}</article><div className="role-divider"><LockIcon/><span>Contract-enforced separation</span></div><article className={viewerRole === "worker" || workerLaneActive ? "active" : ""}><span><UserIcon/></span><div><small>{wallet.mode === "wallet" ? "Worker wallet" : "Demo worker lane"}</small><b>Accept · submit public work</b><p title={workerAddress}>{workerAddress || "Worker address unavailable"}</p></div>{viewerRole === "worker" ? <StatusPill tone="success">You</StatusPill> : workerLaneActive ? <StatusPill tone={workerCanSign ? "success" : "warning"}>{workerCanSign ? "Active" : "Worker action"}</StatusPill> : <StatusPill>Worker</StatusPill>}</article></section>}
     <FundingActivationBanner job={job} viewerAddress={wallet.address} role={viewerRole} state={fundingState} isDemoClient={isDemoClient} onFund={canFundAsClient && fundingState.canFund ? fundEscrow : undefined}/>
+    {fundingState.kind === "FAILED" && fundingState.transactionHash && <div className="inline-alert error" role="alert"><div><b>Funding failed</b><span>No protected payment was activated. Review the failed transaction before retrying.</span></div><a className="button secondary" href={explorerRedirectPath("tx", fundingState.transactionHash) || "#"} target="_blank" rel="noreferrer">View funding transaction</a></div>}
     {visiblePendingAction && <div className="inline-alert info" role="status"><div><b>{visiblePendingAction.label} already submitted</b><span>Bradbury is processing this transaction. Do not submit it again.</span></div><div><a className="button secondary" href={explorerRedirectPath("tx", visiblePendingAction.hash) || "#"} target="_blank" rel="noreferrer">View transaction</a><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh job</button></div></div>}
     <section className="manage-grid"><article className={`panel action-panel ${actionOutcomeClass}`}>{actionPanel()}{message && <div className={`action-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}</article><article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Verified progress</p><h2>Escrow lifecycle</h2></div></div><Lifecycle job={job} result={data.result} transactionPending={Boolean(visiblePendingAction)}/></article></section>
     {(view.isPending || view.isFinalized) && <SettlementProof job={job} result={data.result}/>}

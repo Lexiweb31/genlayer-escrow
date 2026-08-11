@@ -371,6 +371,19 @@ class JobStore:
             ).fetchone()
         return self._transaction_row(row) if row else None
 
+    def latest_transaction_for_job(self, job_address: str, kind: str) -> Optional[dict[str, Any]]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM transactions
+                WHERE lower(job_address) = lower(?) AND kind = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (job_address, kind),
+            ).fetchone()
+        return self._transaction_row(row) if row else None
+
     def list_pending_transactions(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = int(limit)
         if limit < 1:
