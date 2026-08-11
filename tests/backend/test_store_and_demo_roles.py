@@ -9,6 +9,11 @@ import dashboard.api as api
 from genlayer_py.types.transactions import TransactionStatus
 
 
+@pytest.fixture
+def store(tmp_path):
+    return JobStore(tmp_path)
+
+
 def _record(address: str = "0xabc") -> dict:
     return {
         "address": address,
@@ -22,6 +27,38 @@ def _record(address: str = "0xabc") -> dict:
         "lifecycle_status": "UNFUNDED",
         "deployment_tx": "0xdeploy",
     }
+
+
+def test_transaction_hash_is_idempotent(store):
+    item = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xabc",
+        "job_address": "0xjob",
+        "kind": "DEPLOYMENT",
+        "status": "ACCEPTED",
+    }
+    first = store.record_transaction(item)
+    second = store.record_transaction(item)
+    assert first["id"] == second["id"]
+    assert len(store.list_pending_transactions()) == 1
+
+
+def test_transaction_status_can_advance_but_not_regress(store):
+    base = {
+        "network": "testnet_bradbury",
+        "tx_hash": "0xdef",
+        "job_address": "0xjob",
+        "kind": "SETTLEMENT",
+        "status": "ACCEPTED",
+    }
+    store.record_transaction(base)
+    store.record_transaction({
+        **base,
+        "status": "FINALIZED",
+        "verified_at": "2026-08-10T00:00:00+00:00",
+    })
+    store.record_transaction(base)
+    assert store.get_transaction("testnet_bradbury", "0xdef")["status"] == "FINALIZED"
 
 
 def test_sqlite_jobs_survive_store_reopen(tmp_path):
