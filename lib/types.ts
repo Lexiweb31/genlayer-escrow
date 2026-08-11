@@ -104,6 +104,9 @@ export interface JobRecord {
 export interface FundingTransactionRecord {
   tx_hash: string;
   status: string;
+  network_status?: string;
+  execution_result?: string;
+  failed?: boolean;
   kind?: "FUNDING";
   created_at?: string;
   updated_at?: string;

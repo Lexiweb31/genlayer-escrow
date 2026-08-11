@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import time
 from datetime import datetime, timedelta, timezone
-from threading import Barrier, Lock, Thread
+from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from eth_account import Account
@@ -195,6 +195,43 @@ def test_latest_funding_transaction_is_scoped_to_job_and_kind(store):
     assert latest is not None
     assert latest["tx_hash"] == "0xnew"
     assert store.get_transaction("testnet_bradbury", "0xold")["status"] == "CANCELED"
+
+
+@pytest.mark.parametrize(
+    ("network_status", "execution_result"),
+    [
+        ("UNDETERMINED", "UNKNOWN"),
+        ("VALIDATORS_TIMEOUT", "UNKNOWN"),
+        ("LEADER_TIMEOUT", "UNKNOWN"),
+        ("FINALIZED", "FINISHED_WITH_ERROR"),
+    ],
+)
+def test_job_detail_normalizes_terminal_funding_failure_without_losing_evidence(
+    monkeypatch, tmp_path, network_status, execution_result
+):
+    job = _record("0x" + "1" * 40)
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    journal.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": "0x" + "f" * 64,
+        "job_address": job["address"],
+        "kind": "FUNDING",
+        "status": network_status,
+        "transaction": {"tx_execution_result_name": execution_result},
+    })
+    monkeypatch.setattr(api, "store", journal)
+
+    response = api._job_detail_payload(
+        journal.get_job(job["address"]),
+        {"status": "UNFUNDED"},
+        {"status": "UNFUNDED"},
+    )
+
+    assert response["funding_transaction"]["status"] == "FAILED"
+    assert response["funding_transaction"]["network_status"] == network_status
+    assert response["funding_transaction"]["execution_result"] == execution_result
+    assert response["funding_transaction"]["tx_hash"] == "0x" + "f" * 64
 
 
 def test_sqlite_jobs_survive_store_reopen(tmp_path):
@@ -480,6 +517,163 @@ def test_demo_fund_rejects_duplicate_while_verified_transaction_is_nonterminal(m
 
     assert exc.value.status_code == 409
     assert exc.value.detail["code"] == "FUNDING_ALREADY_PENDING"
+
+
+def test_concurrent_demo_funding_reserves_job_before_submitting(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    chain_state = {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: chain_state)
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: chain_state)
+    first_submitted = Event()
+    release_first = Event()
+    calls = []
+
+    def submit_once(*_args, **_kwargs):
+        calls.append(len(calls) + 1)
+        if len(calls) == 1:
+            first_submitted.set()
+            assert release_first.wait(timeout=2)
+            return "0x" + "a" * 64
+        return "0x" + "b" * 64
+
+    monkeypatch.setattr(api, "_call_write", submit_once)
+    monkeypatch.setattr(api, "_wait", lambda tx_hash: {
+        "status_name": "ACCEPTED",
+        "tx_execution_result_name": "SUCCESS",
+        "tx_hash": tx_hash,
+    })
+    first_errors = []
+
+    def fund_first():
+        try:
+            api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+        except Exception as exc:
+            first_errors.append(exc)
+
+    first = Thread(target=fund_first)
+    first.start()
+    assert first_submitted.wait(timeout=2)
+    try:
+        with pytest.raises(HTTPException) as exc:
+            api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+        assert exc.value.status_code == 409
+        assert exc.value.detail["code"] == "FUNDING_ALREADY_PENDING"
+    finally:
+        release_first.set()
+        first.join(timeout=5)
+
+    assert not first.is_alive()
+    assert first_errors == []
+    assert calls == [1]
+
+
+def test_demo_funding_journals_hash_before_waiting_for_consensus(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    tx_hash = "0x" + "c" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    chain_state = {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: chain_state)
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: chain_state)
+    monkeypatch.setattr(api, "_call_write", lambda *_args, **_kwargs: tx_hash)
+    monkeypatch.setattr(api, "_wait", lambda _tx: (_ for _ in ()).throw(RuntimeError("poll interrupted")))
+
+    with pytest.raises(HTTPException):
+        api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    funding = journal.latest_transaction_for_job(job["address"], "FUNDING")
+    assert funding is not None
+    assert funding["tx_hash"] == tx_hash
+    assert funding["status"] == "SUBMITTED"
+
+
+def test_demo_funding_releases_reservation_when_submission_fails_before_hash(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    tx_hash = "0x" + "d" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    chain_state = {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: chain_state)
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: chain_state)
+    submissions = iter([RuntimeError("wallet unavailable before hash"), tx_hash])
+
+    def submit(*_args, **_kwargs):
+        result = next(submissions)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(api, "_call_write", submit)
+    monkeypatch.setattr(api, "_wait", lambda _tx: {
+        "status_name": "ACCEPTED",
+        "tx_execution_result_name": "SUCCESS",
+    })
+
+    with pytest.raises(HTTPException):
+        api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+    response = api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    assert response["tx"] == tx_hash
+    assert journal.latest_transaction_for_job(job["address"], "FUNDING")["tx_hash"] == tx_hash
+
+
+def test_stale_funding_reservation_can_be_reclaimed_after_process_interruption(store):
+    assert store.reserve_funding("0xjob") is True
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE funding_reservations SET created_at = ? WHERE lower(job_address) = lower(?)",
+            ((datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(), "0xjob"),
+        )
+
+    assert store.reserve_funding("0xJOB") is True
+
+
+def test_demo_funding_allows_retry_after_finalized_execution_failure(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    failed_hash = "0x" + "e" * 64
+    retry_hash = "0x" + "f" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    journal.record_transaction({
+        "network": "testnet_bradbury",
+        "tx_hash": failed_hash,
+        "job_address": job["address"],
+        "kind": "FUNDING",
+        "status": "FINALIZED",
+        "transaction": {"tx_execution_result_name": "FINISHED_WITH_ERROR"},
+    })
+    monkeypatch.setattr(api, "store", journal)
+    chain_state = {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: chain_state)
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: chain_state)
+    monkeypatch.setattr(api, "_call_write", lambda *_args, **_kwargs: retry_hash)
+    monkeypatch.setattr(api, "_wait", lambda _tx: {
+        "status_name": "ACCEPTED",
+        "tx_execution_result_name": "SUCCESS",
+    })
+
+    response = api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    assert response["tx"] == retry_hash
+    assert journal.latest_transaction_for_job(job["address"], "FUNDING")["tx_hash"] == retry_hash
+    assert journal.get_transaction("testnet_bradbury", failed_hash)["status"] == "FINALIZED"
 
 
 def test_marketplace_stats_separate_locked_pending_and_finalized():

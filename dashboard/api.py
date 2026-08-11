@@ -1227,13 +1227,35 @@ def owned_jobs(req: OwnedJobsRequest) -> dict[str, Any]:
 def _job_detail_payload(
     meta: dict[str, Any], job: dict[str, Any], result: dict[str, Any]
 ) -> dict[str, Any]:
+    funding_transaction = store.latest_transaction_for_job(meta["address"], "FUNDING")
     return {
         "meta": meta,
         "job": job,
         "result": result,
-        "funding_transaction": store.latest_transaction_for_job(meta["address"], "FUNDING"),
+        "funding_transaction": _funding_transaction_for_wire(funding_transaction),
         "addresses": _addresses(meta["address"]),
         "demo": _demo_public_config(),
+    }
+
+
+def _funding_transaction_for_wire(record: dict[str, Any] | None) -> dict[str, Any] | None:
+    if record is None:
+        return None
+    network_status = str(record.get("status") or "UNKNOWN").upper()
+    payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+    transaction = payload.get("transaction") if isinstance(payload.get("transaction"), dict) else payload
+    execution_result = str(
+        transaction.get("tx_execution_result_name")
+        or transaction.get("execution_result")
+        or "UNKNOWN"
+    ).upper()
+    failed = store.funding_transaction_failed(record)
+    return {
+        **record,
+        "status": "FAILED" if failed else network_status,
+        "network_status": network_status,
+        "execution_result": execution_result,
+        "failed": failed,
     }
 
 
@@ -1565,11 +1587,30 @@ class SubmitRequest(BaseModel):
     url: str
 
 
-def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = None, value: int = 0) -> dict[str, Any]:
+def _run_action(
+    job_id: str,
+    method: str,
+    role: str,
+    args: list[Any] | None = None,
+    value: int = 0,
+    *,
+    funding_reserved: bool = False,
+) -> dict[str, Any]:
     job = _find_job(job_id)
+    tx: str | None = None
     try:
         _preflight(job, method, role)
         tx = _call_write(job["address"], method, role, args=args, value=value)
+        if method == "fund" and funding_reserved:
+            store.record_transaction({
+                "network": "testnet_bradbury",
+                "tx_hash": tx,
+                "job_address": job["address"],
+                "kind": "FUNDING",
+                "status": "SUBMITTED",
+                "method": method,
+            })
+            store.release_funding_reservation(job["address"])
         receipt = _wait(tx)
         if method == "fund":
             _record_verified_transaction(tx, receipt, job["address"], "FUNDING")
@@ -1591,6 +1632,8 @@ def _run_action(job_id: str, method: str, role: str, args: list[Any] | None = No
             "signer_role": f"Bradbury demo {role} account",
         }
     except Exception as exc:
+        if method == "fund" and funding_reserved and tx is None:
+            store.release_funding_reservation(job["address"])
         raise _action_error(exc)
 
 
@@ -1605,18 +1648,24 @@ def fund(job_id: str, req: FundRequest):
         })
     job = _find_job(job_id)
     latest_funding = store.latest_transaction_for_job(job["address"], "FUNDING")
+    live_status = str(_job_state(job["address"])["job"].get("status") or "UNKNOWN")
     if latest_funding:
-        live_status = str(_job_state(job["address"])["job"].get("status") or "UNKNOWN")
-        failed_statuses = {
-            "CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "FAILED", "REJECTED",
-        }
-        if live_status == "UNFUNDED" and str(latest_funding["status"]).upper() not in failed_statuses:
+        if live_status == "UNFUNDED" and not store.funding_transaction_failed(latest_funding):
             raise HTTPException(status_code=409, detail={
                 "code": "FUNDING_ALREADY_PENDING",
                 "message": "A verified funding transaction is still reconciling for this escrow.",
                 "action": "Wait for Bradbury confirmation or inspect the existing transaction before retrying.",
             })
-    return _run_action(job_id, "fund", "client", value=amount_wei)
+    funding_reserved = live_status == "UNFUNDED"
+    if funding_reserved and not store.reserve_funding(job["address"]):
+        raise HTTPException(status_code=409, detail={
+            "code": "FUNDING_ALREADY_PENDING",
+            "message": "Another funding request already reserved this escrow.",
+            "action": "Wait for the existing funding attempt before retrying.",
+        })
+    return _run_action(
+        job_id, "fund", "client", value=amount_wei, funding_reserved=funding_reserved
+    )
 
 
 @app.post("/api/jobs/{job_id}/accept_terms")

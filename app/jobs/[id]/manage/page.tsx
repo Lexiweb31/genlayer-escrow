@@ -13,7 +13,7 @@ import { ErrorState, LoadingState, PageHeader, StatusPill } from "@/components/u
 import { friendlyApiError, meritApi } from "@/lib/api";
 import { genToWei, MIN_DEMO_AMOUNT_WEI } from "@/lib/amount";
 import { explorerRedirectPath } from "@/lib/explorer";
-import { fundingActivationState } from "@/lib/funding-activation";
+import { fundingActivationState, isFundingActivatedStatus } from "@/lib/funding-activation";
 import { useJob } from "@/lib/hooks";
 import { reconciliationPresentation } from "@/lib/job-presentation";
 import { settlementPresentation } from "@/lib/settlement";
@@ -23,12 +23,17 @@ import { readBradburyTransaction, sameAddress, writeWalletContract, type WalletW
 
 interface PendingWalletAction { label: string; hash: string; startingStatus: string; }
 
-const FUNDING_ACTIVE_STATUSES = new Set([
-  "OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED",
-]);
+const FUNDING_RECOVERY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000] as const;
 
-function isFundingActivatedStatus(status?: string) {
-  return Boolean(status && FUNDING_ACTIVE_STATUSES.has(status));
+function readPendingWalletAction(key: string): PendingWalletAction | null {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(localStorage.getItem(key) || "null") as PendingWalletAction | null; }
+  catch { return null; }
+}
+
+function matchesPendingFundingHash(key: string, hash: string): boolean {
+  const pending = readPendingWalletAction(key);
+  return pending?.label === "Funding escrow" && pending.hash === hash;
 }
 
 export default function ManageJobPage() {
@@ -52,13 +57,29 @@ export default function ManageJobPage() {
       return pending?.label === "Submitting payment" ? pending.hash : "";
     } catch { return ""; }
   });
-  const [pendingAction, setPendingAction] = useState<PendingWalletAction | null>(() => {
-    if (typeof window === "undefined") return null;
-    try { return JSON.parse(localStorage.getItem(pendingActionKey) || "null") as PendingWalletAction | null; } catch { return null; }
-  });
+  const [pendingActionState, setPendingActionState] = useState(() => ({
+    key: pendingActionKey,
+    value: readPendingWalletAction(pendingActionKey),
+  }));
+  const pendingAction = pendingActionState.key === pendingActionKey
+    ? pendingActionState.value
+    : readPendingWalletAction(pendingActionKey);
+  const setPendingAction = (value: PendingWalletAction | null) => {
+    setPendingActionState({ key: pendingActionKey, value });
+  };
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
-  const [recoveredFundingTransaction, setRecoveredFundingTransaction] = useState<FundingTransactionRecord | null>(null);
+  const [recoveredFundingState, setRecoveredFundingState] = useState<{
+    key: string;
+    value: FundingTransactionRecord | null;
+  }>({ key: pendingActionKey, value: null });
+  const recoveredFundingTransaction = recoveredFundingState.key === pendingActionKey
+    ? recoveredFundingState.value
+    : null;
+  const setRecoveredFundingTransaction = (value: FundingTransactionRecord | null) => {
+    setRecoveredFundingState({ key: pendingActionKey, value });
+  };
+  const [fundingRecoveryNonce, setFundingRecoveryNonce] = useState(0);
   const automaticRecoveryJob: JobRecord | null = data ? { ...data.meta, ...data.job, address: data.meta.address || data.job.address, status: data.job.status } : null;
   const automaticRecoveryView = automaticRecoveryJob ? settlementPresentation(automaticRecoveryJob, data?.result) : null;
   useEffect(() => {
@@ -83,24 +104,43 @@ export default function ManageJobPage() {
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [automaticRecoveryView?.hasTransactionReference, automaticRecoveryView?.isPending, id, recoveryTx, refresh, settlementRecoveryKey]);
   useEffect(() => {
-    const fundingHash = pendingAction?.label === "Funding escrow" ? pendingAction.hash : "";
+    const savedFundingAction = readPendingWalletAction(pendingActionKey);
+    const fundingHash = savedFundingAction?.label === "Funding escrow" ? savedFundingAction.hash : "";
     if (data?.job.status !== "UNFUNDED" || !/^0x[0-9a-fA-F]{64}$/.test(fundingHash)) return;
     let cancelled = false;
+    let attempt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRetry = () => {
+      if (cancelled || !matchesPendingFundingHash(pendingActionKey, fundingHash) || attempt > FUNDING_RECOVERY_DELAYS_MS.length) return;
+      retryTimer = setTimeout(recoverFunding, FUNDING_RECOVERY_DELAYS_MS[attempt - 1]);
+    };
     const recoverFunding = async () => {
+      attempt += 1;
       try {
         const receipt = await readBradburyTransaction(fundingHash);
-        if (cancelled) return;
-        setRecoveredFundingTransaction({ tx_hash: fundingHash, status: receipt.status, kind: "FUNDING" });
+        if (cancelled || !matchesPendingFundingHash(pendingActionKey, fundingHash)) return;
+        setRecoveredFundingTransaction({
+          tx_hash: fundingHash,
+          status: receipt.failed ? "FAILED" : receipt.status,
+          network_status: receipt.status,
+          execution_result: receipt.executionResult,
+          failed: receipt.failed,
+          kind: "FUNDING",
+        });
         if (receipt.failed) {
           localStorage.removeItem(pendingActionKey);
           setPendingAction(null);
           setMessage({ tone: "error", text: "Funding failed on Bradbury. Review the saved transaction before retrying." });
           return;
         }
-        if (!receipt.confirmed) return;
+        if (!receipt.confirmed) {
+          scheduleRetry();
+          return;
+        }
         const registration = await meritApi.registerWalletFunding(id, fundingHash);
-        if (cancelled) return;
+        if (cancelled || !matchesPendingFundingHash(pendingActionKey, fundingHash)) return;
         await refresh();
+        if (cancelled || !matchesPendingFundingHash(pendingActionKey, fundingHash)) return;
         if (isFundingActivatedStatus(registration.job_status)) {
           localStorage.removeItem(pendingActionKey);
           setPendingAction(null);
@@ -111,12 +151,13 @@ export default function ManageJobPage() {
         }
       } catch {
         // Keep the durable local hash. Bradbury or the backend may still be
-        // indexing it, and a later page load can retry without another send.
+        // indexing it. Bounded retries avoid another send without polling forever.
+        scheduleRetry();
       }
     };
     void recoverFunding();
-    return () => { cancelled = true; };
-  }, [data?.job.status, id, pendingAction?.hash, pendingAction?.label, pendingActionKey, refresh]);
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
+  }, [data?.job.status, fundingRecoveryNonce, id, pendingAction?.hash, pendingAction?.label, pendingActionKey, refresh]);
   useEffect(() => {
     if (typeof window === "undefined" || window.location.hash !== "#funding" || data?.job.status !== "UNFUNDED") return;
     const frame = window.requestAnimationFrame(() => fundingHeadingRef.current?.focus());
@@ -164,6 +205,10 @@ export default function ManageJobPage() {
     pendingAction: visiblePendingAction?.label === "Funding escrow" ? { stage: "confirming", hash: visiblePendingAction.hash } : null,
   });
   const highValueFunding = Number.isFinite(Number(amount)) && Number(amount) >= 1;
+  const retryFundingRecovery = async () => {
+    setFundingRecoveryNonce((value) => value + 1);
+    await refresh();
+  };
 
   const runAction = async (label: string, demoAction: () => Promise<unknown>, walletAction: (onStage: (stage: WalletWriteStage, transactionHash?: string) => void) => Promise<unknown>, walletRoleAllowed = true) => {
     if (busy || visiblePendingAction) return;
@@ -252,7 +297,7 @@ export default function ManageJobPage() {
     if (job.status === "UNFUNDED" && viewerRole === "worker") return <div className="action-copy"><StatusPill tone="warning">Worker workspace</StatusPill><h2>Waiting for protected payment</h2><p>The client must fund the escrow before you can accept the requirements. Do not begin work until funding is confirmed.</p></div>;
     if (job.status === "UNFUNDED" && viewerRole === "visitor") return <div className="action-copy"><StatusPill>Funding required</StatusPill><h2>This job is awaiting client funding</h2><p>The agreement is not active or ready for worker actions yet.</p></div>;
     if (job.status === "UNFUNDED" && !canFundAsClient) return <div className="action-copy"><StatusPill tone="warning">Funding required</StatusPill><h2>This job is awaiting client funding</h2><p>Only the recorded client wallet can activate this agreement.</p></div>;
-    if (job.status === "UNFUNDED" && fundingState.kind === "CONFIRMING") return <div className="action-copy"><StatusPill tone="warning"><ClockIcon size={14}/> Confirming</StatusPill><h2>{fundingState.label}</h2><p>{fundingState.detail}</p>{fundingState.transactionHash && <a className="button secondary large" href={explorerRedirectPath("tx", fundingState.transactionHash) || "#"} target="_blank" rel="noreferrer">View funding transaction</a>}<button className="button secondary large" disabled={loading} onClick={refresh}><RefreshIcon/> Refresh job</button></div>;
+    if (fundingState.kind === "CONFIRMING") return <div className="action-copy"><StatusPill tone="warning"><ClockIcon size={14}/> Confirming</StatusPill><h2>{fundingState.label}</h2><p>{fundingState.detail}</p>{fundingState.transactionHash && <a className="button secondary large" href={explorerRedirectPath("tx", fundingState.transactionHash) || "#"} target="_blank" rel="noreferrer">View funding transaction</a>}<button className="button secondary large" disabled={loading} onClick={() => void retryFundingRecovery()}><RefreshIcon/> Refresh job</button></div>;
     if (isBounty && job.status === "UNFUNDED") return <form onSubmit={fund}><p className="step-label">Bounty step 1 · Client</p><h2 id="funding" tabIndex={-1} ref={fundingHeadingRef}>Fund and activate job</h2><p>Lock the reward before independent contributors begin work.</p><label><span>Reward amount (GEN)</span><input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal"/><small>Minimum 0.001 GEN · held by the Bounty contract</small></label><button className="button primary large" disabled={busy || !live}>{busy ? "Awaiting Bradbury…" : `Open ${amount} GEN Bounty`}<ArrowIcon/></button></form>;
     if (isBounty && job.status === "OPEN" && viewerRole === "client") return <div className="action-copy"><StatusPill tone="info">{submissions.length}/{job.max_submissions || 5} entries</StatusPill><h2>Submissions are open</h2><p>Close the round when enough work has arrived. Closing is permanent and prevents new entries.</p><div className="bounty-entry-list">{submissions.map((entry) => <a key={entry.position} href={entry.url} target="_blank" rel="noreferrer"><b>Entry {entry.position}</b><span>{shortAddress(entry.submitter)} · Inspect public work</span></a>)}</div><button className="button primary large" disabled={busy || submissions.length === 0} onClick={() => runAction("Closing Bounty submissions", () => meritApi.closeSubmissions(id), (onStage) => writeWalletContract({ account: wallet.address!, address: id, functionName: "close_submissions", onStage }), isClient)}>Close submissions <ArrowIcon/></button></div>;
     if (isBounty && job.status === "OPEN" && hasSubmitted) return <div className="action-copy"><StatusPill tone="success"><CheckIcon/> Entry recorded</StatusPill><h2>Your Bounty entry is on-chain</h2><p>One entry is allowed per wallet. The client will close the round before GenLayer evaluates every candidate.</p><a className="button secondary large" href={submissions.find((entry) => sameAddress(entry.submitter, wallet.address))?.url} target="_blank" rel="noreferrer">Inspect your entry <ArrowIcon/></a></div>;

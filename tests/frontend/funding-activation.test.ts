@@ -20,7 +20,25 @@ describe("funding activation state", () => {
     expect(fundingActivationState({ job: { ...job, status: "OPEN" } }).kind).toBe("ACTIVE");
   });
 
+  it("keeps an unknown refreshed state confirming when funding evidence exists", () => {
+    expect(fundingActivationState({
+      job: { ...job, status: "UNKNOWN" },
+      fundingTransaction: { tx_hash: "0xabc", status: "FINALIZED" },
+    })).toMatchObject({ kind: "CONFIRMING", canFund: false, transactionHash: "0xabc" });
+  });
+
   it("makes a cancelled transaction safely retryable", () => {
     expect(fundingActivationState({ job, fundingTransaction: { tx_hash: "0xabc", status: "CANCELED" } })).toMatchObject({ kind: "FAILED", canFund: true });
   });
+
+  it.each(["UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "FAILED"])(
+    "makes %s funding evidence safely retryable",
+    (status) => {
+      expect(fundingActivationState({ job, fundingTransaction: { tx_hash: "0xabc", status } })).toMatchObject({
+        kind: "FAILED",
+        canFund: true,
+        transactionHash: "0xabc",
+      });
+    },
+  );
 });

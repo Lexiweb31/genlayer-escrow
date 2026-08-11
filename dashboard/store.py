@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -152,6 +152,14 @@ class JobStore:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_transactions_pending ON transactions(status_rank, updated_at)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS funding_reservations (
+                    job_address TEXT PRIMARY KEY COLLATE NOCASE,
+                    created_at TEXT NOT NULL
+                )
+                """
             )
 
     @staticmethod
@@ -383,6 +391,61 @@ class JobStore:
                 (job_address, kind),
             ).fetchone()
         return self._transaction_row(row) if row else None
+
+    @staticmethod
+    def funding_transaction_failed(record: dict[str, Any]) -> bool:
+        status = str(record.get("status") or "UNKNOWN").upper()
+        payload = record.get("payload") if isinstance(record.get("payload"), dict) else record
+        transaction = payload.get("transaction") if isinstance(payload.get("transaction"), dict) else payload
+        execution = str(
+            transaction.get("tx_execution_result_name")
+            or transaction.get("execution_result")
+            or "UNKNOWN"
+        ).upper()
+        result = str(transaction.get("result_name") or transaction.get("result") or "UNKNOWN").upper()
+        return (
+            status in {
+                "CANCELED", "CANCELLED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT", "FAILED", "REJECTED",
+            }
+            or "ERROR" in execution
+            or "FAIL" in execution
+            or "FAIL" in result
+        )
+
+    def reserve_funding(self, job_address: str) -> bool:
+        """Atomically reserve the one in-flight demo funding slot for a job."""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            stale_before = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+            conn.execute(
+                "DELETE FROM funding_reservations WHERE created_at < ?",
+                (stale_before,),
+            )
+            latest_funding = conn.execute(
+                """
+                SELECT * FROM transactions
+                WHERE lower(job_address) = lower(?) AND kind = 'FUNDING'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (job_address,),
+            ).fetchone()
+            if latest_funding and not self.funding_transaction_failed(
+                self._transaction_row(latest_funding)
+            ):
+                return False
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO funding_reservations (job_address, created_at) VALUES (?, ?)",
+                (job_address.lower(), utc_now()),
+            )
+            return cursor.rowcount == 1
+
+    def release_funding_reservation(self, job_address: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM funding_reservations WHERE lower(job_address) = lower(?)",
+                (job_address,),
+            )
 
     def list_pending_transactions(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = int(limit)

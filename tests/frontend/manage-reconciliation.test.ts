@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const useJob = vi.hoisted(() => vi.fn());
 const registerWalletFunding = vi.hoisted(() => vi.fn());
 const readBradburyTransaction = vi.hoisted(() => vi.fn());
+const route = vi.hoisted(() => ({ id: "0x1111111111111111111111111111111111111111" }));
 const storage = new Map<string, string>();
 const localStore = {
   getItem: (key: string) => storage.get(key) ?? null,
@@ -22,7 +23,7 @@ const walletMode = vi.hoisted(() => ({
 
 vi.mock("next/link", () => ({ default: "a" }));
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: "0x1111111111111111111111111111111111111111" }),
+  useParams: () => ({ id: route.id }),
   usePathname: () => "/jobs/0x1111111111111111111111111111111111111111/manage",
 }));
 vi.mock("@/components/providers", () => ({
@@ -46,6 +47,7 @@ vi.mock("@/lib/wallet-client", () => ({
 import ManageJobPage from "@/app/jobs/[id]/manage/page";
 
 beforeEach(() => {
+  route.id = "0x1111111111111111111111111111111111111111";
   storage.clear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("localStorage", localStore);
@@ -114,11 +116,31 @@ function renderUnfundedWorkspace({ address, jobType = "DIRECT_HIRE", mode = "wal
   return renderToStaticMarkup(createElement(ManageJobPage));
 }
 
-async function mountUnfundedRecovery(hash: string, receipt: Record<string, unknown>) {
-  registerWalletFunding.mockClear();
-  readBradburyTransaction.mockClear();
+function renderUnknownFundingWorkspace(hash: string) {
   walletMode.current = { mode: "wallet", address: "0xclient", onBradbury: true, balance: "1 GEN" };
-  const refresh = vi.fn();
+  useJob.mockReturnValue({
+    data: {
+      meta: { address: "0x1111111111111111111111111111111111111111", title: "Unknown funding", status: "UNKNOWN", client_address: "0xclient", worker_address: "0xworker" },
+      job: { address: "0x1111111111111111111111111111111111111111", status: "UNKNOWN", client: "0xclient", worker: "0xworker" },
+      funding_transaction: { tx_hash: hash, status: "FINALIZED", network_status: "FINALIZED" },
+      result: {}, addresses: {}, demo: { live_actions_enabled: true, client_address: "0xclient" },
+    },
+    error: null,
+    loading: false,
+    refresh: vi.fn(),
+  });
+  return renderToStaticMarkup(createElement(ManageJobPage));
+}
+
+async function mountUnfundedRecovery(
+  hash: string,
+  receipt: Record<string, unknown> | Record<string, unknown>[],
+  refreshOverride?: ReturnType<typeof vi.fn>,
+) {
+  registerWalletFunding.mockClear();
+  readBradburyTransaction.mockReset();
+  walletMode.current = { mode: "wallet", address: "0xclient", onBradbury: true, balance: "1 GEN" };
+  const refresh = refreshOverride || vi.fn();
   useJob.mockReturnValue({
     data: {
       meta: { address: "0x1111111111111111111111111111111111111111", title: "Funding recovery", status: "UNFUNDED", client_address: "0xclient", worker_address: "0xworker" },
@@ -134,13 +156,20 @@ async function mountUnfundedRecovery(hash: string, receipt: Record<string, unkno
     hash,
     startingStatus: "UNFUNDED",
   }));
-  readBradburyTransaction.mockResolvedValue(receipt);
+  const receipts = Array.isArray(receipt) ? receipt : [receipt];
+  for (const nextReceipt of receipts) readBradburyTransaction.mockResolvedValueOnce(nextReceipt);
+  readBradburyTransaction.mockResolvedValue(receipts[receipts.length - 1]);
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   await act(async () => { root.render(createElement(ManageJobPage)); });
-  await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 0)); });
-  return { host, refresh, unmount: async () => { await act(async () => root.unmount()); host.remove(); } };
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  return {
+    host,
+    refresh,
+    rerender: async () => { await act(async () => { root.render(createElement(ManageJobPage)); await Promise.resolve(); }); },
+    unmount: async () => { await act(async () => root.unmount()); host.remove(); },
+  };
 }
 
 describe("manage settlement reconciliation guidance", () => {
@@ -229,6 +258,41 @@ describe("manage settlement reconciliation guidance", () => {
     localStorage.clear();
   });
 
+  it("polls a pending saved funding hash until it confirms without a reload", async () => {
+    vi.useFakeTimers();
+    const hash = `0x${"2".repeat(64)}`;
+    registerWalletFunding.mockResolvedValue({ job_status: "UNFUNDED" });
+    const pending = { status: "PROPOSING", executionResult: "UNKNOWN", result: "UNKNOWN", failed: false, confirmed: false };
+    const confirmed = { status: "ACCEPTED", executionResult: "FINISHED_WITH_RETURN", result: "SUCCESS", failed: false, confirmed: true };
+    const mounted = await mountUnfundedRecovery(hash, [pending, confirmed]);
+
+    expect(readBradburyTransaction).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+
+    expect(readBradburyTransaction).toHaveBeenCalledTimes(2);
+    expect(registerWalletFunding).toHaveBeenCalledWith("0x1111111111111111111111111111111111111111", hash);
+    await mounted.unmount();
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  it("bounds pending funding polling and clears its timer on unmount", async () => {
+    vi.useFakeTimers();
+    const hash = `0x${"3".repeat(64)}`;
+    const pending = { status: "PROPOSING", executionResult: "UNKNOWN", result: "UNKNOWN", failed: false, confirmed: false };
+    const mounted = await mountUnfundedRecovery(hash, pending);
+
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(readBradburyTransaction).toHaveBeenCalledTimes(5);
+    expect(vi.getTimerCount()).toBe(0);
+
+    await mounted.unmount();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(readBradburyTransaction).toHaveBeenCalledTimes(5);
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
   it("does not treat an unknown refreshed snapshot as funding activation", async () => {
     const hash = `0x${"e".repeat(64)}`;
     registerWalletFunding.mockResolvedValue({ job_status: "UNKNOWN" });
@@ -248,6 +312,17 @@ describe("manage settlement reconciliation guidance", () => {
     localStorage.clear();
   });
 
+  it("rerenders an actual unknown job snapshot as confirming and disabled", () => {
+    const hash = `0x${"1".repeat(64)}`;
+
+    const markup = renderUnknownFundingWorkspace(hash);
+
+    expect(markup).toContain("Transaction submitted — confirming on Bradbury");
+    expect(markup).toContain(`/api/explorer/tx/${hash}`);
+    expect(markup).not.toContain("The payment transaction is confirmed.");
+    expect(markup).not.toContain("button primary large");
+  });
+
   it("renders a failed saved funding reference before clearing it and enabling retry", async () => {
     const hash = `0x${"d".repeat(64)}`;
 
@@ -264,6 +339,75 @@ describe("manage settlement reconciliation guidance", () => {
     expect(mounted.host.textContent).toContain("Funding failed");
     expect(mounted.host.innerHTML).toContain(`/api/explorer/tx/${hash}`);
     expect(mounted.host.querySelector<HTMLButtonElement>("button.primary.large")?.disabled).toBe(false);
+    await mounted.unmount();
+    localStorage.clear();
+  });
+
+  it("treats finalized funding with decoded execution failure as failed and retryable", async () => {
+    const hash = `0x${"f".repeat(64)}`;
+
+    const mounted = await mountUnfundedRecovery(hash, {
+      status: "FINALIZED",
+      executionResult: "FINISHED_WITH_ERROR",
+      result: "FAILURE",
+      failed: true,
+      confirmed: false,
+    });
+
+    expect(mounted.host.textContent).toContain("Funding failed");
+    expect(mounted.host.innerHTML).toContain(`/api/explorer/tx/${hash}`);
+    expect(mounted.host.querySelector<HTMLButtonElement>("button.primary.large")?.disabled).toBe(false);
+    await mounted.unmount();
+    localStorage.clear();
+  });
+
+  it("does not let a stale refresh continuation overwrite a new route funding hash", async () => {
+    const oldHash = `0x${"4".repeat(64)}`;
+    const newHash = `0x${"5".repeat(64)}`;
+    const newId = "0x2222222222222222222222222222222222222222";
+    let resolveRefresh!: () => void;
+    const refresh = vi.fn(() => new Promise<void>((resolve) => { resolveRefresh = resolve; }));
+    registerWalletFunding.mockResolvedValue({ job_status: "OPEN" });
+    const mounted = await mountUnfundedRecovery(oldHash, {
+      status: "ACCEPTED",
+      executionResult: "FINISHED_WITH_RETURN",
+      result: "SUCCESS",
+      failed: false,
+      confirmed: true,
+    }, refresh);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    route.id = newId;
+    localStorage.setItem(`merit-pending-action:${newId}`, JSON.stringify({
+      label: "Funding escrow",
+      hash: newHash,
+      startingStatus: "UNFUNDED",
+    }));
+    readBradburyTransaction.mockImplementation(async () => ({
+      status: "PROPOSING",
+      executionResult: "UNKNOWN",
+      result: "UNKNOWN",
+      failed: false,
+      confirmed: false,
+    }));
+    useJob.mockReturnValue({
+      data: {
+        meta: { address: newId, title: "New route funding", status: "UNFUNDED", client_address: "0xclient", worker_address: "0xworker" },
+        job: { address: newId, status: "UNFUNDED", client: "0xclient", worker: "0xworker" },
+        result: {}, addresses: {}, demo: { live_actions_enabled: true, client_address: "0xclient" },
+      },
+      error: null,
+      loading: false,
+      refresh: vi.fn(),
+    });
+    await mounted.rerender();
+    resolveRefresh();
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(readBradburyTransaction).toHaveBeenCalledWith(newHash);
+    expect(localStorage.getItem(`merit-pending-action:${newId}`)).toContain(newHash);
+    expect(mounted.host.innerHTML).toContain(`/api/explorer/tx/${newHash}`);
+    expect(mounted.host.textContent).toContain("Transaction submitted — confirming on Bradbury");
     await mounted.unmount();
     localStorage.clear();
   });
