@@ -650,7 +650,10 @@ def _refresh_settlement(meta: dict[str, Any], chain_job: dict[str, Any]) -> dict
         # do not always produce a child GenLayer transaction ID. Confirm only
         # when every contract-recorded transfer matches a finalized message, or
         # when the network exposes an inspectable triggered transaction.
-        failed_statuses = {"CANCELED", "UNDETERMINED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"}
+        failed_statuses = {
+            "CANCELED", "CANCELLED", "UNDETERMINED", "VALIDATORS_TIMEOUT",
+            "LEADER_TIMEOUT", "FAILED", "REJECTED",
+        }
         if parent_status in failed_statuses:
             settlement["transfer_status"] = "FAILED_FINALIZATION"
             settlement["status_error"] = f"Bradbury settlement transaction ended with {parent_status}."
@@ -774,6 +777,42 @@ _RECONCILE_STOP = Event()
 _reconcile_thread: Thread | None = None
 
 
+def _reconciliation_error_code(exc: Exception) -> str:
+    """Return a stable public category without persisting SDK diagnostics."""
+    message = str(exc).lower()
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
+        term in message for term in ("network", "connection", "timeout", "temporarily unavailable")
+    ):
+        return "TESTNET_UNAVAILABLE"
+    if "rate limit" in message or "too many requests" in message or "429" in message:
+        return "TESTNET_RATE_LIMITED"
+    if "not found" in message or "404" in message:
+        return "TESTNET_NOT_FOUND"
+    return "TESTNET_READ_FAILED"
+
+
+def _reconcile_backoff_seconds() -> int:
+    try:
+        return min(300, max(10, int(os.getenv("MARKETPLACE_RECONCILE_BACKOFF_SECONDS", "30"))))
+    except ValueError:
+        return 30
+
+
+def _is_verified_final_snapshot(record: dict[str, Any]) -> bool:
+    snapshot = record.get("state_snapshot") or {}
+    settlement = snapshot.get("settlement") or record.get("settlement") or {}
+    status = snapshot.get("status") or record.get("lifecycle_status")
+    return status in _FINAL_STATUSES and settlement.get("transfer_status") == "FINALIZED"
+
+
+def _is_reconcile_backing_off(record: dict[str, Any]) -> bool:
+    return (
+        record.get("reconcile_state") == "BACKING_OFF"
+        and isinstance(record.get("reconcile_age_seconds"), int)
+        and record["reconcile_age_seconds"] < _reconcile_backoff_seconds()
+    )
+
+
 def _wei_int(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -844,11 +883,8 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
             record
             for record in records
             if not record.get("legacy_contract")
-            and not (
-                isinstance((record.get("state_snapshot") or {}).get("job"), dict)
-                and (record.get("state_snapshot") or {}).get("status") in _FINAL_STATUSES
-                and ((record.get("state_snapshot") or {}).get("settlement") or {}).get("transfer_status") == "FINALIZED"
-            )
+            and not _is_verified_final_snapshot(record)
+            and not _is_reconcile_backing_off(record)
         ]
         worker_count = min(max(1, int(os.getenv("MARKETPLACE_READ_WORKERS", "6"))), max(1, len(live_records)))
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="marketplace-read") as executor:
@@ -872,10 +908,21 @@ def _refresh_marketplace_snapshots(records: list[dict[str, Any]]) -> None:
                         lifecycle_status=str(snapshot["status"] or "UNKNOWN"),
                         settlement=snapshot["settlement"],
                         state_snapshot=snapshot,
+                        reconcile_state="CURRENT",
+                        reconcile_attempted_at=utc_now(),
+                        reconcile_error_code="",
                     )
-                except Exception:
+                except Exception as exc:
                     # Preserve the last known-good snapshot when Bradbury has a
-                    # transient read failure.
+                    # transient read failure. The durable backoff timestamp
+                    # prevents request-driven refreshes from retrying in a loop
+                    # after a process restart.
+                    store.update_job(
+                        meta["address"],
+                        reconcile_state="BACKING_OFF",
+                        reconcile_attempted_at=utc_now(),
+                        reconcile_error_code=_reconciliation_error_code(exc),
+                    )
                     continue
         _marketplace_last_refresh = time.monotonic()
     finally:
@@ -944,6 +991,7 @@ def _list_jobs_snapshot() -> dict[str, Any]:
             entry["evaluation_complete"] = entry["status"] in _EVALUATED_STATUSES
             entry["score"] = snapshot.get("score") if entry["evaluation_complete"] else None
             entry["settlement"] = snapshot.get("settlement") or meta.get("settlement") or {}
+            entry["stale"] = bool(meta.get("reconcile_error_code"))
             if not snapshot:
                 degraded += 1
         output.append(entry)
@@ -992,6 +1040,14 @@ def get_job(job_id: str):
             "addresses": _addresses(meta["address"]),
             "demo": _demo_public_config(),
         }
+    if _is_reconcile_backing_off(meta) and isinstance(cached_job, dict) and isinstance(cached_result, dict):
+        return {
+            "meta": {**meta, "stale": True},
+            "job": {**cached_job, "stale": True},
+            "result": cached_result,
+            "addresses": _addresses(meta["address"]),
+            "demo": _demo_public_config(),
+        }
     try:
         public = _public_state(meta, _job_state(meta["address"]))
         live_status = str(public["job"].get("status") or "UNKNOWN")
@@ -1007,6 +1063,9 @@ def get_job(job_id: str):
                 "job": public["job"],
                 "result": public["result"],
             },
+            reconcile_state="CURRENT",
+            reconcile_attempted_at=utc_now(),
+            reconcile_error_code="",
         )
         return {
             "meta": meta,
@@ -1016,6 +1075,25 @@ def get_job(job_id: str):
             "demo": _demo_public_config(),
         }
     except Exception as exc:
+        if not meta.get("legacy_contract"):
+            try:
+                store.update_job(
+                    meta["address"],
+                    reconcile_state="BACKING_OFF",
+                    reconcile_attempted_at=utc_now(),
+                    reconcile_error_code=_reconciliation_error_code(exc),
+                )
+            except Exception:
+                pass
+        if isinstance(cached_job, dict) and isinstance(cached_result, dict):
+            stale_meta = {**meta, "stale": True}
+            return {
+                "meta": stale_meta,
+                "job": {**cached_job, "stale": True},
+                "result": cached_result,
+                "addresses": _addresses(meta["address"]),
+                "demo": _demo_public_config(),
+            }
         if meta.get("legacy_contract"):
             return {
                 "meta": {**meta, "legacy_warning": "Legacy settlement contract — do not fund"},

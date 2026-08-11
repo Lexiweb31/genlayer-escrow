@@ -66,6 +66,9 @@ class JobStore:
         "deployment_tx",
         "settlement_json",
         "state_json",
+        "reconcile_state",
+        "reconcile_attempted_at",
+        "reconcile_error_code",
         "updated_at",
     }
 
@@ -104,6 +107,9 @@ class JobStore:
                     deployment_tx TEXT NOT NULL DEFAULT '',
                     settlement_json TEXT NOT NULL DEFAULT '{}',
                     state_json TEXT NOT NULL DEFAULT '{}',
+                    reconcile_state TEXT NOT NULL DEFAULT 'IDLE',
+                    reconcile_attempted_at TEXT,
+                    reconcile_error_code TEXT NOT NULL DEFAULT '',
                     legacy_contract INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -117,6 +123,12 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'DIRECT_HIRE'")
             if "max_submissions" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN max_submissions INTEGER NOT NULL DEFAULT 0")
+            if "reconcile_state" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN reconcile_state TEXT NOT NULL DEFAULT 'IDLE'")
+            if "reconcile_attempted_at" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN reconcile_attempted_at TEXT")
+            if "reconcile_error_code" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN reconcile_error_code TEXT NOT NULL DEFAULT ''")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC)"
             )
@@ -155,6 +167,16 @@ class JobStore:
             item["state_snapshot"] = json.loads(item.pop("state_json") or "{}")
         except json.JSONDecodeError:
             item["state_snapshot"] = {}
+        attempted_at = item.get("reconcile_attempted_at")
+        try:
+            attempted = datetime.fromisoformat(str(attempted_at).replace("Z", "+00:00"))
+            if attempted.tzinfo is None:
+                attempted = attempted.replace(tzinfo=timezone.utc)
+            item["reconcile_age_seconds"] = max(
+                0, int((datetime.now(timezone.utc) - attempted).total_seconds())
+            )
+        except (TypeError, ValueError):
+            item["reconcile_age_seconds"] = None
         item["explorer"] = f"https://explorer-bradbury.genlayer.com/address/{item['address']}"
         return item
 
@@ -176,6 +198,9 @@ class JobStore:
             "deployment_tx": str(record.get("deployment_tx") or ""),
             "settlement_json": json.dumps(record.get("settlement") or {}, default=str),
             "state_json": json.dumps(record.get("state_snapshot") or {}, default=str),
+            "reconcile_state": str(record.get("reconcile_state") or "IDLE"),
+            "reconcile_attempted_at": record.get("reconcile_attempted_at"),
+            "reconcile_error_code": str(record.get("reconcile_error_code") or ""),
             "legacy_contract": int(bool(record.get("legacy_contract"))),
             "created_at": str(record.get("created_at") or now),
             "updated_at": str(record.get("updated_at") or now),

@@ -154,6 +154,53 @@ def test_background_reconciliation_reads_the_durable_registry(monkeypatch):
     assert received == records
 
 
+def test_reconcile_failure_is_durable_and_serves_the_last_verified_snapshot(monkeypatch, tmp_path):
+    durable_store = JobStore(tmp_path)
+    durable_store.add_job({
+        **_record("0xstale"),
+        "lifecycle_status": "SETTLEMENT_PENDING",
+        "state_snapshot": {
+            "status": "SETTLEMENT_PENDING",
+            "amount": "1000",
+            "score": 60,
+            "settlement": {"parent_transaction": "0xparent", "transfer_status": "PENDING_FINALIZATION"},
+            "job": {"status": "SETTLEMENT_PENDING", "amount": "1000"},
+            "result": {"status": "SETTLEMENT_PENDING", "score": 60},
+        },
+    })
+    monkeypatch.setattr(api, "store", durable_store)
+    monkeypatch.setattr(api, "_job_state", lambda _address: (_ for _ in ()).throw(ConnectionError("network unavailable")))
+
+    api._refresh_marketplace_snapshots(durable_store.list_jobs())
+
+    restarted = JobStore(tmp_path).get_job("0xstale")
+    assert restarted is not None
+    assert restarted["state_snapshot"]["status"] == "SETTLEMENT_PENDING"
+    assert restarted["reconcile_state"] == "BACKING_OFF"
+    assert restarted["reconcile_error_code"] == "TESTNET_UNAVAILABLE"
+    assert restarted["reconcile_attempted_at"]
+    assert restarted["reconcile_age_seconds"] >= 0
+
+    response = api._list_jobs_snapshot()
+    assert response["jobs"][0]["status"] == "SETTLEMENT_PENDING"
+    assert response["jobs"][0]["stale"] is True
+
+
+def test_reconcile_never_attempts_a_verified_final_snapshot(monkeypatch):
+    record = {
+        **_record("0xfinal"),
+        "state_snapshot": {
+            "status": "ACCEPTED",
+            "settlement": {"transfer_status": "FINALIZED"},
+            "job": {"status": "ACCEPTED", "settlement": {"transfer_status": "FINALIZED"}},
+            "result": {"status": "ACCEPTED"},
+        },
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: pytest.fail("finalized snapshot should not be reconciled"))
+
+    api._refresh_marketplace_snapshots([record])
+
+
 def test_legacy_import_is_read_only_and_does_not_overwrite_new_record(tmp_path):
     store = JobStore(tmp_path)
     store.add_job(_record())
