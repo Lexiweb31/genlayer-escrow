@@ -171,12 +171,11 @@ export interface JobsResponse {
   demo: DemoConfig;
 }
 
-export interface OwnedJobsRequest {
+export type OwnedJobsRequest = {
   address: string;
   message: string;
   signature: string;
-  demo_mode: false;
-}
+} & ({ demo_mode: false } | { demo_mode: true });
 
 export interface OwnedJobsResponse {
   jobs: JobRecord[];

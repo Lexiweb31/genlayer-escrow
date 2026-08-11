@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellIcon, CheckIcon, CloseIcon, RefreshIcon } from "@/components/icons";
 import { useWalletMode } from "@/components/providers";
 import { meritApi } from "@/lib/api";
-import { jobRelevantToWallet, notificationForStatus, type MeritNotification } from "@/lib/notifications";
+import { OWNED_UNFUNDED_JOBS_EVENT } from "@/lib/hooks";
+import { addressMatches, jobRelevantToWallet, notificationForStatus, type MeritNotification } from "@/lib/notifications";
 import type { JobRecord, JobStatus } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 
@@ -33,10 +34,28 @@ export function NotificationCenter() {
       setRegistryError(false);
     } catch { setRegistryError(true); }
   }, [itemsKey, save, snapshotKey, viewer]);
+  useEffect(() => {
+    if (!viewer || !itemsKey) return;
+    const onOwnedJobs = (event: Event) => {
+      const detail = (event as CustomEvent<{ address?: string; jobs?: JobRecord[] }>).detail;
+      if (!addressMatches(detail?.address, viewer)) return;
+      const existing = readItems(itemsKey);
+      const retained = existing.filter((item) => !item.id.endsWith(":UNFUNDED"));
+      const previousById = new Map(existing.map((item) => [item.id, item]));
+      const reminders = (detail?.jobs || [])
+        .filter((job) => job.status === "UNFUNDED" && addressMatches(job.client || job.client_address, viewer))
+        .map((job) => notificationForStatus(job, "UNFUNDED", new Date().toISOString(), viewer))
+        .filter((item): item is MeritNotification => item !== null)
+        .map((item) => previousById.get(item.id) || item);
+      save([...reminders, ...retained]);
+    };
+    window.addEventListener(OWNED_UNFUNDED_JOBS_EVENT, onOwnedJobs);
+    return () => window.removeEventListener(OWNED_UNFUNDED_JOBS_EVENT, onOwnedJobs);
+  }, [itemsKey, save, viewer]);
   useEffect(() => { const initial = window.setTimeout(() => void check(), 0); const timer = window.setInterval(() => void check(), 30_000); const onVisibility = () => { if (document.visibilityState === "visible") void check(); }; document.addEventListener("visibilitychange", onVisibility); return () => { window.clearTimeout(initial); window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); }; }, [check]);
   const unread = useMemo(() => items.filter((item) => !item.read).length + (registryError ? 1 : 0), [items, registryError]);
   const markAllRead = () => save(items.map((item) => ({ ...item, read: true })));
   const toggle = () => { const next = !open; setOpen(next); if (next) markAllRead(); };
   if (!viewer) return null;
-  return <div className="notification-center"><button className="icon-button notification-trigger" onClick={toggle} aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open}><BellIcon/>{unread > 0 && <span>{unread > 9 ? "9+" : unread}</span>}</button>{open && <section className="notification-popover" aria-label="Notifications"><header><div><b>Notifications</b><small>Job and payment activity</small></div><button className="notification-close" onClick={() => setOpen(false)} aria-label="Close notifications"><CloseIcon size={15}/></button></header>{registryError && <article className="notification-item danger"><span><RefreshIcon/></span><div><b>Marketplace connection lost</b><p>Live job updates are temporarily unavailable. Merit will retry automatically.</p><small>Connection status</small></div></article>}<div className="notification-list">{items.length ? items.map((item) => <Link key={item.id} href={item.jobAddress ? `/jobs/${encodeURIComponent(item.jobAddress)}` : "/jobs"} className={`notification-item ${item.tone} ${item.read ? "read" : ""}`} onClick={() => setOpen(false)}><span><CheckIcon/></span><div><b>{item.title}</b><p>{item.message}</p><small>{relativeTime(item.createdAt)}</small></div></Link>) : !registryError && <div className="notification-empty"><BellIcon/><b>You’re all caught up</b><p>Job acceptance, submissions, evaluations and payments will appear here.</p></div>}</div>{items.length > 0 && <footer><button onClick={() => save([])}>Clear notifications</button><button onClick={markAllRead}>Mark all read</button></footer>}</section>}</div>;
+  return <div className="notification-center"><button className="icon-button notification-trigger" onClick={toggle} aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open}><BellIcon/>{unread > 0 && <span>{unread > 9 ? "9+" : unread}</span>}</button>{open && <section className="notification-popover" aria-label="Notifications"><header><div><b>Notifications</b><small>Job and payment activity</small></div><button className="notification-close" onClick={() => setOpen(false)} aria-label="Close notifications"><CloseIcon size={15}/></button></header>{registryError && <article className="notification-item danger"><span><RefreshIcon/></span><div><b>Marketplace connection lost</b><p>Live job updates are temporarily unavailable. Merit will retry automatically.</p><small>Connection status</small></div></article>}<div className="notification-list">{items.length ? items.map((item) => <Link key={item.id} href={item.jobAddress ? item.id.endsWith(":UNFUNDED") ? `/jobs/${encodeURIComponent(item.jobAddress)}/manage#funding` : `/jobs/${encodeURIComponent(item.jobAddress)}` : "/jobs"} className={`notification-item ${item.tone} ${item.read ? "read" : ""}`} onClick={() => setOpen(false)}><span><CheckIcon/></span><div><b>{item.title}</b><p>{item.message}</p><small>{relativeTime(item.createdAt)}</small></div></Link>) : !registryError && <div className="notification-empty"><BellIcon/><b>You’re all caught up</b><p>Job acceptance, submissions, evaluations and payments will appear here.</p></div>}</div>{items.length > 0 && <footer><button onClick={() => save([])}>Clear notifications</button><button onClick={markAllRead}>Mark all read</button></footer>}</section>}</div>;
 }

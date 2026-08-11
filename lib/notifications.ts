@@ -16,6 +16,7 @@ const COPY: Partial<Record<JobStatus, Omit<MeritNotification, "id" | "jobAddress
 };
 
 const CLIENT_COPY: Partial<Record<JobStatus, Omit<MeritNotification, "id" | "jobAddress" | "createdAt" | "read">>> = {
+  UNFUNDED: { title: "Fund your job to publish it", message: "This draft is private until its GEN payment is deposited.", tone: "warning" },
   OPEN: { title: "Payment locked", message: "The assigned worker can now review and accept the job requirements.", tone: "info" },
   AGREED: { title: "Worker accepted the job", message: "Work has started under the agreed requirements.", tone: "success" },
   SUBMITTED: { title: "Work ready for evaluation", message: "The worker submitted a public deliverable. Review it and request GenLayer evaluation.", tone: "info" },

@@ -2,21 +2,53 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { PlusIcon, RefreshIcon } from "@/components/icons";
+import { AlertIcon, ClockIcon, PlusIcon, RefreshIcon } from "@/components/icons";
+import { useWalletMode } from "@/components/providers";
 import { JobCard } from "@/components/job-card";
-import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
+import { EmptyState, ErrorState, LoadingState, MonoValue, PageHeader } from "@/components/ui";
 import { formatWeiCompact, safeWei } from "@/lib/amount";
-import { useJobs } from "@/lib/hooks";
+import { useJobs, useOwnedUnfundedJobs } from "@/lib/hooks";
+import type { JobRecord } from "@/lib/types";
+import { relativeTime } from "@/lib/utils";
+
+export function partitionJobs(publicJobs: JobRecord[], ownedJobs: JobRecord[]) {
+  return {
+    liveJobs: publicJobs.filter((job) => job.status !== "UNFUNDED"),
+    needsFunding: ownedJobs.filter((job) => job.status === "UNFUNDED"),
+  };
+}
+
+function NeedsFundingSection({ jobs, loading, onLoad }: {
+  jobs: JobRecord[];
+  loading: boolean;
+  onLoad(): Promise<void>;
+}) {
+  return <section className="needs-funding-section" aria-labelledby="needs-funding-title">
+    <header>
+      <div><p className="card-kicker"><AlertIcon size={14}/> Private client recovery</p><h2 id="needs-funding-title">Needs funding</h2><p>Unpublished drafts are visible only to their client until GEN is deposited. Workers cannot see these jobs.</p></div>
+      <button className="button secondary" onClick={() => void onLoad()} disabled={loading}>{loading ? "Refreshing drafts…" : "Refresh private drafts"}</button>
+    </header>
+    {jobs.length > 0 && <div className="needs-funding-grid">{jobs.map((job) => <article className="needs-funding-card" key={job.address}>
+      <div><p className="card-kicker">Private draft</p><h3>{job.title || "Untitled job"}</h3></div>
+      <dl><div><dt>Contract address</dt><dd><MonoValue>{job.address}</MonoValue></dd></div><div><dt>Created</dt><dd><ClockIcon size={14}/>{relativeTime(job.created_at) || "Timestamp unavailable"}</dd></div></dl>
+      <p className="needs-funding-privacy"><AlertIcon size={14}/> Not visible to workers</p>
+      <Link className="button primary" href={`/jobs/${encodeURIComponent(job.address)}/manage#funding`}>Fund and activate</Link>
+    </article>)}</div>}
+  </section>;
+}
 
 export default function BrowseJobsPage() {
   const { data, error, loading, refresh } = useJobs();
+  const wallet = useWalletMode();
+  const { data: owned, error: ownedError, loading: loadingOwned, load: loadOwned } = useOwnedUnfundedJobs();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [jobType, setJobType] = useState("ALL");
   const [sort, setSort] = useState("NEWEST");
   const [page, setPage] = useState(1);
   const pageSize = 6;
-  const filtered = useMemo(() => (data?.jobs || []).filter((job) => {
+  const { liveJobs, needsFunding } = useMemo(() => partitionJobs(data?.jobs || [], owned?.jobs || []), [data, owned]);
+  const filtered = useMemo(() => liveJobs.filter((job) => {
     const matchesQuery = `${job.title || ""} ${job.spec || ""} ${job.address}`.toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === "ALL" || (status === "ACTIVE" ? ["UNFUNDED", "OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED"].includes(job.status) : status === "FINALIZED" ? ["ACCEPTED", "PARTIAL", "REFUNDED"].includes(job.status) : job.status === status);
     const matchesType = jobType === "ALL" || (job.job_type || "DIRECT_HIRE") === jobType;
@@ -28,12 +60,15 @@ export default function BrowseJobsPage() {
       return sort === "VALUE_HIGH" ? -order : order;
     }
     return sort === "OLDEST" ? new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime() : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-  }), [data, query, status, jobType, sort]);
+  }), [liveJobs, query, status, jobType, sort]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
+  const showNeedsFunding = Boolean(owned?.jobs.length);
 
   return <div className="page-container">
-    <PageHeader eyebrow="Shared marketplace" title="Browse protected jobs" description="See the same shared job records, exact GEN values, evaluation results, and payment status in every browser." actions={<><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh</button><Link className="button primary" href="/jobs/new"><PlusIcon/> Post a job</Link></>}/>
+    <PageHeader eyebrow="Shared marketplace" title="Browse protected jobs" description="See the same shared job records, exact GEN values, evaluation results, and payment status in every browser." actions={<><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh</button>{wallet.mode === "wallet" && <button className="button secondary" onClick={() => void loadOwned()} disabled={loadingOwned}>{loadingOwned ? "Loading recovery…" : "Recover unpublished jobs"}</button>}<Link className="button primary" href="/jobs/new"><PlusIcon/> Post a job</Link></>}/>
+    {ownedError && <p className="needs-funding-error" role="alert">{ownedError.message}</p>}
+    {showNeedsFunding && <NeedsFundingSection jobs={needsFunding} loading={loadingOwned} onLoad={loadOwned}/>}
     {data && <section className="stat-grid marketplace-stats" aria-label="Marketplace totals">
       <article><span>GEN locked in active escrow</span><strong>{formatWeiCompact(data.stats.locked_wei)}</strong><small>Still held by active contracts</small></article>
       <article className="pending"><span>Payments processing</span><strong>{formatWeiCompact(data.stats.pending_settlement_wei)}</strong><small>{data.stats.settlement_pending} payment{data.stats.settlement_pending === 1 ? "" : "s"} awaiting confirmation</small></article>

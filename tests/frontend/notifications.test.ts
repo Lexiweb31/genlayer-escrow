@@ -43,4 +43,13 @@ describe("lifecycle notifications", () => {
   it("does not claim a notification for unchanged waiting state", () => {
     expect(notificationForStatus({ ...job, status: "UNFUNDED" }, "UNFUNDED")).toBeNull();
   });
+
+  it("creates an unfunded reminder only for the recorded client", () => {
+    const unfunded = { ...job, status: "UNFUNDED" as const };
+    const now = "2026-08-11T12:00:00.000Z";
+
+    expect(notificationForStatus(unfunded, "UNFUNDED", now, job.client_address)?.title).toBe("Fund your job to publish it");
+    expect(notificationForStatus(unfunded, "UNFUNDED", now, job.worker_address)).toBeNull();
+    expect(notificationForStatus(unfunded, "UNFUNDED", now, "0xcccccccccccccccccccccccccccccccccccccccc")).toBeNull();
+  });
 });

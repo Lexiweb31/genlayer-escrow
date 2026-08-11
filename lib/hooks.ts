@@ -1,14 +1,75 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useWalletMode } from "@/components/providers";
 import { meritApi } from "@/lib/api";
-import type { JobDetailResponse, JobsResponse } from "@/lib/types";
+import type { JobDetailResponse, JobRecord, JobsResponse, OwnedJobsResponse } from "@/lib/types";
+import { signOwnedJobsAccess } from "@/lib/wallet-ownership";
 
-interface ResourceState<T> {
+export interface ResourceState<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
   refresh: () => Promise<void>;
+}
+
+interface OwnedJobsEventDetail {
+  address: string;
+  jobs: JobRecord[];
+}
+
+export const OWNED_UNFUNDED_JOBS_EVENT = "merit:owned-unfunded-jobs";
+
+export function useOwnedUnfundedJobs(): ResourceState<OwnedJobsResponse> & { load(): Promise<void> } {
+  const wallet = useWalletMode();
+  const [data, setData] = useState<OwnedJobsResponse | null>(null);
+  const [dataScope, setDataScope] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [errorScope, setErrorScope] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const scope = wallet.mode === "demo" ? "demo" : wallet.address ? `wallet:${wallet.address.toLowerCase()}` : null;
+
+  const load = useCallback(async () => {
+    if (!scope) {
+      setError(new Error("Connect the client wallet to load jobs that still need funding."));
+      setErrorScope(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = wallet.mode === "demo"
+        ? await meritApi.ownedJobs({ address: "", message: "", signature: "", demo_mode: true })
+        : await meritApi.ownedJobs(await signOwnedJobsAccess(wallet.address!));
+      const owned = { jobs: response.jobs.filter((job) => job.status === "UNFUNDED") };
+      setData(owned);
+      setDataScope(scope);
+      if (wallet.mode === "wallet" && wallet.address) {
+        window.dispatchEvent(new CustomEvent<OwnedJobsEventDetail>(OWNED_UNFUNDED_JOBS_EVENT, {
+          detail: { address: wallet.address, jobs: owned.jobs },
+        }));
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError : new Error("Unable to load unpublished jobs."));
+      setErrorScope(scope);
+    } finally {
+      setLoading(false);
+    }
+  }, [scope, wallet.address, wallet.mode]);
+
+  useEffect(() => {
+    if (wallet.mode !== "demo") return;
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load, wallet.mode]);
+
+  return {
+    data: dataScope === scope ? data : null,
+    error: errorScope === scope ? error : null,
+    loading,
+    refresh: load,
+    load,
+  };
 }
 
 export function useJobs(): ResourceState<JobsResponse> {
