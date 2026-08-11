@@ -1587,6 +1587,43 @@ class SubmitRequest(BaseModel):
     url: str
 
 
+def _reconcile_demo_funding(record: dict[str, Any]) -> dict[str, Any]:
+    """Refresh a durable demo-funding hash before deciding whether retry is safe."""
+    if store.funding_transaction_failed(record):
+        return record
+    try:
+        transaction = dict(network_client.get_transaction(record["tx_hash"]))
+    except Exception:
+        # An unavailable receipt is not proof of failure. Keep suppressing a
+        # duplicate until Bradbury returns authoritative transaction evidence.
+        return record
+
+    network_status = _status_name(transaction)
+    status = "FAILED" if network_status in {"OUT_OF_FEE", "OUTOFFEE"} else network_status
+    try:
+        refreshed = store.record_transaction({
+            "network": record["network"],
+            "tx_hash": record["tx_hash"],
+            "job_address": record["job_address"],
+            "kind": record["kind"],
+            "status": status,
+            "network_status": network_status,
+            "transaction": _json_safe(transaction),
+        })
+    except ValueError:
+        # Unknown/intermediate SDK statuses are not terminal evidence. Retain
+        # the prior durable row and continue treating the hash as in flight.
+        return record
+    log_event(
+        "registry_write",
+        job=record["job_address"],
+        tx_hash=record["tx_hash"],
+        action="reconcile_funding",
+        status=status,
+    )
+    return refreshed
+
+
 def _run_action(
     job_id: str,
     method: str,
@@ -1648,23 +1685,29 @@ def fund(job_id: str, req: FundRequest):
         })
     job = _find_job(job_id)
     latest_funding = store.latest_transaction_for_job(job["address"], "FUNDING")
-    live_status = str(_job_state(job["address"])["job"].get("status") or "UNKNOWN")
     if latest_funding:
-        if live_status == "UNFUNDED" and not store.funding_transaction_failed(latest_funding):
-            raise HTTPException(status_code=409, detail={
-                "code": "FUNDING_ALREADY_PENDING",
-                "message": "A verified funding transaction is still reconciling for this escrow.",
-                "action": "Wait for Bradbury confirmation or inspect the existing transaction before retrying.",
-            })
-    funding_reserved = live_status == "UNFUNDED"
-    if funding_reserved and not store.reserve_funding(job["address"]):
+        latest_funding = _reconcile_demo_funding(latest_funding)
+    live_status = str(_job_state(job["address"])["job"].get("status") or "UNKNOWN")
+    if live_status != "UNFUNDED":
+        raise HTTPException(status_code=409, detail={
+            "code": "FUNDING_STATE_UNVERIFIED" if live_status == "UNKNOWN" else "STALE_STATE",
+            "message": "Funding requires an authoritative UNFUNDED escrow state.",
+            "action": "Refresh the Bradbury state before retrying.",
+        })
+    if latest_funding and not store.funding_transaction_failed(latest_funding):
+        raise HTTPException(status_code=409, detail={
+            "code": "FUNDING_ALREADY_PENDING",
+            "message": "A submitted funding transaction is still reconciling for this escrow.",
+            "action": "Wait for Bradbury confirmation or inspect the existing transaction before retrying.",
+        })
+    if not store.reserve_funding(job["address"]):
         raise HTTPException(status_code=409, detail={
             "code": "FUNDING_ALREADY_PENDING",
             "message": "Another funding request already reserved this escrow.",
             "action": "Wait for the existing funding attempt before retrying.",
         })
     return _run_action(
-        job_id, "fund", "client", value=amount_wei, funding_reserved=funding_reserved
+        job_id, "fund", "client", value=amount_wei, funding_reserved=True
     )
 
 

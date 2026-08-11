@@ -597,6 +597,85 @@ def test_demo_funding_journals_hash_before_waiting_for_consensus(monkeypatch, tm
     assert funding["status"] == "SUBMITTED"
 
 
+def test_demo_funding_reconciles_interrupted_terminal_failure_before_retry(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    interrupted_hash = "0x" + "c" * 64
+    retry_hash = "0x" + "d" * 64
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    chain_state = {
+        "job": {"status": "UNFUNDED", "client": job["client_address"]},
+        "result": {"status": "UNFUNDED"},
+    }
+    monkeypatch.setattr(api, "_job_state", lambda _address: chain_state)
+    terminal_failure = {
+        "status_name": "VALIDATORS_TIMEOUT",
+        "tx_execution_result_name": "UNKNOWN",
+        "diagnostic": "validator quorum was not reached",
+    }
+    monkeypatch.setattr(
+        api,
+        "network_client",
+        SimpleNamespace(
+            get_transaction=lambda tx_hash: terminal_failure if tx_hash == interrupted_hash else {}
+        ),
+    )
+    monkeypatch.setattr(api, "_preflight", lambda *_args, **_kwargs: chain_state)
+    submissions = iter([interrupted_hash, retry_hash])
+    monkeypatch.setattr(api, "_call_write", lambda *_args, **_kwargs: next(submissions))
+
+    def wait(tx_hash):
+        if tx_hash == interrupted_hash:
+            raise RuntimeError("poll interrupted")
+        return {
+            "status_name": "ACCEPTED",
+            "tx_execution_result_name": "SUCCESS",
+        }
+
+    monkeypatch.setattr(api, "_wait", wait)
+
+    with pytest.raises(HTTPException):
+        api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+    assert journal.get_transaction("testnet_bradbury", interrupted_hash)["status"] == "SUBMITTED"
+
+    response = api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    failed = journal.get_transaction("testnet_bradbury", interrupted_hash)
+    assert response["tx"] == retry_hash
+    assert failed["status"] == "VALIDATORS_TIMEOUT"
+    assert failed["payload"]["transaction"] == terminal_failure
+    assert journal.latest_transaction_for_job(job["address"], "FUNDING")["tx_hash"] == retry_hash
+
+
+def test_demo_funding_rejects_unknown_first_state_without_submitting(monkeypatch, tmp_path):
+    job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
+    journal = JobStore(tmp_path)
+    journal.add_job(job)
+    monkeypatch.setattr(api, "store", journal)
+    states = iter([
+        {"job": {"status": "UNKNOWN", "client": job["client_address"]}},
+        {"job": {"status": "UNFUNDED", "client": job["client_address"]}},
+    ])
+    monkeypatch.setattr(api, "_job_state", lambda _address: next(states))
+    monkeypatch.setattr(
+        api,
+        "_preflight",
+        lambda target, *_args, **_kwargs: api._job_state(target["address"]),
+    )
+    monkeypatch.setattr(
+        api,
+        "_call_write",
+        lambda *_args, **_kwargs: pytest.fail("unreserved funding submitted"),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        api.fund(job["address"], api.FundRequest(amount_wei="1000000000000000"))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "FUNDING_STATE_UNVERIFIED"
+
+
 def test_demo_funding_releases_reservation_when_submission_fails_before_hash(monkeypatch, tmp_path):
     job = {**_record("0x" + "1" * 40), "client_address": "0x" + "2" * 40}
     tx_hash = "0x" + "d" * 64
