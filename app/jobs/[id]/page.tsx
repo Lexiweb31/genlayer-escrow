@@ -30,13 +30,14 @@ export default function JobOverviewPage() {
   const scoreConfirmed = hasConfirmedEvaluation(job, data.result);
   const deploymentLink = txUrl(data.meta.deployment_tx);
   const escrowLink = data.addresses.explorer_escrow || addressUrl(job.address);
-  const clientAddress = job.client_address || job.client || data.demo.client_address;
+  const recordedClientAddress = job.client_address || job.client;
+  const clientAddress = recordedClientAddress || data.demo.client_address;
   const workerAddress = job.worker_address || job.worker || data.demo.worker_address;
   const isBounty = job.job_type === "BOUNTY" || data.meta.job_type === "BOUNTY";
   const submissions = job.submissions || [];
-  const isClient = wallet.mode === "wallet" && sameAddress(wallet.address, clientAddress);
+  const isClient = wallet.mode === "wallet" && sameAddress(wallet.address, recordedClientAddress);
   const isWorker = wallet.mode === "wallet" && sameAddress(wallet.address, workerAddress);
-  const isDemoClient = wallet.mode === "demo" && sameAddress(data.demo.client_address, clientAddress);
+  const isDemoClient = wallet.mode === "demo" && Boolean(recordedClientAddress) && sameAddress(data.demo.client_address, recordedClientAddress);
   const hasSubmitted = isBounty && submissions.some((entry) => sameAddress(entry.submitter, wallet.address));
   const viewerRole = wallet.mode === "demo" ? "demo" : isClient ? "client" : isWorker ? "worker" : hasSubmitted ? "entrant" : "visitor";
   const fundingState = fundingActivationState({ job });

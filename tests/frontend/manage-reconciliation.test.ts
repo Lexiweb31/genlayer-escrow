@@ -25,7 +25,7 @@ vi.mock("@/lib/api", () => ({
   friendlyApiError: () => "Request failed.",
 }));
 vi.mock("@/lib/wallet-client", () => ({
-  sameAddress: (left?: string | null, right?: string | null) => left?.toLowerCase() === right?.toLowerCase(),
+  sameAddress: (left?: string | null, right?: string | null) => Boolean(left && right && left.toLowerCase() === right.toLowerCase()),
   writeWalletContract: vi.fn(),
 }));
 
