@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowIcon, ClockIcon, ExternalIcon, FileIcon, RefreshIcon, ShieldIcon, UserIcon } from "@/components/icons";
+import { FundingActivationBanner, fundingManageHref } from "@/components/funding-activation-banner";
 import { JobNavigation } from "@/components/job-navigation";
 import { Lifecycle } from "@/components/lifecycle";
 import { SettlementProof } from "@/components/settlement-proof";
 import { useWalletMode } from "@/components/providers";
 import { ErrorState, LoadingState, MonoValue, PageHeader, StatusPill } from "@/components/ui";
 import { formatWei } from "@/lib/amount";
+import { fundingActivationState } from "@/lib/funding-activation";
 import { useJob } from "@/lib/hooks";
 import { displayEscrowAmountWei, hasConfirmedEvaluation, settlementPresentation } from "@/lib/settlement";
 import type { JobRecord } from "@/lib/types";
@@ -34,8 +36,10 @@ export default function JobOverviewPage() {
   const submissions = job.submissions || [];
   const isClient = wallet.mode === "wallet" && sameAddress(wallet.address, clientAddress);
   const isWorker = wallet.mode === "wallet" && sameAddress(wallet.address, workerAddress);
+  const isDemoClient = wallet.mode === "demo" && sameAddress(data.demo.client_address, clientAddress);
   const hasSubmitted = isBounty && submissions.some((entry) => sameAddress(entry.submitter, wallet.address));
   const viewerRole = wallet.mode === "demo" ? "demo" : isClient ? "client" : isWorker ? "worker" : hasSubmitted ? "entrant" : "visitor";
+  const fundingState = fundingActivationState({ job });
   const nextHref = view.isFinalized
     ? `/jobs/${encodeURIComponent(id)}/evaluation`
     : view.isPending
@@ -60,6 +64,7 @@ export default function JobOverviewPage() {
     <JobNavigation id={id}/>
     <PageHeader eyebrow={viewerRole === "client" ? isBounty ? "Your client Bounty" : "Your client job" : viewerRole === "worker" ? isBounty ? "Your winning Bounty entry" : "Your assigned work" : viewerRole === "entrant" ? "Your Bounty entry" : isBounty ? "Public Bounty" : "Public protected job"} title={data.meta.title || "Protected job"} description={isBounty ? viewerRole === "client" ? "Track the open submission round, GenLayer ranking, winner, and verified settlement." : viewerRole === "worker" ? "Your entry ranked first. Track the confirmed evaluation and winner payout." : viewerRole === "entrant" ? "Track your recorded entry, the shared evaluation, and the final result." : data.meta.spec || job.spec || "Open competition with contract-enforced settlement." : viewerRole === "worker" ? "Track the requirements you accepted, your public submission, evaluation result, and verified payout." : viewerRole === "client" ? "Track protected funding, worker delivery, evaluation, and final settlement." : data.meta.spec || job.spec || "Job requirements unavailable."} actions={<button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh state</button>}/>
     {job.legacy_contract && <div className="legacy-banner" role="alert"><ShieldIcon/><div><b>Legacy settlement contract — do not fund</b><p>This immutable deployment predates the safe EOA external-message patch. It remains read-only and is not silently migrated.</p></div></div>}
+    <FundingActivationBanner job={job} viewerAddress={wallet.address} role={viewerRole} state={fundingState} isDemoClient={isDemoClient} href={fundingManageHref(id)}/>
     <section className="overview-grid">
       <article className="panel overview-summary"><div className="panel-heading"><div><p className="card-kicker">Current state</p><h2>{view.label}</h2></div><StatusPill tone={view.isPending ? "warning" : view.isFinalized ? "success" : job.legacy_contract ? "danger" : "info"}>{view.status}</StatusPill></div><div className="amount-display"><span>{view.isFinalized ? "Settled value" : isBounty ? "Protected reward" : "Protected payment"}</span><strong>{formatWei(displayEscrowAmountWei(job))}</strong><small>{view.isPending ? "Settlement transaction submitted · awaiting confirmation" : view.isFinalized ? "Original escrow value distributed through the confirmed settlement" : isBounty ? `${submissions.length}/${job.max_submissions || 5} Bounty entries recorded` : "Held according to the current job step"}</small></div><div className="summary-grid"><div><span>{isBounty ? "Winning score" : "AI evaluation"}</span><strong>{scoreConfirmed ? `${data.result.score ?? job.score}/100` : "Not evaluated yet"}</strong></div><div><span>{isBounty ? "Winner qualifies at" : "Full payment starts at"}</span><strong>{job.min_score ?? 70}/100</strong></div><div><span>{isBounty ? "Submission limit" : "Refund below"}</span><strong>{isBounty ? `${job.max_submissions || 5} entries` : `${job.partial_floor ?? 40}/100`}</strong></div><div><span>Merit fee</span><strong>{((job.fee_bps ?? 0) / 100).toFixed(2).replace(/\.00$/, "")}%</strong></div></div></article>
       <article className="panel lifecycle-panel"><div className="panel-heading"><div><p className="card-kicker">Job progress</p><h2>From requirements to payment</h2></div></div><Lifecycle job={job} result={data.result}/></article>

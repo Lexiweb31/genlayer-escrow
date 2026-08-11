@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowIcon, CheckIcon, ShieldIcon } from "@/components/icons";
+import { fundingManageHref } from "@/components/funding-activation-banner";
 import { useDemoMode, useWalletMode } from "@/components/providers";
 import { PageHeader, StatusPill } from "@/components/ui";
 import { friendlyApiError, meritApi } from "@/lib/api";
@@ -68,7 +69,7 @@ export default function PostJobPage() {
       const response = await meritApi.registerWalletJob(pendingRegistration);
       localStorage.removeItem("merit-pending-wallet-job");
       setPendingRegistration(null);
-      router.push(`/jobs/${encodeURIComponent(response.job.address)}`);
+      router.push(fundingManageHref(response.job.address));
     } catch (nextError) {
       setError(friendlyApiError(nextError)); setStatus("");
     } finally {
@@ -118,7 +119,7 @@ export default function PostJobPage() {
       } else {
         response = await meritApi.createJob(common);
       }
-      router.push(`/jobs/${encodeURIComponent(response.job.address)}`);
+      router.push(fundingManageHref(response.job.address));
     } catch (nextError) {
       setError(friendlyApiError(nextError));
       setStatus("");

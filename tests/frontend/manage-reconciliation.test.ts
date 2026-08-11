@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const useJob = vi.hoisted(() => vi.fn());
 const walletMode = vi.hoisted(() => ({
-  current: { mode: "wallet", address: "0xclient", onBradbury: true, balance: "1 GEN" },
+  current: { mode: "wallet" as "wallet" | "demo", address: "0xclient" as string | null, onBradbury: true, balance: "1 GEN" },
 }));
 
 vi.mock("next/link", () => ({ default: "a" }));
@@ -64,6 +64,36 @@ function renderPendingSettlement(settlement: Record<string, string>, visitor = f
   return renderToStaticMarkup(createElement(ManageJobPage));
 }
 
+function renderUnfundedWorkspace({ address, jobType = "DIRECT_HIRE", mode = "wallet", demoClientAddress = "0xclient" }: { address: string | null; jobType?: "DIRECT_HIRE" | "BOUNTY"; mode?: "wallet" | "demo"; demoClientAddress?: string }) {
+  walletMode.current = { mode, address, onBradbury: true, balance: "1 GEN" };
+  useJob.mockReturnValue({
+    data: {
+      meta: {
+        address: "0x1111111111111111111111111111111111111111",
+        title: "Funding gate",
+        status: "UNFUNDED",
+        client_address: "0xclient",
+        worker_address: jobType === "DIRECT_HIRE" ? "0xworker" : undefined,
+        job_type: jobType,
+      },
+      job: {
+        address: "0x1111111111111111111111111111111111111111",
+        status: "UNFUNDED",
+        client: "0xclient",
+        worker: jobType === "DIRECT_HIRE" ? "0xworker" : undefined,
+        job_type: jobType,
+      },
+      result: {},
+      addresses: {},
+      demo: { live_actions_enabled: true, client_address: demoClientAddress },
+    },
+    error: null,
+    loading: false,
+    refresh: vi.fn(),
+  });
+  return renderToStaticMarkup(createElement(ManageJobPage));
+}
+
 describe("manage settlement reconciliation guidance", () => {
   it("renders accepted-but-not-final payment guidance with transaction evidence and elapsed context", () => {
     const transaction = `0x${"a".repeat(64)}`;
@@ -94,5 +124,37 @@ describe("manage settlement reconciliation guidance", () => {
     expect(markup).toContain("Check finality");
     expect(markup).not.toContain("Public job status");
     expect(markup).not.toContain("Verify and recover payment");
+  });
+
+  it("blocks a visitor from client funding controls while the job is unfunded", () => {
+    const markup = renderUnfundedWorkspace({ address: "0xvisitor" });
+
+    expect(markup).toContain("This job is awaiting client funding");
+    expect(markup).not.toContain("Client wallet required");
+    expect(markup).not.toContain("Lock 0.001 GEN");
+  });
+
+  it("keeps an unfunded Bounty entrant out of the submission form", () => {
+    const markup = renderUnfundedWorkspace({ address: "0xentrant", jobType: "BOUNTY" });
+
+    expect(markup).toContain("This Bounty opens after the reward is funded");
+    expect(markup).not.toContain("Public link to finished work");
+    expect(markup).not.toContain("Open 0.001 GEN Bounty");
+  });
+
+  it("keeps the server demo client on the post-publish funding path", () => {
+    const markup = renderUnfundedWorkspace({ address: null, mode: "demo" });
+
+    expect(markup).toContain("Fund and activate job");
+    expect(markup).toContain("Fund with demo client");
+    expect(markup).not.toContain("Only the recorded client wallet can activate this agreement.");
+  });
+
+  it("does not let a retained wallet address authorize the server demo client", () => {
+    const markup = renderUnfundedWorkspace({ address: "0xclient", mode: "demo", demoClientAddress: "0xdemo" });
+
+    expect(markup).toContain("This job is awaiting client funding");
+    expect(markup).not.toContain("Fund and activate job");
+    expect(markup).not.toContain("Fund with demo client");
   });
 });
