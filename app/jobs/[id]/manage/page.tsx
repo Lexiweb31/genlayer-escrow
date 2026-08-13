@@ -13,7 +13,7 @@ import { ErrorState, LoadingState, PageHeader, StatusPill } from "@/components/u
 import { friendlyApiError, meritApi } from "@/lib/api";
 import { genToWei, MIN_DEMO_AMOUNT_WEI } from "@/lib/amount";
 import { explorerRedirectPath } from "@/lib/explorer";
-import { fundingActivationState, isFundingActivatedStatus } from "@/lib/funding-activation";
+import { fundingActivationState, fundingFailurePresentation, isFundingActivatedStatus } from "@/lib/funding-activation";
 import { useJob } from "@/lib/hooks";
 import { reconciliationPresentation } from "@/lib/job-presentation";
 import { settlementPresentation } from "@/lib/settlement";
@@ -106,7 +106,16 @@ export default function ManageJobPage() {
   useEffect(() => {
     const savedFundingAction = readPendingWalletAction(pendingActionKey);
     const fundingHash = savedFundingAction?.label === "Funding escrow" ? savedFundingAction.hash : "";
-    if (data?.job.status !== "UNFUNDED" || !/^0x[0-9a-fA-F]{64}$/.test(fundingHash)) return;
+    if (data?.job.status !== "UNFUNDED" || !fundingHash) return;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(fundingHash)) {
+      localStorage.removeItem(pendingActionKey);
+      const timer = window.setTimeout(() => {
+        setPendingAction(null);
+        setRecoveredFundingTransaction({ tx_hash: fundingHash, status: "FAILED", failed: true, kind: "FUNDING" });
+        setMessage({ tone: "error", text: fundingFailurePresentation("malformed hash").copy });
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
     let cancelled = false;
     let attempt = 0;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -130,7 +139,7 @@ export default function ManageJobPage() {
         if (receipt.failed) {
           localStorage.removeItem(pendingActionKey);
           setPendingAction(null);
-          setMessage({ tone: "error", text: "Funding failed on Bradbury. Review the saved transaction before retrying." });
+          setMessage({ tone: "error", text: fundingFailurePresentation("contract rejection").copy });
           return;
         }
         if (!receipt.confirmed) {
@@ -246,7 +255,15 @@ export default function ManageJobPage() {
       setMessage({ tone: "success", text: `${label} accepted by Bradbury. Refreshing shared state…` });
       await refresh();
     }
-    catch (nextError) { setMessage({ tone: submittedHash ? "info" : "error", text: submittedHash ? `${label} was submitted but confirmation is still pending. Do not submit again; refresh the job status later.` : friendlyApiError(nextError) }); }
+    catch (nextError) {
+      if (label === "Funding escrow") {
+        const fallback = friendlyApiError(nextError);
+        const failure = submittedHash ? "network timeout" : /canceled|rejected/i.test(fallback) ? "wallet rejection" : "API unavailable";
+        setMessage({ tone: failure === "wallet rejection" ? "error" : "info", text: fundingFailurePresentation(failure).copy });
+      } else {
+        setMessage({ tone: submittedHash ? "info" : "error", text: submittedHash ? `${label} was submitted but confirmation is still pending. Do not submit again; refresh the job status later.` : friendlyApiError(nextError) });
+      }
+    }
     finally { setBusy(false); }
   };
 

@@ -1,8 +1,15 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { meritApi } from "@/lib/api";
+import { sanitizeBackendPayload } from "@/lib/server/proxy-policy";
 
 const root = process.cwd();
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function sourceFiles(directory: string): string[] {
   const absolute = join(root, directory);
@@ -41,5 +48,57 @@ describe("server-only environment boundary", () => {
       .filter((file) => readFileSync(file, "utf8").includes("process.env"))
       .map((file) => relative(root, file));
     expect(readers).toEqual(["lib/server/config.ts"]);
+  });
+
+  it("removes signature-shaped backend response fields without dropping public job data", () => {
+    const signature = `0x${"ab".repeat(65)}`;
+    const result = sanitizeBackendPayload({
+      jobs: [{
+        address: "0x1111111111111111111111111111111111111111",
+        title: "Recovered client job",
+        status: "UNFUNDED",
+        signature,
+        ownership_signature: signature,
+        recoverySignatureProof: signature,
+      }],
+    }, "Bradbury testnet");
+
+    expect(result).toEqual({
+      jobs: [{
+        address: "0x1111111111111111111111111111111111111111",
+        title: "Recovered client job",
+        status: "UNFUNDED",
+      }],
+    });
+    expect(JSON.stringify(result)).not.toContain(signature);
+  });
+
+  it("keeps a recovery signature out of URLs and application logs", async () => {
+    const signature = `0x${"cd".repeat(65)}`;
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ jobs: [] }) });
+    vi.stubGlobal("fetch", fetch);
+    const loggers = [
+      vi.spyOn(console, "debug").mockImplementation(() => undefined),
+      vi.spyOn(console, "error").mockImplementation(() => undefined),
+      vi.spyOn(console, "info").mockImplementation(() => undefined),
+      vi.spyOn(console, "log").mockImplementation(() => undefined),
+      vi.spyOn(console, "warn").mockImplementation(() => undefined),
+    ];
+
+    await meritApi.ownedJobs({
+      address: "0x1111111111111111111111111111111111111111",
+      message: "bounded recovery proof",
+      signature,
+      demo_mode: false,
+    });
+
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/jobs/owned");
+    expect(new URL(url, "https://merit.example").search).toBe("");
+    expect(url).not.toContain(signature);
+    expect(init.body).toContain(signature);
+    for (const logger of loggers) {
+      expect(JSON.stringify(logger.mock.calls)).not.toContain(signature);
+    }
   });
 });

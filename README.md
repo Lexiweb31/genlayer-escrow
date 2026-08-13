@@ -181,6 +181,16 @@ The Render service also runs a lightweight contract-state reconciler every 30 se
 5. Confirm the evaluation page exposes the proof URL, validator consensus score, and reasoning.
 6. Finalize settlement and verify the recipient, amount, parent transaction, and outbound transfer evidence in the application and Bradbury explorer.
 
+## Funding activation tester flow
+
+1. Deploy the job.
+2. Merit opens **Fund and activate job** automatically.
+3. Approve the GEN deposit and wait for **Job funded and publicly visible**.
+4. Only then switch to the worker or contributor wallet.
+5. If the page was closed, open **Browse jobs → Needs funding**, sign the view-only recovery message, and resume without redeploying.
+
+The recovery signature cannot move funds or submit contract actions. It proves short-lived, view-only access to the connected client’s unpublished jobs and is sent only in the same-origin recovery request body.
+
 ## Wallet Mode
 
 The interface explicitly distinguishes two architectures:

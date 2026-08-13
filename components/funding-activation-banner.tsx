@@ -38,7 +38,7 @@ export function FundingActivationBanner({
       : <Link className="button primary" href={href!}>Fund and activate job</Link>
     : null;
 
-  return <section className={`funding-activation-banner ${state.kind.toLowerCase()}`} aria-label="Funding activation">
+  return <section className={`funding-activation-banner ${state.kind.toLowerCase()}`} aria-label="Funding activation" role="status">
     <div>
       <p className="card-kicker">Funding activation</p>
       <h2>Your job is created but not active yet</h2>

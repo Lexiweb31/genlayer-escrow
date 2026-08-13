@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -146,3 +147,107 @@ def test_evidence_recorder_persists_a_submitted_hash_before_a_wait_failure(tmp_p
 
     evidence = __import__("json").loads(path.read_text())
     assert evidence["scenarios"]["direct-full"]["transactions"]["fund"] == "0xsubmitted"
+
+
+def test_public_and_authenticated_recovery_fixtures_keep_unfunded_jobs_private(monkeypatch):
+    """Removing either public filtering or client scoping must fail this release gate."""
+    from datetime import datetime, timedelta, timezone
+
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    from dashboard import api
+
+    client = Account.create()
+    other = Account.create()
+    mine = {
+        "address": "0x1111111111111111111111111111111111111111",
+        "title": "My private draft",
+        "status": "UNFUNDED",
+        "client_address": client.address,
+    }
+    theirs = {
+        "address": "0x2222222222222222222222222222222222222222",
+        "title": "Another private draft",
+        "status": "UNFUNDED",
+        "client_address": other.address,
+    }
+    public = {
+        "address": "0x3333333333333333333333333333333333333333",
+        "title": "Funded public job",
+        "status": "OPEN",
+        "client_address": other.address,
+        "amount": "1000",
+    }
+    monkeypatch.setattr(api, "_list_jobs_snapshot", lambda: {
+        "jobs": [mine, theirs, public],
+        "stats": {},
+        "demo": {"network": "testnet_bradbury"},
+    })
+
+    public_response = api._public_jobs_snapshot()
+    assert [job["address"] for job in public_response["jobs"]] == [public["address"]]
+    assert all(job["status"] != "UNFUNDED" for job in public_response["jobs"])
+
+    message = api._ownership_message(
+        client.address,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    signature = Account.sign_message(encode_defunct(text=message), client.key).signature.hex()
+    owned_response = api.owned_jobs(api.OwnedJobsRequest(
+        address=client.address,
+        message=message,
+        signature=signature,
+    ))
+
+    assert [job["address"] for job in owned_response["jobs"]] == [mine["address"]]
+    assert signature not in str(public_response)
+    assert signature not in str(owned_response)
+
+
+def test_custody_runner_refuses_worker_actions_while_contract_remains_unfunded(monkeypatch, tmp_path):
+    """Removing the post-funding OPEN observation would permit unsafe worker writes."""
+    runner = load_runner()
+    address = "0x1111111111111111111111111111111111111111"
+    accounts = {
+        "client": SimpleNamespace(address="0x2222222222222222222222222222222222222222"),
+        "worker": SimpleNamespace(address="0x3333333333333333333333333333333333333333"),
+        "bounty_worker": SimpleNamespace(address="0x4444444444444444444444444444444444444444"),
+    }
+    recorder = runner.EvidenceRecorder(tmp_path / "blocked.json", {"mode": "test"})
+    writes: list[str] = []
+
+    monkeypatch.setattr(runner, "_deploy", lambda *_args, **_kwargs: ("0xdeploy", address))
+    monkeypatch.setattr(runner, "_register_job", lambda *_args, **_kwargs: {"job": {"address": address}})
+    monkeypatch.setattr(runner, "_read_contract", lambda *_args: {"status": "UNFUNDED"})
+
+    def write(*_args, **kwargs):
+        writes.append(kwargs["action"])
+        return f"0x{kwargs['action']}"
+
+    monkeypatch.setattr(runner, "_write", write)
+
+    with pytest.raises(runner.VerificationError, match="expected OPEN, observed UNFUNDED"):
+        runner._direct_scenario(
+            SimpleNamespace(), object(), accounts,
+            "0x5555555555555555555555555555555555555555",
+            name="direct-blocked", submission_url="https://evidence.example/direct",
+            min_score=0, partial_floor=0, expected_outcome="ACCEPTED",
+            timeout_seconds=30, recorder=recorder,
+        )
+    assert writes == ["fund"]
+    assert "accept_terms" not in writes
+    assert "submit_work" not in writes
+
+    writes.clear()
+    with pytest.raises(runner.VerificationError, match="expected OPEN, observed UNFUNDED"):
+        runner._bounty_scenario(
+            SimpleNamespace(), object(), accounts,
+            "0x5555555555555555555555555555555555555555",
+            name="bounty-blocked", first_url="https://evidence.example/first",
+            second_url="https://evidence.example/second", min_score=0,
+            expected_outcome="ACCEPTED", timeout_seconds=30, recorder=recorder,
+        )
+    assert writes == ["fund"]
+    assert "submit_first" not in writes
+    assert "submit_second" not in writes

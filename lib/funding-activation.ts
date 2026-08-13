@@ -10,6 +10,20 @@ export interface FundingActivationView {
   transactionHash?: string;
 }
 
+export type FundingFailureCase = "wallet rejection" | "malformed hash" | "network timeout" | "stale snapshot" | "contract rejection" | "API unavailable";
+
+export function fundingFailurePresentation(failure: FundingFailureCase): Pick<FundingActivationView, "kind"> & { copy: string } {
+  const presentations: Record<FundingFailureCase, Pick<FundingActivationView, "kind"> & { copy: string }> = {
+    "wallet rejection": { kind: "REQUIRED", copy: "The wallet request was canceled. No GEN moved." },
+    "malformed hash": { kind: "FAILED", copy: "The saved funding transaction hash is malformed. Clear it and retry funding safely." },
+    "network timeout": { kind: "CONFIRMING", copy: "Confirmation timed out. Check funding status before taking another action." },
+    "stale snapshot": { kind: "CONFIRMING", copy: "Transaction submitted — confirming on Bradbury. The shared job snapshot is still refreshing." },
+    "contract rejection": { kind: "FAILED", copy: "Funding failed. Bradbury confirmed that the contract rejected the deposit." },
+    "API unavailable": { kind: "CONFIRMING", copy: "Live updates unavailable. Check funding status before submitting another deposit." },
+  };
+  return presentations[failure];
+}
+
 const FUNDING_ACTIVE_JOB_STATUSES = new Set([
   "OPEN", "CLOSED", "AGREED", "SUBMITTED", "EVALUATED", "SETTLEMENT_PENDING", "ACCEPTED", "PARTIAL", "REFUNDED",
 ]);

@@ -36,7 +36,9 @@ function normalizedKey(key: string): string {
 
 function isBlockedResponseKey(key: string): boolean {
   const normalized = normalizedKey(key);
-  return BLOCKED_RESPONSE_KEYS.has(normalized) || normalized.endsWith("_private_key");
+  return BLOCKED_RESPONSE_KEYS.has(normalized)
+    || normalized.endsWith("_private_key")
+    || normalized.split("_").includes("signature");
 }
 
 function rewriteExplorerUrl(value: string): string | null {

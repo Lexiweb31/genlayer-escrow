@@ -63,7 +63,7 @@ export default function BrowseJobsPage() {
   }), [liveJobs, query, status, jobType, sort]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
-  const showNeedsFunding = Boolean(owned?.jobs.length);
+  const showNeedsFunding = Boolean((wallet.mode === "demo" || wallet.address) && owned?.jobs.length);
 
   return <div className="page-container">
     <PageHeader eyebrow="Shared marketplace" title="Browse protected jobs" description="See the same shared job records, exact GEN values, evaluation results, and payment status in every browser." actions={<><button className="button secondary" onClick={refresh} disabled={loading}><RefreshIcon/> Refresh</button>{wallet.mode === "wallet" && <button className="button secondary" onClick={() => void loadOwned()} disabled={loadingOwned}>{loadingOwned ? "Loading recovery…" : "Recover unpublished jobs"}</button>}<Link className="button primary" href="/jobs/new"><PlusIcon/> Post a job</Link></>}/>
@@ -84,7 +84,7 @@ export default function BrowseJobsPage() {
           ? <><section className="job-grid">{visible.map((job) => <JobCard key={job.address} job={job}/>)}</section><nav className="pagination" aria-label="Marketplace pages"><button className="button secondary" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button><span>Page {Math.min(page, pageCount)} of {pageCount} · {filtered.length} results</span><button className="button secondary" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next</button></nav></>
           : <EmptyState
               title="No escrows match these filters"
-              description="Clear the search or choose a different lifecycle status."
+              description="Clear the search or choose a different lifecycle status. Unpublished jobs may still need client funding; clients can connect their wallet and then recover unpublished jobs."
               action={<button className="button secondary" onClick={() => { setQuery(""); setStatus("ALL"); setJobType("ALL"); setPage(1); }}>Clear filters</button>}
             />}
   </div>;
