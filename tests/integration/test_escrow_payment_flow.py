@@ -146,7 +146,14 @@ def _fund_and_submit(escrow, worker):
     as_worker = escrow.connect(worker)
     _committed(_send(as_worker.accept_terms))
     _committed(_send(as_worker.submit_work, [URL]))
-    _committed(_send(escrow.evaluate))
+    # A LEADER_TIMEOUT / UNDETERMINED round writes nothing (job stays SUBMITTED),
+    # so re-running evaluate() is safe; testnet leaders time out intermittently.
+    for attempt in range(3):
+        receipt = _send(escrow.evaluate)
+        if _succeeded(receipt) or attempt == 2:
+            break
+        print(f"  evaluate ended {receipt.get('status_name')}/{receipt.get('result_name')}; retrying")
+    _committed(receipt)
     result = _view(escrow, "get_result")
     for _ in range(12):  # reads can briefly lag the accepted write on testnet
         if result["status"] != "SUBMITTED":
