@@ -25,6 +25,14 @@ from gltest.utils import extract_contract_address
 from gltest_cli.config.general import get_general_config
 
 
+from genlayer_py.types import transactions as _tx
+
+# Bradbury reports transaction status codes newer than genlayer-py knows (seen:
+# 14), and get_transaction() then raises KeyError mid-poll. Treat unknown codes
+# as still in flight so waits continue to a real terminal status.
+for _code in range(14, 32):
+    _tx.TRANSACTION_STATUS_NUMBER_TO_NAME.setdefault(str(_code), _tx.TransactionStatus.PENDING)
+
 NETWORK = get_general_config().get_network_name()
 WORKER_KEY = os.environ.get("WORKER_PRIVATE_KEY", "")
 
