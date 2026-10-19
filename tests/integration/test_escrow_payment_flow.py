@@ -22,11 +22,11 @@ from eth_utils import decode_hex, to_bytes
 from genlayer_py.abi import calldata
 from genlayer_py.abi.transactions import serialize
 from genlayer_py.contracts.utils import make_calldata_object
+from genlayer_py.exceptions import GenLayerError
 from genlayer_py.types.calldata import CalldataAddress
 
 from gltest import create_account, get_contract_factory, get_default_account, get_gl_client
 from gltest.assertions import tx_execution_succeeded
-from gltest.types import TransactionStatus
 from gltest.utils import extract_contract_address
 from gltest_cli.config.general import get_general_config
 
@@ -56,8 +56,7 @@ pytestmark = pytest.mark.skipif(
     reason="needs --network testnet_* and WORKER_PRIVATE_KEY (localnet can't move GEN)",
 )
 
-# Settlement transfers are child transactions that run after finalize() is
-# itself finalized, which on testnet includes the appeal window.
+# Waits for ACCEPTED; settlement is confirmed separately by balance polling.
 WAIT = dict(wait_interval=10000, wait_retries=120)
 
 
@@ -75,8 +74,22 @@ def _succeeded(receipt) -> bool:
     return tx_execution_succeeded(receipt) or receipt.get("tx_execution_result_name") == "FINISHED_WITH_RETURN"
 
 
+def _send(method, args=None, value=0, attempts=3):
+    """transact() with retries: Bradbury occasionally reverts the EVM wrapper
+    tx (genlayer-py estimates gas with no margin), raising "Transaction failed".
+    A reverted send changes nothing, so resending is safe."""
+    for i in range(attempts):
+        try:
+            return method(args=args or []).transact(value=value, **WAIT)
+        except GenLayerError as e:
+            if "Transaction failed" not in str(e) or i == attempts - 1:
+                raise
+            print(f"  retrying after reverted send ({i + 1}/{attempts - 1})")
+            time.sleep(10)
+
+
 def _committed(receipt) -> None:
-    assert _succeeded(receipt), receipt
+    assert _succeeded(receipt), {k: receipt.get(k) for k in ("tx_id", "recipient", "status_name", "tx_execution_result_name")}
 
 
 def _deploy(contract_file: str, args: list):
@@ -103,8 +116,9 @@ def _view(contract, method: str, *args) -> dict:
     return json.loads(calldata.decode(decode_hex("0x" + raw)))
 
 
-def _wait_for_balance_change(account, before: int, timeout: int = 900) -> int:
-    """Settlement transfers run after finalize() itself finalizes (appeal window)."""
+def _wait_for_balance_change(account, before: int, timeout: int = 3600) -> int:
+    """Settlement transfers run only after finalize() is FINALIZED; on Bradbury
+    that takes ~30 min (the appeal window), so allow up to an hour."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         now = _balance(account)
@@ -121,13 +135,18 @@ def _open_job(worker, platform):
 
 def _fund_and_submit(escrow, worker):
     """Client funds; worker accepts terms and submits; the work is evaluated."""
-    _committed(escrow.fund(args=[]).transact(value=AMOUNT, **WAIT))
+    _committed(_send(escrow.fund, value=AMOUNT))
     as_worker = escrow.connect(worker)
-    _committed(as_worker.accept_terms(args=[]).transact(**WAIT))
-    _committed(as_worker.submit_work(args=[URL]).transact(**WAIT))
-    _committed(escrow.evaluate(args=[]).transact(**WAIT))
+    _committed(_send(as_worker.accept_terms))
+    _committed(_send(as_worker.submit_work, [URL]))
+    _committed(_send(escrow.evaluate))
     result = _view(escrow, "get_result")
-    print(f"\n  evaluated: score={result.get('score')} status={result.get('status')}")
+    for _ in range(12):  # reads can briefly lag the accepted write on testnet
+        if result["status"] != "SUBMITTED":
+            break
+        time.sleep(10)
+        result = _view(escrow, "get_result")
+    print(f"\n  escrow {escrow.address} evaluated: score={result.get('score')} status={result.get('status')}")
     assert result["status"] == "EVALUATED", result
     assert result["score"] >= MIN_SCORE, f"Expected a passing score for {URL}: {result}"
 
@@ -149,9 +168,7 @@ class TestEscrowPaymentFlow:
         _fund_and_submit(escrow, worker)
 
         worker_before = _balance(worker)
-        _committed(escrow.finalize(args=[]).transact(
-            wait_transaction_status=TransactionStatus.FINALIZED, **WAIT
-        ))
+        _committed(_send(escrow.finalize))
 
         job = _view(escrow, "get_job")
         fee = AMOUNT * FEE_BPS // 10000
@@ -164,19 +181,19 @@ class TestEscrowPaymentFlow:
 
     def test_drifted_worker_payout_is_held(self, parties):
         worker, platform = parties
-        detector = _deploy("value_drift_detector.py", [_addr(worker), MANDATE, [], False, 0, 80])
+        detector = _deploy("value_drift_detector.py", [str(worker.address), MANDATE, [], False, 0, 80])
         escrow = _open_job(worker, platform)
-        _committed(escrow.link_drift_detector(args=[_addr(detector), 3600]).transact(**WAIT))
+        _committed(_send(escrow.link_drift_detector, [_addr(detector), 3600]))
         _fund_and_submit(escrow, worker)
 
-        _committed(detector.submit_evidence(args=["text", EVIDENCE_DRIFT, "testnet flow"]).transact(**WAIT))
-        _committed(detector.trigger_review(args=[]).transact(**WAIT))
+        _committed(_send(detector.submit_evidence, ["text", EVIDENCE_DRIFT, "testnet flow"]))
+        _committed(_send(detector.trigger_review))
         drift_status = _view(detector, "get_status")["status"]
         print(f"  detector: {drift_status}")
         assert drift_status in ("DRIFTED", "REVOKED")
 
         worker_before = _balance(worker)
-        _committed(escrow.finalize(args=[]).transact(**WAIT))
+        _committed(_send(escrow.finalize))
 
         job = _view(escrow, "get_job")
         print(f"  after finalize: {job['status']} gate={job['drift_gate']}")
