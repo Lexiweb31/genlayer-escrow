@@ -25,3 +25,12 @@ def test_contract_fits_testnet_deploy_limit(path):
 def test_contract_source_is_ascii(path):
     # genlayer-py encodes the source as ASCII when fetching the schema.
     path.read_bytes().decode("ascii")
+
+
+@pytest.mark.parametrize("path", sorted(CONTRACTS.glob("*.py")), ids=lambda p: p.name)
+def test_no_comment_directly_under_runner_header(path):
+    # GenVM reads consecutive leading "#" lines as the runner header JSON;
+    # an extra comment line fails deploy with "invalid_contract: trailing characters".
+    lines = path.read_text().splitlines()
+    assert lines[0].startswith("# {"), "first line must be the runner header"
+    assert not lines[1].lstrip().startswith("#"), "line 2 must not be a comment"

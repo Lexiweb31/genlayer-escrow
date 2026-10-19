@@ -1,6 +1,7 @@
 # { "Seq": [{ "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }] }
-# Value Drift Detector: is this agent still doing what its principal meant?
-# Docs: docs/value-drift-detector.md. Kept compact: Bradbury caps deploys at ~16.7M gas.
+"""Value Drift Detector: is this agent still doing what its principal meant?
+Docs: docs/value-drift-detector.md. Kept compact: Bradbury caps deploys at ~16.7M gas.
+No comment lines directly under the runner header: GenVM parses them as header JSON."""
 from genlayer import *
 
 from dataclasses import dataclass
