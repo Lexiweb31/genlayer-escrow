@@ -82,8 +82,8 @@ Respond with JSON only - no markdown, no explanation outside the JSON:
 def _run_evaluation(spec: str, url: str) -> dict:
     """Run the leader/validator non-deterministic evaluation and return result dict."""
     def leader_fn():
-        page    = gl.nondet.web.get(url)
-        content = page.body.decode("utf-8", errors="replace")
+        # Judge the browser-rendered page (incl. client-side JS content).
+        content = gl.nondet.web.render(url, mode="text", wait_after_loaded="3s")
         response = gl.nondet.exec_prompt(_build_prompt(spec, content), response_format="json")
         try:
             data    = response if isinstance(response, dict) else json.loads(response)
@@ -353,6 +353,8 @@ class FreelanceEscrow(gl.Contract):
         """
         if self.status != SUBMITTED:
             raise gl.vm.UserError(f"[EXPECTED] Nothing to evaluate (status: {self.status})")
+        if gl.message.sender_address != self.client:
+            raise gl.vm.UserError("[EXPECTED] Only the client can request evaluation")
 
         result = _run_evaluation(self.spec, self.submission_url)
 
@@ -397,6 +399,8 @@ class FreelanceEscrow(gl.Contract):
         """
         if self.status != EVALUATED:
             raise gl.vm.UserError(f"[EXPECTED] Job not yet evaluated (status: {self.status})")
+        if gl.message.sender_address != self.client:
+            raise gl.vm.UserError("[EXPECTED] Only the client can finalize settlement")
 
         if self._drift_linked() and self.score >= self.partial_floor:
             drift_status = self._drift_status()

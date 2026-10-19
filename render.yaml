@@ -18,3 +18,11 @@ services:
         sync: false
       - key: PERSIST_DATA_DIR
         value: /var/data/merit
+      - key: PLATFORM_FEE_ADDRESS
+        sync: false
+      - key: MARKETPLACE_RECONCILE_ENABLED
+        value: "1"
+      - key: MARKETPLACE_RECONCILE_SECONDS
+        value: "30"
+      - key: MERIT_RELEASE
+        sync: false

@@ -2,13 +2,13 @@
 
 ## Before presenting
 
-- Open the [live app](https://lexiweb31.github.io/genlayer-escrow/).
+- Open the [live Next.js app](https://genlayer-escrow.vercel.app/).
 - Confirm the Bradbury network badge loads.
 - Press `Cmd/Ctrl + J` and keep Judge Mode ready.
 - Keep the GitHub repository and Bradbury explorer in background tabs.
-- If services are slow for eight seconds, use **Enter resilient demo**. Say explicitly that it is labeled fallback data.
-- State up front that this is a **server-signed Bradbury testnet demo**. No visitor wallet is connected or controls the testnet GEN.
-- Confirm the Contracts page shows different demo client and worker addresses before attempting live actions. If either signer is missing, stay in the simulated walkthrough.
+- If Render is waking up, use the visible retry state and explain that the shared registry remains authoritative.
+- Use **Wallet Mode** for the primary demonstration: connect the client wallet on Bradbury, and keep a separate assigned worker wallet ready in another browser profile.
+- Use Demo Mode only as a clearly labelled fallback. Confirm that its Contracts page shows different server-held client and worker addresses before attempting demo actions.
 
 ## 0:00–0:30 — the problem
 
@@ -20,22 +20,22 @@ Show the animated escrow lifecycle and the “living protocol” telemetry.
 
 Open **Post a Job**. Apply the landing-page template.
 
-> The Bradbury demo client signer defines “done” before work begins. Merit checks whether the agreement is clear and testable, previews all settlement bands, and fingerprints the exact terms. Those terms become the validator rubric and settlement rules.
+> The client defines “done” before work begins. Merit checks whether the agreement is clear and testable and previews every settlement band. Those terms become the validator rubric and settlement rules encoded in the escrow.
 
 Point out:
 
 - agreement-quality score;
 - full-payment and partial-payment thresholds;
-- payout preview;
-- SHA-256 terms fingerprint.
+- deterministic payout thresholds;
+- connected-wallet deployment and transaction status.
 
 ## 1:10–1:35 — show the marketplace
 
 Open **Browse Jobs** and select a funded or completed listing.
 
-> Every live listing maps to a dedicated escrow contract. Separate server-controlled Bradbury accounts sign the client and worker steps; this is role-separated demo infrastructure, not browser-wallet custody.
+> Every live listing maps to a dedicated escrow contract. The contract separates the client actions from the assigned worker actions, and the shared registry makes the same job visible across browsers.
 
-Briefly show search, status filtering, saved jobs, and the contract-backed job timeline.
+Briefly show search, status filtering, precise GEN values, and the contract-backed job timeline.
 
 ## 1:35–2:30 — reveal the technical core
 
@@ -45,9 +45,8 @@ Open **AI Evaluation**.
 
 Show:
 
-- fetch → sandbox → evaluate → consensus → settle pipeline;
-- validator score spread;
-- final rationale;
+- immutable agreement, public submission, and threshold evidence;
+- backend-confirmed score and rationale;
 - decision evidence room;
 - security checks;
 - deliverable provenance;
@@ -66,9 +65,35 @@ Show the job contract, distinct demo signers, settlement status, recipient, amou
 
 ## 2:50–3:00 — close
 
-> Merit demonstrates an agreement that can understand public evidence, explain its decision, and queue score-based settlement on GenLayer. This competition build is server-signed and testnet-only; user wallet signing is future work.
+> Merit turns a plain-language agreement into inspectable evaluation and score-based settlement on GenLayer. Wallet Mode gives the client and worker control of their Bradbury actions; Demo Mode remains an explicitly labelled testnet fallback.
 
 Finish on the evidence report or settlement receipt.
+
+## Custody reliability gate (run before a live Wallet Mode demo)
+
+The custody matrix uses funded **Bradbury testnet-only** wallets and never
+uses a presentation or production wallet. It is safe by default: both the
+ordinary command and `--dry-run` only validate public wallet addresses and
+funding, with zero transaction writes.
+
+```bash
+.venv/bin/python scripts/custody_matrix.py --dry-run
+```
+
+After supplying a third, distinct funded Bounty entrant wallet and the public
+fixture URLs documented in [`tests/live/README.md`](tests/live/README.md), an
+operator must explicitly acknowledge testnet writes:
+
+```bash
+.venv/bin/python scripts/custody_matrix.py \
+  --execute --confirm-testnet-custody \
+  --output /tmp/merit-custody-evidence.json
+```
+
+Do not put any wallet key in a command, evidence file, demo slide, or commit.
+The evidence report contains public job addresses, transaction hashes,
+state-transition and replay checks, recipient deltas, and settlement-finality
+proof only.
 
 ## Likely judge questions
 
@@ -84,9 +109,9 @@ The fetched page is explicitly treated as untrusted evidence and isolated from e
 
 The result includes reasoning and supports an appeal before final settlement. The project demonstrates the appeal path without claiming a single model is infallible.
 
-### Is the fallback fake blockchain activity?
+### Does the interface fake blockchain activity when services are unavailable?
 
-No. Fallback state is visibly labeled, and all chain-mutating actions are blocked. It exists only to protect the presentation journey during network downtime.
+No. Failed reads show loading/error/retry states, and disabled live actions never manufacture a transaction or result.
 
 ### What is the business model?
 

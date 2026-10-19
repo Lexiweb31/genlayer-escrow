@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+import { formatWei, formatWeiCompact, genToWei, isAtLeastMinimumDemoAmount, MIN_DEMO_AMOUNT_WEI, safeWei } from "@/lib/amount";
+
+describe("GEN and wei conversion", () => {
+  it("converts decimal GEN without floating-point math", () => {
+    expect(genToWei("0.001")).toBe("1000000000000000");
+    expect(genToWei("1.000000000000000001")).toBe("1000000000000000001");
+    expect(genToWei("9007199254740993.123456789012345678")).toBe(
+      "9007199254740993123456789012345678",
+    );
+  });
+
+  it("rejects unsafe or ambiguous numeric syntax", () => {
+    expect(() => genToWei("1e-3")).toThrow();
+    expect(() => genToWei("0.0000000000000000001")).toThrow();
+    expect(() => genToWei("-1")).toThrow();
+    expect(() => genToWei("1.2.3")).toThrow();
+  });
+
+  it("enforces the 0.001 GEN demo minimum", () => {
+    expect(MIN_DEMO_AMOUNT_WEI).toBe(1_000_000_000_000_000n);
+    expect(isAtLeastMinimumDemoAmount("0.001")).toBe(true);
+    expect(isAtLeastMinimumDemoAmount("0.000999999999999999")).toBe(false);
+  });
+
+  it("never rounds nonzero wei to zero GEN", () => {
+    expect(formatWei("1")).toBe("0.000000000000000001 GEN");
+    expect(formatWei("999")).toBe("0.000000000000000999 GEN");
+    expect(formatWei("980000000000000")).toBe("0.00098 GEN");
+    expect(formatWei("0")).toBe("0 GEN");
+  });
+
+  it("keeps tiny aggregate balances readable without pretending they are zero", () => {
+    expect(formatWeiCompact("1")).toBe("1 wei");
+    expect(formatWeiCompact("999")).toBe("999 wei");
+    expect(formatWeiCompact("1000000000000")).toBe("0.000001 GEN");
+    expect(formatWeiCompact("980000000000000")).toBe("0.00098 GEN");
+  });
+
+  it("treats a malformed backend amount as zero instead of crashing the page", () => {
+    expect(safeWei("not-an-amount")).toBe(0n);
+    expect(safeWei("1000000000000000000")).toBe(1_000_000_000_000_000_000n);
+  });
+});

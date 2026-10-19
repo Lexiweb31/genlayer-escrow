@@ -13,6 +13,9 @@ Run against localnet (full GenVM):
 import json
 import pytest
 
+from gltest.contracts import get_contract_factory
+from gltest.types import TransactionStatus
+
 
 SPEC_LANDING_PAGE = (
     "Build a landing page for a fintech startup. Must include: "
@@ -30,50 +33,52 @@ URL_CLEARLY_NOT_DONE = "https://example.com/404-this-does-not-exist"
 class TestEvaluateSubmissionIntegration:
 
     @pytest.fixture
-    def contract(self, gl_deploy):
-        return gl_deploy("contracts/evaluate_submission.py", constructor_args=[])
+    def contract(self, default_account):
+        factory = get_contract_factory(
+            contract_file_path="contracts/evaluate_submission.py"
+        )
+        return factory.deploy(
+            account=default_account,
+            wait_transaction_status=TransactionStatus.FINALIZED,
+        )
 
-    def test_initial_state_is_pending(self, contract, gl_call):
-        result = json.loads(gl_call(contract, "get_result"))
+    def test_initial_state_is_pending(self, contract):
+        result = json.loads(contract.get_result().call())
         assert result["status"] == "pending"
 
-    def test_evaluation_reaches_consensus(self, contract, gl_transaction):
+    def test_evaluation_reaches_consensus(self, contract):
         """
         Core Phase 0 gate: validators must reach consensus and finalise the transaction.
         If this test fails with UNDETERMINED, the validator agreement thresholds need tuning.
         """
-        receipt = gl_transaction(
-            contract,
-            "evaluate_submission",
-            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE],
+        receipt = contract.evaluate_submission(
+            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE]
+        ).transact(
+            wait_transaction_status=TransactionStatus.FINALIZED,
         )
-        assert receipt["status"] == "FINALIZED", (
+        assert receipt["status"].upper() == "FINALIZED", (
             f"Transaction did not finalise — validators could not agree. "
             f"Status: {receipt['status']}"
         )
 
-    def test_result_stored_after_evaluation(self, contract, gl_transaction, gl_call):
+    def test_result_stored_after_evaluation(self, contract):
         """After a finalised transaction, result must be readable."""
-        gl_transaction(
-            contract,
-            "evaluate_submission",
-            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE],
-        )
+        contract.evaluate_submission(
+            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE]
+        ).transact(wait_transaction_status=TransactionStatus.FINALIZED)
 
-        result = json.loads(gl_call(contract, "get_result"))
+        result = json.loads(contract.get_result().call())
         assert "verdict" in result
         assert result["verdict"] in ("ACCEPTED", "REJECTED")
         assert 0 <= result["score"] <= 100
         assert len(result["reasoning"]) > 10
 
-    def test_verdict_is_boolean_not_numeric(self, contract, gl_transaction, gl_call):
+    def test_verdict_is_boolean_not_numeric(self, contract):
         """Verdict must be a string ACCEPTED or REJECTED, never a number or boolean."""
-        gl_transaction(
-            contract,
-            "evaluate_submission",
-            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE],
-        )
+        contract.evaluate_submission(
+            args=[SPEC_LANDING_PAGE, URL_CLEARLY_DONE]
+        ).transact(wait_transaction_status=TransactionStatus.FINALIZED)
 
-        result = json.loads(gl_call(contract, "get_result"))
+        result = json.loads(contract.get_result().call())
         assert isinstance(result["verdict"], str)
         assert result["verdict"] in ("ACCEPTED", "REJECTED")

@@ -71,8 +71,14 @@ class EvaluateSubmission(gl.Contract):
     @gl.public.write
     def evaluate_submission(self, spec: str, url: str) -> None:
         def leader_fn():
-            page = gl.nondet.web.get(url)
-            content = page.body.decode("utf-8", errors="replace")
+            # Render the final DOM instead of grading the URL string or the
+            # server's initial response. This also covers JavaScript-driven
+            # deliverables such as Vercel applications and public social proof.
+            content = gl.nondet.web.render(
+                url,
+                mode="text",
+                wait_after_loaded="3s",
+            )
             prompt = _build_prompt(spec, content)
             response = gl.nondet.exec_prompt(prompt, response_format="json")
             data = response if isinstance(response, dict) else json.loads(response)
