@@ -182,7 +182,7 @@ class TestAccessAndMandate:
         direct_vm.sender = reporter
         contract.submit_evidence("text", "reporter observation", "")
         direct_vm.sender = owner
-        assert len(json.loads(contract.get_pending_evidence())) == 2
+        assert _status(contract)["pending_evidence"] == 2
 
     def test_only_owner_updates_mandate(self, direct_deploy, direct_vm):
         contract, agent, owner = _deploy(direct_deploy)
@@ -230,15 +230,16 @@ class TestAppealAndHistory:
         with pytest.raises(Exception):
             contract.appeal_last_review()  # appeals are not themselves appealable
 
-    def test_history_newest_first(self, direct_deploy, direct_vm):
+    def test_history_readable_by_index(self, direct_deploy, direct_vm):
         contract, _, _ = _deploy(direct_deploy)
         for lvl in ("none", "mild", "material"):
             _review(contract, direct_vm, _llm(lvl, "constrain" if lvl == "material" else "continue"))
-        h = json.loads(contract.get_history(0, 2))
-        assert h["total"] == 3
-        assert [i["drift_level"] for i in h["items"]] == ["material", "mild"]
-        h2 = json.loads(contract.get_history(2, 2))
-        assert [i["drift_level"] for i in h2["items"]] == ["none"]
+        total = _status(contract)["review_count"]
+        assert total == 3
+        levels = [json.loads(contract.get_review(i))["drift_level"] for i in range(total)]
+        assert levels == ["none", "mild", "material"]
+        with pytest.raises(Exception):
+            contract.get_review(total)
 
 
 class TestEquivalence:
