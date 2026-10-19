@@ -70,8 +70,15 @@ def _balance(account) -> int:
 
 def _succeeded(receipt) -> bool:
     # gltest only reads consensus_data.leader_receipt, which testnet receipts
-    # leave empty; testnet reports the outcome in tx_execution_result_name.
-    return tx_execution_succeeded(receipt) or receipt.get("tx_execution_result_name") == "FINISHED_WITH_RETURN"
+    # leave empty. On testnet, require that validators agreed (UNDETERMINED /
+    # NO_MAJORITY writes nothing) and that the agreed execution returned.
+    if tx_execution_succeeded(receipt):
+        return True
+    return (
+        receipt.get("status_name") in ("ACCEPTED", "FINALIZED")
+        and receipt.get("result_name") == "AGREE"
+        and receipt.get("tx_execution_result_name") == "FINISHED_WITH_RETURN"
+    )
 
 
 def _send(method, args=None, value=0, attempts=3):
@@ -89,7 +96,7 @@ def _send(method, args=None, value=0, attempts=3):
 
 
 def _committed(receipt) -> None:
-    assert _succeeded(receipt), {k: receipt.get(k) for k in ("tx_id", "recipient", "status_name", "tx_execution_result_name")}
+    assert _succeeded(receipt), {k: receipt.get(k) for k in ("tx_id", "recipient", "status_name", "result_name", "tx_execution_result_name")}
 
 
 def _deploy(contract_file: str, args: list):
