@@ -372,3 +372,211 @@ class TestAppeal:
         contract, _, _ = _setup(direct_deploy, direct_vm)
         with pytest.raises(Exception):
             contract.finalize()
+
+
+# ── Tests: drift gate ─────────────────────────────────────────────────────────
+
+HOLD = 3600  # 1h, the minimum, keeps warps small
+
+
+class _StubDetector:
+    """Answers cross-contract view calls the escrow makes to a ValueDriftDetector."""
+
+    def __init__(self, agent, status="ALIGNED"):
+        self.agent = str(agent)
+        self.status = status
+        self.broken = False
+
+    def hook(self, vm, request):
+        if "CallContract" not in request:
+            return None
+        from genlayer.py import calldata
+        if self.broken:
+            return bytes([2]) + b"detector unavailable"   # VM_ERROR
+        method = request["CallContract"]["calldata"]["method"]
+        if method == "get_mandate":
+            value = json.dumps({"agent": self.agent})
+        elif method == "get_status":
+            value = json.dumps({"status": self.status})
+        else:
+            return None
+        return bytes([0]) + calldata.encode(value)          # RETURN
+
+
+def _setup_gated(direct_deploy, direct_vm, status="ALIGNED"):
+    """Deploy, fund, link a stub detector for the worker, accept terms and submit."""
+    contract, worker, client = _setup(direct_deploy, direct_vm, with_terms=False)
+    detector = _StubDetector(worker, status)
+    direct_vm._gl_call_hook = detector.hook
+    contract.link_drift_detector(_addr("detector"), HOLD)
+    direct_vm.sender = worker
+    contract.accept_terms()
+    contract.submit_work("http://example.com")
+    direct_vm.sender = client
+    return contract, detector
+
+
+def _warp(direct_vm, timestamp: str) -> None:
+    """direct_vm.warp() skips gl.message_raw["datetime"], which the contract reads."""
+    import sys
+    direct_vm.warp(timestamp)
+    gl = sys.modules.get("genlayer.gl")
+    if gl is not None and getattr(gl, "message_raw", None) is not None:
+        gl.message_raw["datetime"] = timestamp
+
+
+def _evaluate(contract, direct_vm, score):
+    direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_COMPLETE})
+    direct_vm.mock_llm(".*", _llm(score))
+    contract.evaluate()
+
+
+class TestDriftGateLinking:
+
+    def test_link_records_detector_and_hold(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm)
+        gate = json.loads(contract.get_job())["drift_gate"]
+        assert gate["linked"] is True
+        assert gate["hold_seconds"] == HOLD
+        assert gate["hold_since"] == ""
+
+    def test_unlinked_job_reports_no_gate(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm)
+        assert json.loads(contract.get_job())["drift_gate"]["linked"] is False
+
+    def test_zero_hold_uses_seven_day_default(self, direct_deploy, direct_vm):
+        contract, worker, _ = _setup(direct_deploy, direct_vm, with_terms=False)
+        direct_vm._gl_call_hook = _StubDetector(worker).hook
+        contract.link_drift_detector(_addr("detector"), 0)
+        assert json.loads(contract.get_job())["drift_gate"]["hold_seconds"] == 7 * 24 * 3600
+
+    def test_only_client_can_link(self, direct_deploy, direct_vm):
+        contract, worker, _ = _setup(direct_deploy, direct_vm, with_terms=False)
+        direct_vm._gl_call_hook = _StubDetector(worker).hook
+        direct_vm.sender = worker
+        with pytest.raises(Exception):
+            contract.link_drift_detector(_addr("detector"), HOLD)
+
+    def test_cannot_link_after_terms_accepted(self, direct_deploy, direct_vm):
+        contract, worker, _ = _setup(direct_deploy, direct_vm, with_submission=False)
+        direct_vm._gl_call_hook = _StubDetector(worker).hook
+        with pytest.raises(Exception):
+            contract.link_drift_detector(_addr("detector"), HOLD)
+
+    def test_detector_must_track_the_worker(self, direct_deploy, direct_vm):
+        contract, _, _ = _setup(direct_deploy, direct_vm, with_terms=False)
+        direct_vm._gl_call_hook = _StubDetector(_addr("someone_else")).hook
+        with pytest.raises(Exception):
+            contract.link_drift_detector(_addr("detector"), HOLD)
+
+    def test_unreadable_detector_rejected(self, direct_deploy, direct_vm):
+        contract, worker, _ = _setup(direct_deploy, direct_vm, with_terms=False)
+        stub = _StubDetector(worker)
+        stub.broken = True
+        direct_vm._gl_call_hook = stub.hook
+        with pytest.raises(Exception):
+            contract.link_drift_detector(_addr("detector"), HOLD)
+
+    @pytest.mark.parametrize("hold", [HOLD - 1, 30 * 24 * 3600 + 1])
+    def test_hold_bounds_enforced(self, direct_deploy, direct_vm, hold):
+        contract, worker, _ = _setup(direct_deploy, direct_vm, with_terms=False)
+        direct_vm._gl_call_hook = _StubDetector(worker).hook
+        with pytest.raises(Exception):
+            contract.link_drift_detector(_addr("detector"), hold)
+
+
+class TestDriftGateFinalize:
+
+    def test_aligned_agent_pays_out(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "ALIGNED")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "SETTLEMENT_PENDING"
+        assert job["drift_gate"]["release"] == "CLEAR"
+        assert job["drift_gate"]["last_status"] == "ALIGNED"
+
+    def test_unreviewed_agent_is_not_held(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "UNREVIEWED")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        assert json.loads(contract.get_job())["status"] == "SETTLEMENT_PENDING"
+
+    @pytest.mark.parametrize("status", ["DRIFTED", "REVOKED"])
+    def test_drifted_agent_payout_is_held(self, direct_deploy, direct_vm, status):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, status)
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "EVALUATED"
+        assert job["amount"] == AMOUNT
+        assert job["drift_gate"]["hold_since"] != ""
+        assert job["drift_gate"]["last_status"] == status
+        assert job["settlement"]["transfer_status"] == "NOT_STARTED"
+
+    def test_hold_persists_until_period_ends(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _warp(direct_vm, "2026-01-01T00:00:00Z")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        _warp(direct_vm, "2026-01-01T00:59:59Z")
+        contract.finalize()
+        assert json.loads(contract.get_job())["status"] == "EVALUATED"
+
+    def test_expired_hold_pays_out_the_verdict(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _warp(direct_vm, "2026-01-01T00:00:00Z")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        _warp(direct_vm, "2026-01-01T01:00:00Z")
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "SETTLEMENT_PENDING"
+        assert job["settlement"]["outcome"] == "ACCEPTED"
+        assert job["drift_gate"]["release"] == "HOLD_EXPIRED"
+
+    def test_re_review_to_aligned_releases_hold(self, direct_deploy, direct_vm):
+        contract, detector = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        detector.status = "ALIGNED"
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "SETTLEMENT_PENDING"
+        assert job["drift_gate"]["release"] == "CLEAR"
+
+    def test_partial_payout_is_also_held(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _evaluate(contract, direct_vm, 55)
+        contract.finalize()
+        assert json.loads(contract.get_job())["status"] == "EVALUATED"
+
+    def test_refund_is_never_held(self, direct_deploy, direct_vm):
+        """A drifted agent with failing work: the client's refund goes straight out."""
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _evaluate(contract, direct_vm, 10)
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "SETTLEMENT_PENDING"
+        assert job["settlement"]["outcome"] == "REFUNDED"
+        assert job["drift_gate"]["hold_since"] == ""
+
+    def test_unavailable_detector_fails_open(self, direct_deploy, direct_vm):
+        contract, detector = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _evaluate(contract, direct_vm, 90)
+        detector.broken = True
+        contract.finalize()
+        job = json.loads(contract.get_job())
+        assert job["status"] == "SETTLEMENT_PENDING"
+        assert job["drift_gate"]["last_status"] == "UNAVAILABLE"
+
+    def test_appeal_still_allowed_during_hold(self, direct_deploy, direct_vm):
+        contract, _ = _setup_gated(direct_deploy, direct_vm, "DRIFTED")
+        _evaluate(contract, direct_vm, 90)
+        contract.finalize()
+        direct_vm.clear_mocks()
+        direct_vm.mock_web(".*", {**_WEB_OK, "body": MOCK_PAGE_EMPTY})
+        direct_vm.mock_llm(".*", _llm(20))
+        contract.appeal()
+        contract.finalize()
+        assert json.loads(contract.get_job())["settlement"]["outcome"] == "REFUNDED"
